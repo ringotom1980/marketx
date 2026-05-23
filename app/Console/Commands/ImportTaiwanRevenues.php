@@ -17,18 +17,40 @@ class ImportTaiwanRevenues extends Command
     public function handle(): int
     {
         $target = CarbonImmutable::now('Asia/Taipei')->subMonthNoOverflow();
-        $year = (int) ($this->option('year') ?: $target->year);
-        $month = (int) ($this->option('month') ?: $target->month);
-        $rocYear = $year - 1911;
-        $yearMonth = sprintf('%04d-%02d', $year, $month);
 
-        $count = 0;
-
-        foreach (['sii' => 'TWSE', 'otc' => 'TPEx'] as $marketCode => $market) {
-            $count += $this->importMarket($marketCode, $market, $rocYear, $month, $yearMonth);
+        if ($this->option('year') || $this->option('month')) {
+            $months = [CarbonImmutable::create(
+                (int) ($this->option('year') ?: $target->year),
+                (int) ($this->option('month') ?: $target->month),
+                1,
+                0,
+                0,
+                0,
+                'Asia/Taipei',
+            )];
+        } else {
+            $months = collect(range(0, 24))->map(fn (int $offset) => $target->subMonthsNoOverflow($offset)->startOfMonth())->all();
         }
 
-        $this->info('Revenue rows imported: '.$count);
+        foreach ($months as $monthDate) {
+            $year = $monthDate->year;
+            $month = $monthDate->month;
+            $rocYear = $year - 1911;
+            $yearMonth = sprintf('%04d-%02d', $year, $month);
+            $count = 0;
+
+            foreach (['sii' => 'TWSE', 'otc' => 'TPEx'] as $marketCode => $market) {
+                $count += $this->importMarket($marketCode, $market, $rocYear, $month, $yearMonth);
+            }
+
+            if ($count > 0 || $this->option('year') || $this->option('month')) {
+                $this->info('Revenue rows imported for '.$yearMonth.': '.$count);
+
+                return self::SUCCESS;
+            }
+        }
+
+        $this->warn('No available MOPS revenue page found in the fallback window.');
 
         return self::SUCCESS;
     }
@@ -38,7 +60,7 @@ class ImportTaiwanRevenues extends Command
         $url = sprintf('https://mops.twse.com.tw/nas/t21/%s/t21sc03_%d_%d_0.html', $marketCode, $rocYear, $month);
         $response = Http::retry(3, 700)->timeout(60)->get($url);
 
-        if (! $response->ok()) {
+        if (! $response->ok() || str_contains($response->body(), 'HTTP Status 404')) {
             $this->warn($market.' revenue page unavailable: '.$response->status());
             return 0;
         }
