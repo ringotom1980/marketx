@@ -82,6 +82,11 @@ class CalculateTechnicalScores extends Command
         $sma60 = $this->sma($closes, 60);
         $ema12 = $this->ema($closes, 12);
         $ema26 = $this->ema($closes, 26);
+        $rsi14 = $this->rsi($closes, 14);
+        $macd = $this->macd($closes);
+        $kd = $this->kd($prices, 9, 3, 3);
+        $bollinger = $this->bollinger($closes, 20);
+        $atr14 = $this->atr($prices, 14);
         $avgVolume20 = $this->average(array_slice($volumes, -20));
         $volumeRatio = $avgVolume20 > 0 ? ((float) $latest->volume / $avgVolume20) : null;
         $returns20 = $this->returns(array_slice($closes, -21));
@@ -142,6 +147,57 @@ class CalculateTechnicalScores extends Command
             $score += 3;
         }
 
+        if ($rsi14 !== null) {
+            if ($rsi14 >= 55 && $rsi14 <= 72) {
+                $score += 5;
+            } elseif ($rsi14 > 78) {
+                $score -= 5;
+                $riskFlags[] = 'rsi_overheated';
+            } elseif ($rsi14 < 35) {
+                $score -= 5;
+                $riskFlags[] = 'rsi_weak';
+            }
+        }
+
+        if ($macd['macd'] !== null && $macd['signal'] !== null) {
+            if ($macd['macd'] > $macd['signal'] && $macd['histogram'] > 0) {
+                $score += 5;
+            } elseif ($macd['macd'] < $macd['signal'] && $macd['histogram'] < 0) {
+                $score -= 5;
+                $riskFlags[] = 'macd_bearish';
+            }
+        }
+
+        if ($kd['k'] !== null && $kd['d'] !== null) {
+            if ($kd['k'] > $kd['d'] && $kd['k'] >= 50 && $kd['k'] <= 85) {
+                $score += 4;
+            } elseif ($kd['k'] < $kd['d'] && $kd['k'] < 45) {
+                $score -= 4;
+                $riskFlags[] = 'kd_weak';
+            } elseif ($kd['k'] > 90 && $kd['d'] > 85) {
+                $score -= 3;
+                $riskFlags[] = 'kd_overheated';
+            }
+        }
+
+        if ($bollinger['upper'] !== null && $bollinger['lower'] !== null) {
+            if ($close > $bollinger['upper'] && $volumeRatio !== null && $volumeRatio >= 1.2) {
+                $score += 4;
+            } elseif ($close < $bollinger['lower']) {
+                $score -= 6;
+                $riskFlags[] = 'below_bollinger_lower';
+            }
+        }
+
+        if ($atr14 !== null && $close > 0) {
+            $atrPct = $atr14 / $close;
+
+            if ($atrPct > 0.055) {
+                $score -= 4;
+                $riskFlags[] = 'atr_expanded';
+            }
+        }
+
         $score = max(0, min(100, (int) round($score)));
 
         return [
@@ -153,6 +209,16 @@ class CalculateTechnicalScores extends Command
             'sma60' => $sma60,
             'ema12' => $ema12,
             'ema26' => $ema26,
+            'rsi14' => $rsi14,
+            'macd' => $macd['macd'],
+            'macd_signal' => $macd['signal'],
+            'macd_histogram' => $macd['histogram'],
+            'k9' => $kd['k'],
+            'd9' => $kd['d'],
+            'bollinger_upper20' => $bollinger['upper'],
+            'bollinger_middle20' => $bollinger['middle'],
+            'bollinger_lower20' => $bollinger['lower'],
+            'atr14' => $atr14,
             'return20' => round($return20 * 100, 2),
             'volume_ratio20' => $volumeRatio === null ? null : round($volumeRatio, 2),
             'volatility20' => $volatility20 === null ? null : round($volatility20 * 100, 2),
@@ -187,6 +253,173 @@ class CalculateTechnicalScores extends Command
         return round($ema, 4);
     }
 
+    private function emaSeries(array $values, int $period): array
+    {
+        if (count($values) < $period) {
+            return [];
+        }
+
+        $multiplier = 2 / ($period + 1);
+        $ema = $this->average(array_slice($values, 0, $period));
+        $series = array_fill(0, $period - 1, null);
+        $series[] = $ema;
+
+        foreach (array_slice($values, $period) as $value) {
+            $ema = ($value - $ema) * $multiplier + $ema;
+            $series[] = $ema;
+        }
+
+        return $series;
+    }
+
+    private function rsi(array $values, int $period): ?float
+    {
+        if (count($values) <= $period) {
+            return null;
+        }
+
+        $gains = [];
+        $losses = [];
+
+        for ($i = count($values) - $period; $i < count($values); $i++) {
+            $change = $values[$i] - $values[$i - 1];
+            $gains[] = max(0, $change);
+            $losses[] = abs(min(0, $change));
+        }
+
+        $avgGain = $this->average($gains);
+        $avgLoss = $this->average($losses);
+
+        if ($avgLoss == 0.0) {
+            return 100.0;
+        }
+
+        $rs = $avgGain / $avgLoss;
+
+        return round(100 - (100 / (1 + $rs)), 2);
+    }
+
+    private function macd(array $values): array
+    {
+        if (count($values) < 35) {
+            return ['macd' => null, 'signal' => null, 'histogram' => null];
+        }
+
+        $ema12 = $this->emaSeries($values, 12);
+        $ema26 = $this->emaSeries($values, 26);
+        $macdSeries = [];
+
+        foreach ($values as $index => $_) {
+            if (($ema12[$index] ?? null) !== null && ($ema26[$index] ?? null) !== null) {
+                $macdSeries[] = $ema12[$index] - $ema26[$index];
+            }
+        }
+
+        if (count($macdSeries) < 9) {
+            return ['macd' => null, 'signal' => null, 'histogram' => null];
+        }
+
+        $signalSeries = $this->emaSeries($macdSeries, 9);
+        $macd = $macdSeries[count($macdSeries) - 1];
+        $signal = $signalSeries[count($signalSeries) - 1] ?? null;
+
+        return [
+            'macd' => round($macd, 4),
+            'signal' => $signal === null ? null : round($signal, 4),
+            'histogram' => $signal === null ? null : round($macd - $signal, 4),
+        ];
+    }
+
+    /**
+     * @param array<int, \App\Models\StockPrice1d> $prices
+     */
+    private function kd(array $prices, int $period, int $kSmooth, int $dSmooth): array
+    {
+        if (count($prices) < $period + $kSmooth + $dSmooth) {
+            return ['k' => null, 'd' => null];
+        }
+
+        $rawK = [];
+
+        for ($i = $period - 1; $i < count($prices); $i++) {
+            $slice = array_slice($prices, $i - $period + 1, $period);
+            $high = max(array_map(fn ($price) => (float) $price->high, $slice));
+            $low = min(array_map(fn ($price) => (float) $price->low, $slice));
+            $close = (float) $prices[$i]->close;
+            $rawK[] = $high == $low ? 50.0 : (($close - $low) / ($high - $low)) * 100;
+        }
+
+        $kValues = $this->simpleMovingSeries($rawK, $kSmooth);
+        $dValues = $this->simpleMovingSeries(array_values(array_filter($kValues, fn ($value) => $value !== null)), $dSmooth);
+
+        return [
+            'k' => round((float) end($kValues), 2),
+            'd' => $dValues === [] ? null : round((float) end($dValues), 2),
+        ];
+    }
+
+    private function bollinger(array $values, int $period): array
+    {
+        if (count($values) < $period) {
+            return ['upper' => null, 'middle' => null, 'lower' => null];
+        }
+
+        $slice = array_slice($values, -$period);
+        $middle = $this->average($slice);
+        $sd = $this->standardDeviation($slice);
+
+        if ($sd === null) {
+            return ['upper' => null, 'middle' => round($middle, 4), 'lower' => null];
+        }
+
+        return [
+            'upper' => round($middle + ($sd * 2), 4),
+            'middle' => round($middle, 4),
+            'lower' => round($middle - ($sd * 2), 4),
+        ];
+    }
+
+    /**
+     * @param array<int, \App\Models\StockPrice1d> $prices
+     */
+    private function atr(array $prices, int $period): ?float
+    {
+        if (count($prices) <= $period) {
+            return null;
+        }
+
+        $trueRanges = [];
+
+        for ($i = 1; $i < count($prices); $i++) {
+            $high = (float) $prices[$i]->high;
+            $low = (float) $prices[$i]->low;
+            $previousClose = (float) $prices[$i - 1]->close;
+            $trueRanges[] = max($high - $low, abs($high - $previousClose), abs($low - $previousClose));
+        }
+
+        return round($this->average(array_slice($trueRanges, -$period)), 4);
+    }
+
+    private function simpleMovingSeries(array $values, int $period): array
+    {
+        if (count($values) < $period) {
+            return [];
+        }
+
+        $series = [];
+
+        for ($i = 0; $i < count($values); $i++) {
+            if ($i + 1 < $period) {
+                $series[] = null;
+                continue;
+            }
+
+            $series[] = $this->average(array_slice($values, $i - $period + 1, $period));
+        }
+
+        return $series;
+    }
+
     private function average(array $values): float
     {
         $values = array_values(array_filter($values, fn ($value) => $value !== null));
@@ -219,4 +452,3 @@ class CalculateTechnicalScores extends Command
         return sqrt($variance);
     }
 }
-

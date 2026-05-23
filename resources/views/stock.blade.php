@@ -45,14 +45,17 @@
             @if ($technical)
                 <table class="table">
                     <tbody>
-                    <tr><th>SMA 5</th><td>{{ $technical['sma5'] ?? '-' }}</td></tr>
-                    <tr><th>SMA 20</th><td>{{ $technical['sma20'] ?? '-' }}</td></tr>
-                    <tr><th>SMA 60</th><td>{{ $technical['sma60'] ?? '-' }}</td></tr>
+                    <tr><th>SMA 5 / 20 / 60</th><td>{{ $technical['sma5'] ?? '-' }} / {{ $technical['sma20'] ?? '-' }} / {{ $technical['sma60'] ?? '-' }}</td></tr>
                     <tr><th>EMA 12 / 26</th><td>{{ $technical['ema12'] ?? '-' }} / {{ $technical['ema26'] ?? '-' }}</td></tr>
+                    <tr><th>RSI 14</th><td>{{ $technical['rsi14'] ?? '-' }}</td></tr>
+                    <tr><th>MACD / Signal / Histogram</th><td>{{ $technical['macd'] ?? '-' }} / {{ $technical['macd_signal'] ?? '-' }} / {{ $technical['macd_histogram'] ?? '-' }}</td></tr>
+                    <tr><th>KD 9</th><td>K {{ $technical['k9'] ?? '-' }} / D {{ $technical['d9'] ?? '-' }}</td></tr>
+                    <tr><th>布林通道 20</th><td>上 {{ $technical['bollinger_upper20'] ?? '-' }} / 中 {{ $technical['bollinger_middle20'] ?? '-' }} / 下 {{ $technical['bollinger_lower20'] ?? '-' }}</td></tr>
+                    <tr><th>ATR 14</th><td>{{ $technical['atr14'] ?? '-' }}</td></tr>
                     <tr><th>20 日報酬</th><td>{{ $technical['return20'] ?? '-' }}%</td></tr>
                     <tr><th>20 日量比</th><td>{{ $technical['volume_ratio20'] ?? '-' }}</td></tr>
                     <tr><th>20 日波動</th><td>{{ $technical['volatility20'] ?? '-' }}%</td></tr>
-                    <tr><th>突破</th><td>{{ ($technical['breakout20'] ?? false) ? '是' : '否' }}</td></tr>
+                    <tr><th>20 日突破</th><td>{{ ($technical['breakout20'] ?? false) ? '是' : '否' }}</td></tr>
                     </tbody>
                 </table>
             @else
