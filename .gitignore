@@ -28,6 +28,7 @@ __pycache__/
 venv/
 
 *.log
+*.bundle
 *.sqlite
 *.sqlite3
 *.tmp
