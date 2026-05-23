@@ -10,6 +10,7 @@ use App\Console\Commands\GenerateStockReports;
 use App\Console\Commands\ImportGlobalEvents;
 use App\Console\Commands\ImportGlobalMarketData;
 use App\Console\Commands\ImportTaiwanChips;
+use App\Console\Commands\ImportTaiwanRevenues;
 use App\Console\Commands\ImportTaiwanStocks;
 use App\Console\Commands\MarketDataStatus;
 use App\Console\Commands\RunDailyPipeline;
@@ -33,6 +34,7 @@ return Application::configure(basePath: dirname(__DIR__))
         ImportGlobalEvents::class,
         ImportGlobalMarketData::class,
         ImportTaiwanChips::class,
+        ImportTaiwanRevenues::class,
         ImportTaiwanStocks::class,
         MarketDataStatus::class,
         RunDailyPipeline::class,

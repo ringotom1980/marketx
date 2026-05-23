@@ -27,6 +27,7 @@ class RunDailyPipeline extends Command
                 ['global_events', 'market:import-global-events', []],
                 ['taiwan_stocks', 'market:import-stocks', ['--deactivate-missing' => true]],
                 ['taiwan_chips', 'market:import-chips', []],
+                ['taiwan_revenues', 'market:import-revenues', []],
                 ['technical_scores', 'market:calculate-technical-scores', ['--min-days' => 10]],
                 ['fundamental_scores', 'market:calculate-fundamental-scores', []],
                 ['theme_scores', 'market:calculate-theme-scores', []],
