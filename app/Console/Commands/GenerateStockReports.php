@@ -56,6 +56,8 @@ class GenerateStockReports extends Command
                 'latest_volume' => $price?->volume,
                 'foreign_net_buy' => $chip?->foreign_net_buy,
                 'investment_trust_net_buy' => $chip?->investment_trust_net_buy,
+                'margin_balance' => $chip?->margin_balance,
+                'short_balance' => $chip?->short_balance,
                 'revenue_year_month' => $revenue?->year_month,
                 'revenue_yoy_pct' => $revenue?->yoy_pct,
                 'engine' => 'rule_based_zh',
@@ -201,6 +203,10 @@ class GenerateStockReports extends Command
 
         if ($chip && $chip->institutional_net_buy < 0) {
             return '法人合計賣超，需觀察是否連續轉弱。';
+        }
+
+        if ($chip && $chip->margin_balance !== null && $chip->short_balance !== null && $chip->short_balance > $chip->margin_balance * 0.6) {
+            return '融券餘額相對融資偏高，短線籌碼波動可能加大。';
         }
 
         if ($revenue?->yoy_pct !== null && (float) $revenue->yoy_pct < 0) {

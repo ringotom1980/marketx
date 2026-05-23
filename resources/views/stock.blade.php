@@ -69,6 +69,8 @@
                     <tr><th>投信買賣超</th><td>{{ number_format($chip->investment_trust_net_buy) }}</td></tr>
                     <tr><th>自營商買賣超</th><td>{{ number_format($chip->dealer_net_buy) }}</td></tr>
                     <tr><th>三大法人合計</th><td>{{ number_format($chip->institutional_net_buy) }}</td></tr>
+                    <tr><th>融資餘額</th><td>{{ $chip->margin_balance === null ? '無資料' : number_format($chip->margin_balance) }}</td></tr>
+                    <tr><th>融券餘額</th><td>{{ $chip->short_balance === null ? '無資料' : number_format($chip->short_balance) }}</td></tr>
                     </tbody>
                 </table>
             @else

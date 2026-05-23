@@ -254,6 +254,8 @@ Route::get('/admin', function () {
         ['title' => '股票檔數', 'body' => (string) DB::table('stocks')->count()],
         ['title' => '日 K 筆數', 'body' => (string) DB::table('stock_prices_1d')->count()],
         ['title' => '籌碼筆數', 'body' => (string) DB::table('stock_chips_1d')->count()],
+        ['title' => '個股融資融券筆數', 'body' => (string) DB::table('stock_chips_1d')->whereNotNull('margin_balance')->count()],
+        ['title' => '大盤融資融券筆數', 'body' => (string) DB::table('market_margins_1d')->count()],
         ['title' => '分數筆數', 'body' => (string) DB::table('stock_scores')->count()],
         ['title' => '財務資料筆數', 'body' => (string) DB::table('stock_financials')->count()],
         ['title' => '月營收筆數', 'body' => (string) DB::table('stock_revenues')->count()],
