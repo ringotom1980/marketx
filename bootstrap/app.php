@@ -2,6 +2,7 @@
 
 use Illuminate\Foundation\Application;
 use App\Console\Commands\BackfillTaiwanPrices;
+use App\Console\Commands\CalculateDecisionScores;
 use App\Console\Commands\CalculateTechnicalScores;
 use App\Console\Commands\ImportTaiwanChips;
 use App\Console\Commands\ImportTaiwanStocks;
@@ -17,6 +18,7 @@ return Application::configure(basePath: dirname(__DIR__))
     )
     ->withCommands([
         BackfillTaiwanPrices::class,
+        CalculateDecisionScores::class,
         CalculateTechnicalScores::class,
         ImportTaiwanChips::class,
         ImportTaiwanStocks::class,

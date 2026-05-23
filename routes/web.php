@@ -2,51 +2,49 @@
 
 use App\Models\Stock;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/', function () {
-    $featuredStocks = Stock::query()
-        ->whereIn('symbol', ['2382', '3017'])
+    $markets = [
+        ['name' => '美股', 'state' => '待接 Global Engine', 'tone' => 'amber'],
+        ['name' => '費半', 'state' => '待接 Global Engine', 'tone' => 'amber'],
+        ['name' => 'VIX', 'state' => '待接 Global Engine', 'tone' => 'amber'],
+        ['name' => '美債', 'state' => '待接 Global Engine', 'tone' => 'amber'],
+        ['name' => '美元', 'state' => '待接 Global Engine', 'tone' => 'amber'],
+    ];
+
+    $topStocks = Stock::query()
+        ->join('stock_scores', 'stocks.id', '=', 'stock_scores.stock_id')
+        ->select('stocks.symbol', 'stocks.name', 'stock_scores.decision', 'stock_scores.total_score')
+        ->whereNotNull('stock_scores.total_score')
+        ->orderByDesc('stock_scores.score_date')
+        ->orderByDesc('stock_scores.total_score')
+        ->limit(5)
         ->get()
-        ->keyBy('symbol');
+        ->map(fn ($stock) => [
+            'symbol' => $stock->symbol,
+            'name' => $stock->name,
+            'decision' => $stock->decision ?? '待評分',
+            'score' => $stock->total_score ?? 0,
+        ]);
 
     return view('home', [
-        'markets' => [
-            ['name' => '美股', 'state' => '偏強', 'tone' => 'green'],
-            ['name' => '費半', 'state' => '強勢', 'tone' => 'green'],
-            ['name' => 'VIX', 'state' => '低風險', 'tone' => 'green'],
-            ['name' => '美債', 'state' => '壓力下降', 'tone' => 'blue'],
-            ['name' => '美元', 'state' => '偏弱', 'tone' => 'amber'],
-        ],
+        'markets' => $markets,
         'events' => [
-            ['title' => 'NVIDIA 財報優於預期', 'impact' => 'AI Server、散熱與 CoWoS 題材維持高熱度'],
-            ['title' => 'Fed 官員偏鴿', 'impact' => '科技股估值壓力下降，風險偏好回升'],
-            ['title' => 'AI 晶片出口限制', 'impact' => '供應鏈需追蹤政策不確定性'],
+            ['title' => '全球事件引擎尚未啟用', 'impact' => 'Phase 8 將接新聞抓取、事件分類、產業分類與個股映射。'],
         ],
         'themes' => [
-            ['name' => 'AI Server', 'score' => 92],
-            ['name' => '散熱', 'score' => 88],
-            ['name' => 'CoWoS', 'score' => 86],
-            ['name' => '光通訊', 'score' => 81],
+            ['name' => 'AI Server', 'score' => 0],
+            ['name' => '散熱', 'score' => 0],
+            ['name' => 'CoWoS', 'score' => 0],
+            ['name' => '光通訊', 'score' => 0],
         ],
-        'topStocks' => [
-            [
-                'symbol' => '2382',
-                'name' => $featuredStocks->get('2382')?->name ?? '廣達',
-                'decision' => '買進',
-                'score' => 82,
-            ],
-            [
-                'symbol' => '3017',
-                'name' => $featuredStocks->get('3017')?->name ?? '奇鋐',
-                'decision' => '強力買進',
-                'score' => 88,
-            ],
-        ],
+        'topStocks' => $topStocks,
         'riskStocks' => [
-            ['name' => '高檔爆量股', 'risk' => '高檔爆量'],
-            ['name' => '題材退潮股', 'risk' => '題材退潮'],
-            ['name' => '法人轉賣股', 'risk' => '法人轉賣'],
+            ['name' => '法人賣超', 'risk' => '待接風險排序'],
+            ['name' => '技術轉弱', 'risk' => '待接風險排序'],
+            ['name' => '波動升高', 'risk' => '待接風險排序'],
         ],
     ]);
 });
@@ -97,16 +95,7 @@ Route::get('/s/{symbol}', function (string $symbol) {
     $latestPrice = $stockRecord->dailyPrices->first();
     $latestChip = $stockRecord->latestChip;
     $latestScore = $stockRecord->latestScore;
-    $technicalScore = $latestScore?->technical_score ?? 0;
     $technicalPayload = $latestScore?->technical_payload;
-
-    $decisionPack = match (true) {
-        $technicalScore >= 85 => ['decision' => '強力買進', 'score' => $technicalScore, 'confidence' => 65],
-        $technicalScore >= 70 => ['decision' => '買進', 'score' => $technicalScore, 'confidence' => 62],
-        $technicalScore >= 55 => ['decision' => '續抱', 'score' => $technicalScore, 'confidence' => 58],
-        $technicalScore >= 40 => ['decision' => '減碼', 'score' => $technicalScore, 'confidence' => 55],
-        default => ['decision' => '賣出', 'score' => $technicalScore, 'confidence' => 50],
-    };
 
     return view('stock', [
         'stock' => [
@@ -116,17 +105,17 @@ Route::get('/s/{symbol}', function (string $symbol) {
             'close' => $latestPrice?->close ?? '待匯入',
             'change' => $latestPrice?->change ?? '待匯入',
             'volume' => $latestPrice?->volume ? number_format($latestPrice->volume) : '待匯入',
-            'decision' => $decisionPack['decision'],
-            'score' => $decisionPack['score'],
-            'confidence' => $decisionPack['confidence'],
+            'decision' => $latestScore?->decision ?? '待評分',
+            'score' => $latestScore?->total_score ?? $latestScore?->technical_score ?? 0,
+            'confidence' => $latestScore?->confidence_score ?? 0,
         ],
         'modules' => [
-            ['name' => '全球宏觀', 'score' => 0],
-            ['name' => '全球事件', 'score' => 0],
-            ['name' => '題材熱度', 'score' => 0],
-            ['name' => '技術結構', 'score' => $technicalScore],
-            ['name' => '籌碼', 'score' => $latestChip ? 50 : 0],
-            ['name' => '財務營收', 'score' => 0],
+            ['name' => '全球宏觀', 'score' => $latestScore?->macro_score ?? 0],
+            ['name' => '全球事件', 'score' => $latestScore?->event_score ?? 0],
+            ['name' => '題材熱度', 'score' => $latestScore?->theme_score ?? 0],
+            ['name' => '技術結構', 'score' => $latestScore?->technical_score ?? 0],
+            ['name' => '籌碼', 'score' => $latestScore?->chip_score ?? 0],
+            ['name' => '財務營收', 'score' => $latestScore?->fundamental_score ?? 0],
         ],
         'technical' => $technicalPayload,
         'chip' => $latestChip,
@@ -134,7 +123,7 @@ Route::get('/s/{symbol}', function (string $symbol) {
             '全球事件引擎尚未啟用',
             '-> Phase 8 將建立事件分類、產業分類與個股映射',
         ],
-        'summary' => '目前決策卡先以 Technical Score 顯示技術結構分數；Macro、Event、Theme、Chip、Fundamental 與 AI Explain 將依規劃分階段接上。',
+        'summary' => '目前 Decision Engine 已整合 Technical Score 與 Chip Score；Macro、Event、Theme、Fundamental 與 AI Explain 將依規劃分階段接上。',
     ]);
 });
 
@@ -172,12 +161,17 @@ Route::get('/watchlist', function () {
 });
 
 Route::get('/admin', function () {
+    $stats = [
+        ['title' => '股票總數', 'body' => (string) DB::table('stocks')->count()],
+        ['title' => '日 K 筆數', 'body' => (string) DB::table('stock_prices_1d')->count()],
+        ['title' => '籌碼筆數', 'body' => (string) DB::table('stock_chips_1d')->count()],
+        ['title' => '分數筆數', 'body' => (string) DB::table('stock_scores')->count()],
+    ];
+
     return view('simple', [
         'heading' => '系統後台',
         'description' => 'Job 狀態、爬蟲狀態、AI 生成狀態、錯誤紀錄與手動重跑。',
-        'items' => [
-            ['title' => 'Job 狀態', 'body' => 'system_jobs 將記錄每個 pipeline 任務的開始、結束、耗時與錯誤。'],
-            ['title' => 'AI 成本治理', 'body' => 'ai_logs 會追蹤模型、token、任務狀態與估算成本。'],
-        ],
+        'items' => $stats,
     ]);
 });
+
