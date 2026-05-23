@@ -39,7 +39,7 @@ class RunDailyPipeline extends Command
             ];
 
         if (! $this->option('skip-ai')) {
-            $steps[] = ['ai_reports', 'market:generate-stock-reports', ['--limit' => 30]];
+            $steps[] = ['rule_based_reports', 'market:generate-stock-reports', ['--limit' => 0]];
         }
 
         foreach ($steps as [$name, $command, $parameters]) {

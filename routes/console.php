@@ -8,7 +8,7 @@ Artisan::command('inspire', function () {
     $this->comment(Inspiring::quote());
 })->purpose('Display an inspiring quote');
 
-Schedule::command('market:daily-pipeline --skip-ai')
+Schedule::command('market:daily-pipeline')
     ->dailyAt('18:30')
     ->timezone('Asia/Taipei')
     ->withoutOverlapping();
