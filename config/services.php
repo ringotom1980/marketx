@@ -39,6 +39,7 @@ return [
         'global_market_feed' => env('MARKETX_GLOBAL_MARKET_FEED'),
         'global_event_feed' => env('MARKETX_GLOBAL_EVENT_FEED'),
         'ai_model' => env('MARKETX_AI_MODEL', 'gpt-4.1-mini'),
+        'admin_password_hash' => env('MARKETX_ADMIN_PASSWORD_HASH'),
     ],
 
 ];

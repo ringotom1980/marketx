@@ -18,6 +18,7 @@ use App\Console\Commands\MarketDataStatus;
 use App\Console\Commands\RunDailyPipeline;
 use App\Console\Commands\SeedThemeMappings;
 use App\Console\Commands\SeedThemes;
+use App\Http\Middleware\EnsureMarketxAdmin;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
 
@@ -47,7 +48,9 @@ return Application::configure(basePath: dirname(__DIR__))
         SeedThemes::class,
     ])
     ->withMiddleware(function (Middleware $middleware): void {
-        //
+        $middleware->web(append: [
+            EnsureMarketxAdmin::class,
+        ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         //

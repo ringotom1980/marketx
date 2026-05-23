@@ -4,7 +4,42 @@ use App\Models\Stock;
 use App\Support\MarketDisplay;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Route;
+
+Route::get('/login', function () {
+    if (session()->boolean('marketx_admin')) {
+        return redirect('/');
+    }
+
+    return view('login');
+});
+
+Route::post('/login', function (Request $request) {
+    $request->validate([
+        'password' => ['required', 'string'],
+    ]);
+
+    $hash = config('services.marketx.admin_password_hash');
+
+    if (! $hash || ! Hash::check($request->string('password')->toString(), $hash)) {
+        return back()
+            ->withErrors(['password' => '密碼錯誤'])
+            ->onlyInput();
+    }
+
+    $request->session()->regenerate();
+    $request->session()->put('marketx_admin', true);
+
+    return redirect()->intended('/');
+});
+
+Route::match(['get', 'post'], '/logout', function (Request $request) {
+    $request->session()->forget('marketx_admin');
+    $request->session()->regenerateToken();
+
+    return redirect('/login');
+});
 
 Route::get('/', function () {
     $markets = DB::table('global_market_data')
