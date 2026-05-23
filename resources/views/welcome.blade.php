@@ -4,6 +4,8 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>{{ $title ?? '股市在幹嘛' }}</title>
+    <link rel="icon" type="image/png" sizes="32x32" href="/assets/favicon-32.png">
+    <link rel="apple-touch-icon" sizes="180x180" href="/assets/favicon-180.png">
     <style>
         :root {
             --bg: #f7f8fa;
@@ -42,14 +44,34 @@
         .topbar-inner {
             max-width: 1180px;
             margin: 0 auto;
-            padding: 16px 20px;
+            padding: 10px 20px;
             display: flex;
             align-items: center;
             justify-content: space-between;
             gap: 24px;
         }
 
-        .brand { font-weight: 800; font-size: 20px; }
+        .brand {
+            display: inline-flex;
+            align-items: center;
+            gap: 10px;
+            min-width: 0;
+        }
+
+        .brand img {
+            width: 48px;
+            height: 48px;
+            border-radius: 8px;
+            object-fit: cover;
+            display: block;
+            box-shadow: 0 0 0 1px rgba(22, 32, 42, .08);
+        }
+
+        .brand span {
+            font-weight: 800;
+            font-size: 20px;
+            white-space: nowrap;
+        }
 
         .nav {
             display: flex;
@@ -156,9 +178,10 @@
         .chain strong { color: var(--ink); }
 
         @media (max-width: 820px) {
-            .topbar-inner,
-            .page-head { display: block; }
+            .topbar-inner { display: block; }
+            .brand img { width: 42px; height: 42px; }
             .nav { margin-top: 12px; }
+            .page-head { display: block; }
             .search { margin-top: 16px; }
             .grid.two,
             .grid.three { grid-template-columns: 1fr; }
@@ -169,7 +192,10 @@
 <div class="shell">
     <header class="topbar">
         <div class="topbar-inner">
-            <a class="brand" href="/">股市在幹嘛</a>
+            <a class="brand" href="/">
+                <img src="/assets/marketx-logo.png" alt="股市在幹嘛">
+                <span>股市在幹嘛</span>
+            </a>
             <nav class="nav">
                 <a class="{{ request()->is('/') ? 'active' : '' }}" href="/">今日狀態</a>
                 <a class="{{ request()->is('global') ? 'active' : '' }}" href="/global">全球雷達</a>
