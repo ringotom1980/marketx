@@ -52,8 +52,10 @@ Route::get('/', function () {
 
 Route::get('/s/{symbol}', function (string $symbol) {
     $stockRecord = Stock::query()
+        ->with(['dailyPrices' => fn ($query) => $query->latest('trade_date')->limit(1)])
         ->where('symbol', $symbol)
         ->firstOrFail();
+    $latestPrice = $stockRecord->dailyPrices->first();
 
     $decisionPack = match ($stockRecord->symbol) {
         '3017' => ['decision' => '強力買進', 'score' => 88, 'confidence' => 76],
@@ -67,9 +69,9 @@ Route::get('/s/{symbol}', function (string $symbol) {
             'symbol' => $stockRecord->symbol,
             'name' => $stockRecord->name,
             'market' => $stockRecord->market,
-            'close' => '待串接',
-            'change' => '待串接',
-            'volume' => '待串接',
+            'close' => $latestPrice?->close ?? '待匯入',
+            'change' => $latestPrice?->change ?? '待匯入',
+            'volume' => $latestPrice?->volume ? number_format($latestPrice->volume) : '待匯入',
             'decision' => $decisionPack['decision'],
             'score' => $decisionPack['score'],
             'confidence' => $decisionPack['confidence'],
@@ -135,4 +137,3 @@ Route::get('/admin', function () {
         ],
     ]);
 });
-
