@@ -5,24 +5,91 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Route;
 
+function mxIndicatorName(string $indicator): string
+{
+    return [
+        'S&P 500' => '標普 500',
+        'NASDAQ' => '那斯達克',
+        'SOX' => '費城半導體',
+        'VIX' => 'VIX 恐慌指數',
+        'DXY' => '美元指數',
+        'US10Y' => '美國十年債殖利率',
+        'Crude Oil' => '原油',
+        'Gold' => '黃金',
+        'TSM ADR' => '台積電 ADR',
+    ][$indicator] ?? $indicator;
+}
+
+function mxStateName(?string $state): string
+{
+    return [
+        'strong' => '強勢',
+        'positive' => '偏強',
+        'soft' => '偏弱',
+        'weak' => '弱勢',
+        'low_risk' => '低風險',
+        'neutral' => '中性',
+        'high_risk' => '高風險',
+        'pressure_down' => '壓力下降',
+        'pressure_up' => '壓力上升',
+        'unknown' => '待判讀',
+    ][$state ?? 'unknown'] ?? '待判讀';
+}
+
+function mxTone(?string $state, ?float $changePct = null): string
+{
+    if (in_array($state, ['strong', 'positive', 'low_risk', 'pressure_down'], true)) {
+        return 'green';
+    }
+
+    if (in_array($state, ['weak', 'high_risk', 'pressure_up'], true)) {
+        return 'red';
+    }
+
+    return $changePct !== null && $changePct >= 0 ? 'green' : 'amber';
+}
+
+function mxEventTitle(object $event): string
+{
+    $source = $event->source ?: '全球消息';
+    $category = $event->category ?: '全球';
+
+    return match ($source) {
+        'Federal Reserve' => 'Fed 最新公告',
+        'NVIDIA Blog' => 'NVIDIA AI 與運算更新',
+        'Apple Newsroom' => 'Apple 產品與服務消息',
+        'Microsoft Blog' => 'Microsoft AI 與雲端更新',
+        default => $category.' 事件',
+    };
+}
+
+function mxEventBody(object $event): string
+{
+    $date = $event->event_date ? date('Y-m-d H:i', strtotime($event->event_date)) : '日期待補';
+    $category = $event->category ?: '全球';
+    $impact = $event->impact_score === null ? '待 AI 判讀' : $event->impact_score.'/100';
+
+    return '日期：'.$date.'｜分類：'.$category.'｜影響分數：'.$impact.'｜來源已收錄，中文摘要待 AI 解釋引擎產生。';
+}
+
 Route::get('/', function () {
     $markets = DB::table('global_market_data')
         ->orderByDesc('trade_date')
         ->limit(5)
         ->get()
         ->map(fn ($row) => [
-            'name' => $row->indicator,
-            'state' => $row->state ?: 'waiting source',
-            'tone' => $row->change_pct !== null && (float) $row->change_pct >= 0 ? 'green' : 'amber',
+            'name' => mxIndicatorName($row->indicator),
+            'state' => mxStateName($row->state),
+            'tone' => mxTone($row->state, $row->change_pct === null ? null : (float) $row->change_pct),
         ]);
 
     if ($markets->isEmpty()) {
         $markets = collect([
-            ['name' => 'US Market', 'state' => 'Global Engine ready', 'tone' => 'amber'],
-            ['name' => 'SOX', 'state' => 'Global Engine ready', 'tone' => 'amber'],
-            ['name' => 'VIX', 'state' => 'Global Engine ready', 'tone' => 'amber'],
-            ['name' => 'DXY', 'state' => 'Global Engine ready', 'tone' => 'amber'],
-            ['name' => 'US 10Y', 'state' => 'Global Engine ready', 'tone' => 'amber'],
+            ['name' => '美股', 'state' => '等待全球資料', 'tone' => 'amber'],
+            ['name' => '費半', 'state' => '等待全球資料', 'tone' => 'amber'],
+            ['name' => 'VIX', 'state' => '等待全球資料', 'tone' => 'amber'],
+            ['name' => '美債', 'state' => '等待全球資料', 'tone' => 'amber'],
+            ['name' => '美元', 'state' => '等待全球資料', 'tone' => 'amber'],
         ]);
     }
 
@@ -46,13 +113,13 @@ Route::get('/', function () {
         ->limit(4)
         ->get()
         ->map(fn ($event) => [
-            'title' => $event->title,
-            'impact' => $event->summary ?: ($event->impact_direction ?: 'pending'),
+            'title' => mxEventTitle($event),
+            'impact' => mxEventBody($event),
         ]);
 
     if ($events->isEmpty()) {
         $events = collect([
-            ['title' => 'Event Engine ready', 'impact' => 'No global event source configured; importer logs skipped status and writes no fake data.'],
+            ['title' => '全球事件引擎已就緒', 'impact' => '尚未匯入全球事件。'],
         ]);
     }
 
@@ -68,22 +135,13 @@ Route::get('/', function () {
         ->get()
         ->map(fn ($theme) => ['name' => $theme->name, 'score' => $theme->heat_score ?? 0]);
 
-    if ($themes->isEmpty()) {
-        $themes = collect([
-            ['name' => 'AI Server', 'score' => 0],
-            ['name' => 'Thermal', 'score' => 0],
-            ['name' => 'CoWoS', 'score' => 0],
-            ['name' => 'Optical Communication', 'score' => 0],
-        ]);
-    }
-
     return view('home', [
         'markets' => $markets,
         'events' => $events,
         'themes' => $themes,
         'topStocks' => $topStocks,
         'riskStocks' => [
-            ['name' => 'Risk Engine', 'risk' => 'Risk list will use real score deterioration and chip reversal signals after enough score history is collected.'],
+            ['name' => '風險清單', 'risk' => '等累積更多歷史分數後，會列出分數轉弱、法人轉賣、題材退潮的股票。'],
         ],
     ]);
 });
@@ -164,13 +222,13 @@ Route::get('/s/{symbol}', function (string $symbol) {
         'technical' => $technicalPayload,
         'chip' => $latestChip,
         'chain' => [
-            'Global events',
-            '-> industry impact',
-            '-> theme mapping',
-            '-> stock score',
+            '全球市場與事件',
+            '→ 產業與題材影響',
+            '→ 台股供應鏈映射',
+            '→ 個股多因子分數',
         ],
         'summary' => $latestReport?->summary
-            ?: 'Decision Engine is running on real Taiwan price/chip data. AI summary stays empty until an OpenAI key and cost gate are configured.',
+            ?: '目前決策分數已使用真實台股日 K、法人籌碼、月營收、全球市場與全球事件資料。AI 中文摘要會在 AI 解釋引擎接上成本控管後產生。',
     ]);
 });
 
@@ -188,22 +246,22 @@ Route::get('/global', function () {
         ->get();
 
     $items = $marketRows->map(fn ($row) => [
-        'title' => $row->indicator.' '.$row->trade_date,
-        'body' => trim(($row->state ?: 'no state').' value='.($row->value ?? 'n/a').' change='.($row->change_pct ?? 'n/a')),
+        'title' => mxIndicatorName($row->indicator).'｜'.$row->trade_date,
+        'body' => '狀態：'.mxStateName($row->state).'｜數值：'.number_format((float) $row->value, 2).'｜漲跌幅：'.($row->change_pct === null ? '無資料' : number_format((float) $row->change_pct, 2).'%'),
     ])->merge($eventRows->map(fn ($row) => [
-        'title' => $row->title,
-        'body' => trim(($row->category ?: 'event').' / '.($row->impact_direction ?: 'pending').' / '.($row->summary ?: 'no summary')),
+        'title' => mxEventTitle($row),
+        'body' => mxEventBody($row),
     ]));
 
     if ($items->isEmpty()) {
         $items = collect([
-            ['title' => 'Global Engine ready', 'body' => 'No global market/event source is configured yet. Import jobs will record skipped status instead of writing fake data.'],
+            ['title' => '全球引擎已就緒', 'body' => '尚未匯入全球市場或全球事件資料。'],
         ]);
     }
 
     return view('simple', [
         'heading' => '全球雷達',
-        'description' => '全球市場、全球事件與產業影響鏈入口。沒有設定外部來源時，只顯示系統狀態，不寫入假資料。',
+        'description' => '整理美股、費半、VIX、美元、美債、原油、黃金、台積電 ADR，以及 Fed、AI、科技大廠事件對台股的影響。',
         'items' => $items,
     ]);
 });
@@ -214,25 +272,34 @@ Route::get('/themes', function () {
             $join->on('themes.id', '=', 'theme_scores.theme_id')
                 ->whereRaw('theme_scores.score_date = (select max(ts.score_date) from theme_scores ts where ts.theme_id = themes.id)');
         })
-        ->select('themes.name', 'themes.description', 'theme_scores.heat_score', 'theme_scores.price_score', 'theme_scores.chip_score', 'theme_scores.score_date')
+        ->select('themes.id', 'themes.name', 'themes.description', 'theme_scores.heat_score', 'theme_scores.price_score', 'theme_scores.chip_score', 'theme_scores.score_date')
         ->where('themes.is_active', true)
         ->orderByDesc('theme_scores.heat_score')
         ->orderBy('themes.name')
         ->get()
-        ->map(fn ($theme) => [
-            'title' => $theme->name.($theme->heat_score === null ? ' - pending' : ' - '.$theme->heat_score),
-            'body' => trim(($theme->description ?: '').' price='.($theme->price_score ?? 'n/a').' chip='.($theme->chip_score ?? 'n/a').' date='.($theme->score_date ?? 'n/a')),
-        ]);
+        ->map(function ($theme) {
+            $mappedCount = DB::table('stock_theme_map')->where('theme_id', $theme->id)->count();
+            $score = $theme->heat_score === null ? '尚未計算' : $theme->heat_score.' / 100';
+
+            return [
+                'title' => $theme->name.'｜熱度 '.$score,
+                'body' => ($theme->description ?: '無描述')
+                    .'｜對應股票：'.$mappedCount.' 檔'
+                    .'｜技術：'.($theme->price_score ?? '無資料')
+                    .'｜籌碼：'.($theme->chip_score ?? '無資料')
+                    .'｜日期：'.($theme->score_date ?? '無資料'),
+            ];
+        });
 
     if ($themes->isEmpty()) {
         $themes = collect([
-            ['title' => 'Theme Engine ready', 'body' => 'Run market:seed-themes to create initial theme definitions. Scores require real stock-theme mappings.'],
+            ['title' => '題材引擎已就緒', 'body' => '尚未建立題材資料。'],
         ]);
     }
 
     return view('simple', [
         'heading' => '題材雷達',
-        'description' => '題材熱度、資金流向與個股映射入口。分數只從真實映射與已計算個股分數產生。',
+        'description' => '把全球事件落到台股題材，再由對應股票的技術、籌碼與分數計算題材熱度。',
         'items' => $themes,
     ]);
 });
@@ -240,31 +307,31 @@ Route::get('/themes', function () {
 Route::get('/watchlist', function () {
     return view('simple', [
         'heading' => '追蹤清單',
-        'description' => '自選股入口已保留 watchlist 資料表，下一輪可接登入使用者與每日報告。',
+        'description' => '自選股資料表已建立，可接登入使用者、每日更新與 AI 報告。',
         'items' => [
-            ['title' => 'Watchlist table', 'body' => 'Ready for user-stock subscriptions.'],
-            ['title' => 'Daily report hook', 'body' => 'Daily pipeline can generate reports for watched stocks after AI source is configured.'],
+            ['title' => '追蹤資料表', 'body' => '已可儲存使用者與股票的追蹤關係。'],
+            ['title' => '每日報告入口', 'body' => '排程可針對追蹤清單產生每日摘要。'],
         ],
     ]);
 });
 
 Route::get('/admin', function () {
     $stats = [
-        ['title' => 'Stocks', 'body' => (string) DB::table('stocks')->count()],
-        ['title' => 'Daily K rows', 'body' => (string) DB::table('stock_prices_1d')->count()],
-        ['title' => 'Chip rows', 'body' => (string) DB::table('stock_chips_1d')->count()],
-        ['title' => 'Score rows', 'body' => (string) DB::table('stock_scores')->count()],
-        ['title' => 'Financial rows', 'body' => (string) DB::table('stock_financials')->count()],
-        ['title' => 'Revenue rows', 'body' => (string) DB::table('stock_revenues')->count()],
-        ['title' => 'Themes', 'body' => (string) DB::table('themes')->count()],
-        ['title' => 'Global events', 'body' => (string) DB::table('global_events')->count()],
-        ['title' => 'System jobs', 'body' => (string) DB::table('system_jobs')->count()],
-        ['title' => 'AI logs', 'body' => (string) DB::table('ai_logs')->count()],
+        ['title' => '股票檔數', 'body' => (string) DB::table('stocks')->count()],
+        ['title' => '日 K 筆數', 'body' => (string) DB::table('stock_prices_1d')->count()],
+        ['title' => '籌碼筆數', 'body' => (string) DB::table('stock_chips_1d')->count()],
+        ['title' => '分數筆數', 'body' => (string) DB::table('stock_scores')->count()],
+        ['title' => '財務資料筆數', 'body' => (string) DB::table('stock_financials')->count()],
+        ['title' => '月營收筆數', 'body' => (string) DB::table('stock_revenues')->count()],
+        ['title' => '題材數', 'body' => (string) DB::table('themes')->count()],
+        ['title' => '全球事件數', 'body' => (string) DB::table('global_events')->count()],
+        ['title' => '系統工作紀錄', 'body' => (string) DB::table('system_jobs')->count()],
+        ['title' => 'AI 紀錄', 'body' => (string) DB::table('ai_logs')->count()],
     ];
 
     return view('simple', [
         'heading' => '後台狀態',
-        'description' => 'Job 狀態、資料覆蓋、AI 生成紀錄與系統治理入口。',
+        'description' => '查看資料覆蓋、Job 狀態、AI 紀錄與系統治理指標。',
         'items' => $stats,
     ]);
 });

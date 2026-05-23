@@ -65,9 +65,61 @@ class CalculateThemeScores extends Command
             $calculated++;
         });
 
+        $stockScoresUpdated = $this->updateStockThemeScores();
+
         $this->info('Theme scores calculated: '.$calculated);
         $this->line('Skipped without mapped/scored stocks: '.$skipped);
+        $this->line('Stock theme scores updated: '.$stockScoresUpdated);
 
         return self::SUCCESS;
+    }
+
+    private function updateStockThemeScores(): int
+    {
+        $latestThemeScores = DB::table('theme_scores')
+            ->join('themes', 'themes.id', '=', 'theme_scores.theme_id')
+            ->select('theme_scores.theme_id', 'theme_scores.heat_score')
+            ->whereRaw('theme_scores.score_date = (select max(ts.score_date) from theme_scores ts where ts.theme_id = theme_scores.theme_id)')
+            ->whereNotNull('theme_scores.heat_score')
+            ->get()
+            ->keyBy('theme_id');
+
+        if ($latestThemeScores->isEmpty()) {
+            return 0;
+        }
+
+        $updated = 0;
+
+        DB::table('stock_theme_map')
+            ->orderBy('stock_id')
+            ->get()
+            ->groupBy('stock_id')
+            ->each(function ($maps, int $stockId) use ($latestThemeScores, &$updated) {
+                $weighted = [];
+
+                foreach ($maps as $map) {
+                    $themeScore = $latestThemeScores[$map->theme_id]->heat_score ?? null;
+
+                    if ($themeScore !== null) {
+                        $weighted[] = ['score' => (int) $themeScore, 'weight' => max(1, (int) $map->weight)];
+                    }
+                }
+
+                if ($weighted === []) {
+                    return;
+                }
+
+                $weightSum = array_sum(array_column($weighted, 'weight'));
+                $score = (int) round(array_sum(array_map(fn ($row) => $row['score'] * $row['weight'], $weighted)) / $weightSum);
+
+                DB::table('stock_scores')
+                    ->where('stock_id', $stockId)
+                    ->whereRaw('score_date = (select max(ss.score_date) from stock_scores ss where ss.stock_id = stock_scores.stock_id)')
+                    ->update(['theme_score' => max(0, min(100, $score)), 'updated_at' => now()]);
+
+                $updated++;
+            });
+
+        return $updated;
     }
 }

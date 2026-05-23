@@ -4,10 +4,10 @@
     <section class="page-head">
         <div>
             <h1>今日全球 × 台股狀態中心</h1>
-            <p class="lead">從全球市場、重大事件、題材熱度一路收斂到台股個股決策分數。</p>
+            <p class="lead">整合全球市場、重大事件、題材熱度、台股籌碼與個股分數，作為買進、續抱、減碼、賣出的決策雷達。</p>
         </div>
         <form class="search" action="/search" method="get">
-            <input name="q" value="{{ request('q') }}" placeholder="搜尋股票代號、名稱、產業">
+            <input name="q" value="{{ request('q') }}" placeholder="搜尋股票代號、名稱或產業">
             <button type="submit">搜尋</button>
         </form>
     </section>
@@ -59,13 +59,15 @@
             <h2>今日高分股票</h2>
             <table class="table">
                 <tbody>
-                @foreach ($topStocks as $stock)
+                @forelse ($topStocks as $stock)
                     <tr>
                         <th><a href="/s/{{ $stock['symbol'] }}">{{ $stock['name'] }}</a></th>
                         <td><span class="badge green">{{ $stock['decision'] }}</span></td>
                         <td>{{ $stock['score'] }}</td>
                     </tr>
-                @endforeach
+                @empty
+                    <tr><td colspan="3">尚未產生分數。</td></tr>
+                @endforelse
                 </tbody>
             </table>
         </div>
@@ -77,7 +79,7 @@
                 @foreach ($riskStocks as $stock)
                     <tr>
                         <th>{{ $stock['name'] }}</th>
-                        <td><span class="badge red">{{ $stock['risk'] }}</span></td>
+                        <td><span class="badge amber">{{ $stock['risk'] }}</span></td>
                     </tr>
                 @endforeach
                 </tbody>
@@ -85,4 +87,3 @@
         </div>
     </section>
 @endsection
-

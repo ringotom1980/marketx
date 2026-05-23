@@ -15,6 +15,7 @@ use App\Console\Commands\ImportTaiwanRevenues;
 use App\Console\Commands\ImportTaiwanStocks;
 use App\Console\Commands\MarketDataStatus;
 use App\Console\Commands\RunDailyPipeline;
+use App\Console\Commands\SeedThemeMappings;
 use App\Console\Commands\SeedThemes;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
@@ -40,6 +41,7 @@ return Application::configure(basePath: dirname(__DIR__))
         ImportTaiwanStocks::class,
         MarketDataStatus::class,
         RunDailyPipeline::class,
+        SeedThemeMappings::class,
         SeedThemes::class,
     ])
     ->withMiddleware(function (Middleware $middleware): void {

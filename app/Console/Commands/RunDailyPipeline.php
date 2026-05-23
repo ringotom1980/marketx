@@ -20,6 +20,7 @@ class RunDailyPipeline extends Command
                 ['technical_scores', 'market:calculate-technical-scores', ['--min-days' => 10]],
                 ['fundamental_scores', 'market:calculate-fundamental-scores', []],
                 ['global_influence', 'market:calculate-global-influence', []],
+                ['theme_mappings', 'market:seed-theme-mappings', []],
                 ['theme_scores', 'market:calculate-theme-scores', []],
                 ['decision_scores', 'market:calculate-decision-scores', []],
             ]
@@ -32,6 +33,7 @@ class RunDailyPipeline extends Command
                 ['technical_scores', 'market:calculate-technical-scores', ['--min-days' => 10]],
                 ['fundamental_scores', 'market:calculate-fundamental-scores', []],
                 ['global_influence', 'market:calculate-global-influence', []],
+                ['theme_mappings', 'market:seed-theme-mappings', []],
                 ['theme_scores', 'market:calculate-theme-scores', []],
                 ['decision_scores', 'market:calculate-decision-scores', []],
             ];

@@ -4,7 +4,7 @@
     <section class="page-head">
         <div>
             <h1>{{ $stock['name'] }} {{ $stock['symbol'] }}</h1>
-            <p class="lead">{{ $stock['market'] }} · 收盤價 {{ $stock['close'] }} · 漲跌 {{ $stock['change'] }} · 成交量 {{ $stock['volume'] }}</p>
+            <p class="lead">{{ $stock['market'] }}｜收盤 {{ $stock['close'] }}｜漲跌 {{ $stock['change'] }}｜成交量 {{ $stock['volume'] }}</p>
         </div>
         <div class="panel">
             <div class="badge green">{{ $stock['decision'] }}</div>
@@ -49,14 +49,14 @@
                     <tr><th>SMA 20</th><td>{{ $technical['sma20'] ?? '-' }}</td></tr>
                     <tr><th>SMA 60</th><td>{{ $technical['sma60'] ?? '-' }}</td></tr>
                     <tr><th>EMA 12 / 26</th><td>{{ $technical['ema12'] ?? '-' }} / {{ $technical['ema26'] ?? '-' }}</td></tr>
-                    <tr><th>20 日漲跌幅</th><td>{{ $technical['return20'] ?? '-' }}%</td></tr>
+                    <tr><th>20 日報酬</th><td>{{ $technical['return20'] ?? '-' }}%</td></tr>
                     <tr><th>20 日量比</th><td>{{ $technical['volume_ratio20'] ?? '-' }}</td></tr>
                     <tr><th>20 日波動</th><td>{{ $technical['volatility20'] ?? '-' }}%</td></tr>
-                    <tr><th>Breakout</th><td>{{ ($technical['breakout20'] ?? false) ? '是' : '否' }}</td></tr>
+                    <tr><th>突破</th><td>{{ ($technical['breakout20'] ?? false) ? '是' : '否' }}</td></tr>
                     </tbody>
                 </table>
             @else
-                <p class="lead">尚未計算技術分數。</p>
+                <p class="lead">尚未產生技術分析。</p>
             @endif
         </div>
         <div class="panel">
@@ -64,7 +64,7 @@
             @if ($chip)
                 <table class="table">
                     <tbody>
-                    <tr><th>資料日期</th><td>{{ $chip->trade_date->toDateString() }}</td></tr>
+                    <tr><th>交易日</th><td>{{ $chip->trade_date->toDateString() }}</td></tr>
                     <tr><th>外資買賣超</th><td>{{ number_format($chip->foreign_net_buy) }}</td></tr>
                     <tr><th>投信買賣超</th><td>{{ number_format($chip->investment_trust_net_buy) }}</td></tr>
                     <tr><th>自營商買賣超</th><td>{{ number_format($chip->dealer_net_buy) }}</td></tr>

@@ -14,10 +14,10 @@ class SeedThemes extends Command
     public function handle(): int
     {
         $themes = [
-            ['name' => 'AI Server', 'slug' => 'ai-server', 'description' => 'AI server supply chain and related capital expenditure beneficiaries.'],
-            ['name' => 'Thermal', 'slug' => 'thermal', 'description' => 'Cooling, heat dissipation, liquid cooling, fans, and thermal modules.'],
-            ['name' => 'CoWoS', 'slug' => 'cowos', 'description' => 'Advanced packaging, CoWoS capacity, substrate, testing, and related equipment.'],
-            ['name' => 'Optical Communication', 'slug' => 'optical-communication', 'description' => 'Optical modules, silicon photonics, high-speed transmission, and data center networking.'],
+            ['name' => 'AI 伺服器', 'slug' => 'ai-server', 'description' => 'AI 伺服器、雲端資料中心、GPU 主機板與系統組裝供應鏈。'],
+            ['name' => '散熱', 'slug' => 'thermal', 'description' => '風扇、散熱模組、液冷、均熱片與高功耗伺服器散熱供應鏈。'],
+            ['name' => 'CoWoS 先進封裝', 'slug' => 'cowos', 'description' => '台積電 CoWoS、先進封裝、測試、探針卡、設備與相關材料。'],
+            ['name' => '光通訊', 'slug' => 'optical-communication', 'description' => '光模組、矽光子、高速傳輸、資料中心網通與光纖通訊供應鏈。'],
         ];
 
         foreach ($themes as $theme) {
