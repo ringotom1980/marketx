@@ -54,7 +54,7 @@ class MarketDisplay
         $category = $event->category ?: '全球';
 
         return match ($source) {
-            'Federal Reserve' => 'Fed 最新公告',
+            'Federal Reserve' => '聯準會最新公告',
             'NVIDIA Blog' => 'NVIDIA AI 與運算更新',
             'Apple Newsroom' => 'Apple 產品與服務消息',
             'Microsoft Blog' => 'Microsoft AI 與雲端更新',
@@ -65,9 +65,21 @@ class MarketDisplay
     public static function eventBody(object $event): string
     {
         $date = $event->event_date ? date('Y-m-d H:i', strtotime($event->event_date)) : '日期待補';
-        $category = $event->category ?: '全球';
+        $category = self::categoryName($event->category ?: 'Global');
         $impact = $event->impact_score === null ? '待 AI 判讀' : $event->impact_score.'/100';
 
         return '日期：'.$date.'｜分類：'.$category.'｜影響分數：'.$impact.'｜來源已收錄，中文摘要待 AI 解釋引擎產生。';
+    }
+
+    public static function categoryName(string $category): string
+    {
+        return [
+            'Fed' => '聯準會',
+            'AI' => 'AI 人工智慧',
+            'Geopolitics' => '地緣政治',
+            'Apple' => 'Apple 供應鏈',
+            'Microsoft' => 'Microsoft 雲端',
+            'Global' => '全球事件',
+        ][$category] ?? $category;
     }
 }
