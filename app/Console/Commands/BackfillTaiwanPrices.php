@@ -197,7 +197,7 @@ class BackfillTaiwanPrices extends Command
     {
         $value = trim($value);
 
-        if (! preg_match('/^(\d{3})\/(\d{2})\/(\d{2})$/', $value, $matches)) {
+        if (! preg_match('/^(\d{3})\/(\d{2})\/(\d{2})/', $value, $matches)) {
             throw new \InvalidArgumentException('Invalid ROC date: '.$value);
         }
 
@@ -237,4 +237,3 @@ class BackfillTaiwanPrices extends Command
         return is_numeric($value) ? (float) $value : null;
     }
 }
-
