@@ -8,7 +8,7 @@ use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/login', function () {
-    if (session()->boolean('marketx_admin')) {
+    if (session()->get('marketx_admin') === true) {
         return redirect('/');
     }
 

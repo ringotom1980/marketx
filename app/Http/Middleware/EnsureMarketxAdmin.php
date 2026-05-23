@@ -10,7 +10,7 @@ class EnsureMarketxAdmin
 {
     public function handle(Request $request, Closure $next): Response
     {
-        if ($this->isPublicPath($request) || $request->session()->boolean('marketx_admin')) {
+        if ($this->isPublicPath($request) || $request->session()->get('marketx_admin') === true) {
             return $next($request);
         }
 
