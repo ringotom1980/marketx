@@ -1,0 +1,73 @@
+<?php
+
+namespace App\Console\Commands;
+
+use App\Models\Theme;
+use Carbon\CarbonImmutable;
+use Illuminate\Console\Command;
+use Illuminate\Support\Facades\DB;
+
+class CalculateThemeScores extends Command
+{
+    protected $signature = 'market:calculate-theme-scores {--date= : Score date, default today}';
+
+    protected $description = 'Calculate theme heat scores from mapped stocks and existing module scores.';
+
+    public function handle(): int
+    {
+        $scoreDate = $this->option('date') ?: CarbonImmutable::now('Asia/Taipei')->toDateString();
+        $calculated = 0;
+        $skipped = 0;
+
+        Theme::query()->where('is_active', true)->orderBy('id')->each(function (Theme $theme) use ($scoreDate, &$calculated, &$skipped) {
+            $mapped = DB::table('stock_theme_map')
+                ->where('theme_id', $theme->id)
+                ->pluck('stock_id');
+
+            if ($mapped->isEmpty()) {
+                $skipped++;
+                return;
+            }
+
+            $scores = DB::table('stock_scores')
+                ->select('stock_id', 'technical_score', 'chip_score', 'total_score')
+                ->whereIn('stock_id', $mapped)
+                ->whereNotNull('technical_score')
+                ->orderByDesc('score_date')
+                ->get()
+                ->unique('stock_id');
+
+            if ($scores->isEmpty()) {
+                $skipped++;
+                return;
+            }
+
+            $priceScore = (int) round($scores->avg('technical_score'));
+            $chipScore = (int) round($scores->avg('chip_score'));
+            $heatScore = (int) round(collect([$priceScore, $chipScore ?: null])->filter(fn ($value) => $value !== null)->avg());
+
+            DB::table('theme_scores')->updateOrInsert(
+                ['theme_id' => $theme->id, 'score_date' => $scoreDate],
+                [
+                    'heat_score' => max(0, min(100, $heatScore)),
+                    'price_score' => max(0, min(100, $priceScore)),
+                    'chip_score' => $chipScore ? max(0, min(100, $chipScore)) : null,
+                    'payload' => json_encode([
+                        'mapped_stock_count' => $mapped->count(),
+                        'scored_stock_count' => $scores->count(),
+                        'source' => 'stock_theme_map + stock_scores',
+                    ], JSON_UNESCAPED_SLASHES),
+                    'updated_at' => now(),
+                    'created_at' => now(),
+                ],
+            );
+
+            $calculated++;
+        });
+
+        $this->info('Theme scores calculated: '.$calculated);
+        $this->line('Skipped without mapped/scored stocks: '.$skipped);
+
+        return self::SUCCESS;
+    }
+}

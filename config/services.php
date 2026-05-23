@@ -35,4 +35,10 @@ return [
         ],
     ],
 
+    'marketx' => [
+        'global_market_feed' => env('MARKETX_GLOBAL_MARKET_FEED'),
+        'global_event_feed' => env('MARKETX_GLOBAL_EVENT_FEED'),
+        'ai_model' => env('MARKETX_AI_MODEL', 'gpt-4.1-mini'),
+    ],
+
 ];
