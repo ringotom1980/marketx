@@ -33,8 +33,16 @@ class CalculateDecisionScores extends Command
             }
 
             $chipScore = $stock->latestChip ? $this->chipScore($stock) : null;
-            $totalScore = $this->totalScore($score->technical_score, $chipScore, $score->fundamental_score);
-            $confidence = $this->confidenceScore($score->technical_score, $chipScore, $score->fundamental_score);
+            $score->chip_score = $chipScore;
+            $totalScore = $this->totalScore($score);
+            $confidence = $this->confidenceScore([
+                $score->technical_score,
+                $chipScore,
+                $score->fundamental_score,
+                $score->macro_score,
+                $score->event_score,
+                $score->theme_score,
+            ]);
             $decision = $this->decision($totalScore);
             $riskFlags = array_values(array_unique(array_merge(
                 $score->risk_flags ?? [],
@@ -93,20 +101,21 @@ class CalculateDecisionScores extends Command
         return ($capped / 0.12) * $weight;
     }
 
-    private function totalScore(?int $technicalScore, ?int $chipScore, ?int $fundamentalScore): int
+    private function totalScore(StockScore $score): int
     {
         $available = [];
 
-        if ($technicalScore !== null) {
-            $available[] = ['score' => $technicalScore, 'weight' => 0.45];
-        }
-
-        if ($chipScore !== null) {
-            $available[] = ['score' => $chipScore, 'weight' => 0.30];
-        }
-
-        if ($fundamentalScore !== null) {
-            $available[] = ['score' => $fundamentalScore, 'weight' => 0.25];
+        foreach ([
+            'technical_score' => 0.35,
+            'chip_score' => 0.25,
+            'fundamental_score' => 0.20,
+            'macro_score' => 0.10,
+            'event_score' => 0.05,
+            'theme_score' => 0.05,
+        ] as $field => $weight) {
+            if ($score->{$field} !== null) {
+                $available[] = ['score' => $score->{$field}, 'weight' => $weight];
+            }
         }
 
         if ($available === []) {
@@ -119,10 +128,10 @@ class CalculateDecisionScores extends Command
         return (int) round($weighted / $weightSum);
     }
 
-    private function confidenceScore(?int $technicalScore, ?int $chipScore, ?int $fundamentalScore): int
+    private function confidenceScore(array $inputScores): int
     {
-        $modules = collect([$technicalScore, $chipScore, $fundamentalScore])->filter(fn ($score) => $score !== null)->values();
-        $confidence = 45 + ($modules->count() * 12);
+        $modules = collect($inputScores)->filter(fn ($score) => $score !== null)->values();
+        $confidence = 35 + ($modules->count() * 8);
 
         if ($modules->count() >= 2 && $modules->max() - $modules->min() <= 18) {
             $confidence += 12;

@@ -4,6 +4,7 @@ use Illuminate\Foundation\Application;
 use App\Console\Commands\BackfillTaiwanPrices;
 use App\Console\Commands\CalculateDecisionScores;
 use App\Console\Commands\CalculateFundamentalScores;
+use App\Console\Commands\CalculateGlobalInfluenceScores;
 use App\Console\Commands\CalculateTechnicalScores;
 use App\Console\Commands\CalculateThemeScores;
 use App\Console\Commands\GenerateStockReports;
@@ -28,6 +29,7 @@ return Application::configure(basePath: dirname(__DIR__))
         BackfillTaiwanPrices::class,
         CalculateDecisionScores::class,
         CalculateFundamentalScores::class,
+        CalculateGlobalInfluenceScores::class,
         CalculateTechnicalScores::class,
         CalculateThemeScores::class,
         GenerateStockReports::class,
