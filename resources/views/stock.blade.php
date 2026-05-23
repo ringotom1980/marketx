@@ -79,7 +79,7 @@
 
     <section class="grid two" style="margin-top:16px">
         <div class="panel">
-            <h2>AI 分析摘要</h2>
+            <h2>規則式中文解釋</h2>
             <p class="lead">{{ $summary }}</p>
         </div>
     </section>
