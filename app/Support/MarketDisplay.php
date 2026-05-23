@@ -51,14 +51,14 @@ class MarketDisplay
     public static function eventTitle(object $event): string
     {
         $source = $event->source ?: '全球消息';
-        $category = $event->category ?: '全球';
+        $category = self::categoryName($event->category ?: 'Global');
 
         return match ($source) {
             'Federal Reserve' => '聯準會最新公告',
-            'NVIDIA Blog' => 'NVIDIA AI 與運算更新',
-            'Apple Newsroom' => 'Apple 產品與服務消息',
-            'Microsoft Blog' => 'Microsoft AI 與雲端更新',
-            default => $category.' 事件',
+            'NVIDIA Blog' => '輝達人工智慧與運算更新',
+            'Apple Newsroom' => '蘋果產品與服務消息',
+            'Microsoft Blog' => '微軟人工智慧與雲端更新',
+            default => $category.'事件',
         };
     }
 
@@ -75,10 +75,10 @@ class MarketDisplay
     {
         return [
             'Fed' => '聯準會',
-            'AI' => 'AI 人工智慧',
+            'AI' => '人工智慧',
             'Geopolitics' => '地緣政治',
-            'Apple' => 'Apple 供應鏈',
-            'Microsoft' => 'Microsoft 雲端',
+            'Apple' => '蘋果供應鏈',
+            'Microsoft' => '微軟雲端',
             'Global' => '全球事件',
         ][$category] ?? $category;
     }

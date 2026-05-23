@@ -162,7 +162,7 @@ Route::get('/s/{symbol}', function (string $symbol) {
             '→ 個股多因子分數',
         ],
         'summary' => $latestReport?->summary
-            ?: '目前決策分數已使用真實台股日 K、法人籌碼、月營收、全球市場與全球事件資料。AI 中文摘要會在 AI 解釋引擎接上成本控管後產生。',
+            ?: '目前決策分數已使用真實台股日 K、法人籌碼、月營收、全球市場與全球事件資料。人工智慧中文摘要會在解釋引擎接上成本控管後產生。',
     ]);
 });
 
@@ -195,7 +195,7 @@ Route::get('/global', function () {
 
     return view('simple', [
         'heading' => '全球雷達',
-        'description' => '整理美股、費半、VIX、美元、美債、原油、黃金、台積電 ADR，以及 Fed、AI、科技大廠事件對台股的影響。',
+        'description' => '整理美股、費半、VIX、美元、美債、原油、黃金、台積電 ADR，以及聯準會、人工智慧、科技大廠事件對台股的影響。',
         'items' => $items,
     ]);
 });
@@ -241,7 +241,7 @@ Route::get('/themes', function () {
 Route::get('/watchlist', function () {
     return view('simple', [
         'heading' => '追蹤清單',
-        'description' => '自選股資料表已建立，可接登入使用者、每日更新與 AI 報告。',
+        'description' => '自選股資料表已建立，可接登入使用者、每日更新與人工智慧報告。',
         'items' => [
             ['title' => '追蹤資料表', 'body' => '已可儲存使用者與股票的追蹤關係。'],
             ['title' => '每日報告入口', 'body' => '排程可針對追蹤清單產生每日摘要。'],
@@ -260,12 +260,12 @@ Route::get('/admin', function () {
         ['title' => '題材數', 'body' => (string) DB::table('themes')->count()],
         ['title' => '全球事件數', 'body' => (string) DB::table('global_events')->count()],
         ['title' => '系統工作紀錄', 'body' => (string) DB::table('system_jobs')->count()],
-        ['title' => 'AI 紀錄', 'body' => (string) DB::table('ai_logs')->count()],
+        ['title' => '人工智慧紀錄', 'body' => (string) DB::table('ai_logs')->count()],
     ];
 
     return view('simple', [
         'heading' => '後台狀態',
-        'description' => '查看資料覆蓋、Job 狀態、AI 紀錄與系統治理指標。',
+        'description' => '查看資料覆蓋、Job 狀態、人工智慧紀錄與系統治理指標。',
         'items' => $stats,
     ]);
 });
