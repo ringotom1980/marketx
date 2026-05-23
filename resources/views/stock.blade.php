@@ -60,6 +60,25 @@
             @endif
         </div>
         <div class="panel">
+            <h2>籌碼分析</h2>
+            @if ($chip)
+                <table class="table">
+                    <tbody>
+                    <tr><th>資料日期</th><td>{{ $chip->trade_date->toDateString() }}</td></tr>
+                    <tr><th>外資買賣超</th><td>{{ number_format($chip->foreign_net_buy) }}</td></tr>
+                    <tr><th>投信買賣超</th><td>{{ number_format($chip->investment_trust_net_buy) }}</td></tr>
+                    <tr><th>自營商買賣超</th><td>{{ number_format($chip->dealer_net_buy) }}</td></tr>
+                    <tr><th>三大法人合計</th><td>{{ number_format($chip->institutional_net_buy) }}</td></tr>
+                    </tbody>
+                </table>
+            @else
+                <p class="lead">尚未匯入籌碼資料。</p>
+            @endif
+        </div>
+    </section>
+
+    <section class="grid two" style="margin-top:16px">
+        <div class="panel">
             <h2>AI 分析摘要</h2>
             <p class="lead">{{ $summary }}</p>
         </div>

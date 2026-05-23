@@ -88,12 +88,14 @@ Route::get('/s/{symbol}', function (string $symbol) {
     $stockRecord = Stock::query()
         ->with([
             'dailyPrices' => fn ($query) => $query->latest('trade_date')->limit(1),
+            'latestChip',
             'latestScore',
         ])
         ->where('symbol', $symbol)
         ->firstOrFail();
 
     $latestPrice = $stockRecord->dailyPrices->first();
+    $latestChip = $stockRecord->latestChip;
     $latestScore = $stockRecord->latestScore;
     $technicalScore = $latestScore?->technical_score ?? 0;
     $technicalPayload = $latestScore?->technical_payload;
@@ -123,10 +125,11 @@ Route::get('/s/{symbol}', function (string $symbol) {
             ['name' => '全球事件', 'score' => 0],
             ['name' => '題材熱度', 'score' => 0],
             ['name' => '技術結構', 'score' => $technicalScore],
-            ['name' => '籌碼', 'score' => 0],
+            ['name' => '籌碼', 'score' => $latestChip ? 50 : 0],
             ['name' => '財務營收', 'score' => 0],
         ],
         'technical' => $technicalPayload,
+        'chip' => $latestChip,
         'chain' => [
             '全球事件引擎尚未啟用',
             '-> Phase 8 將建立事件分類、產業分類與個股映射',
@@ -178,4 +181,3 @@ Route::get('/admin', function () {
         ],
     ]);
 });
-

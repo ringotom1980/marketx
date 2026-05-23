@@ -37,4 +37,14 @@ class Stock extends Model
     {
         return $this->hasOne(StockScore::class)->latestOfMany('score_date');
     }
+
+    public function chips(): HasMany
+    {
+        return $this->hasMany(StockChip1d::class);
+    }
+
+    public function latestChip(): HasOne
+    {
+        return $this->hasOne(StockChip1d::class)->latestOfMany('trade_date');
+    }
 }
