@@ -57,7 +57,7 @@ class ImportTaiwanRevenues extends Command
 
     private function importMarket(string $marketCode, string $market, int $rocYear, int $month, string $yearMonth): int
     {
-        $url = sprintf('https://mops.twse.com.tw/nas/t21/%s/t21sc03_%d_%d_0.html', $marketCode, $rocYear, $month);
+        $url = sprintf('https://mopsov.twse.com.tw/nas/t21/%s/t21sc03_%d_%d_0.html', $marketCode, $rocYear, $month);
         $response = Http::retry(3, 700)->timeout(60)->get($url);
 
         if (! $response->ok() || str_contains($response->body(), 'HTTP Status 404')) {
