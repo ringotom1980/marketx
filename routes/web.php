@@ -5,6 +5,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Route;
 
+if (! function_exists('mxIndicatorName')) {
 function mxIndicatorName(string $indicator): string
 {
     return [
@@ -19,7 +20,9 @@ function mxIndicatorName(string $indicator): string
         'TSM ADR' => '台積電 ADR',
     ][$indicator] ?? $indicator;
 }
+}
 
+if (! function_exists('mxStateName')) {
 function mxStateName(?string $state): string
 {
     return [
@@ -35,7 +38,9 @@ function mxStateName(?string $state): string
         'unknown' => '待判讀',
     ][$state ?? 'unknown'] ?? '待判讀';
 }
+}
 
+if (! function_exists('mxTone')) {
 function mxTone(?string $state, ?float $changePct = null): string
 {
     if (in_array($state, ['strong', 'positive', 'low_risk', 'pressure_down'], true)) {
@@ -48,7 +53,9 @@ function mxTone(?string $state, ?float $changePct = null): string
 
     return $changePct !== null && $changePct >= 0 ? 'green' : 'amber';
 }
+}
 
+if (! function_exists('mxEventTitle')) {
 function mxEventTitle(object $event): string
 {
     $source = $event->source ?: '全球消息';
@@ -62,7 +69,9 @@ function mxEventTitle(object $event): string
         default => $category.' 事件',
     };
 }
+}
 
+if (! function_exists('mxEventBody')) {
 function mxEventBody(object $event): string
 {
     $date = $event->event_date ? date('Y-m-d H:i', strtotime($event->event_date)) : '日期待補';
@@ -70,6 +79,7 @@ function mxEventBody(object $event): string
     $impact = $event->impact_score === null ? '待 AI 判讀' : $event->impact_score.'/100';
 
     return '日期：'.$date.'｜分類：'.$category.'｜影響分數：'.$impact.'｜來源已收錄，中文摘要待 AI 解釋引擎產生。';
+}
 }
 
 Route::get('/', function () {
