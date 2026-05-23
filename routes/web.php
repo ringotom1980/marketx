@@ -1,10 +1,11 @@
 <?php
 
 use App\Models\Stock;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/', function () {
-    $seededStocks = Stock::query()
+    $featuredStocks = Stock::query()
         ->whereIn('symbol', ['2382', '3017'])
         ->get()
         ->keyBy('symbol');
@@ -31,13 +32,13 @@ Route::get('/', function () {
         'topStocks' => [
             [
                 'symbol' => '2382',
-                'name' => $seededStocks->get('2382')?->name ?? '廣達',
+                'name' => $featuredStocks->get('2382')?->name ?? '廣達',
                 'decision' => '買進',
                 'score' => 82,
             ],
             [
                 'symbol' => '3017',
-                'name' => $seededStocks->get('3017')?->name ?? '奇鋐',
+                'name' => $featuredStocks->get('3017')?->name ?? '奇鋐',
                 'decision' => '強力買進',
                 'score' => 88,
             ],
@@ -47,6 +48,39 @@ Route::get('/', function () {
             ['name' => '題材退潮股', 'risk' => '題材退潮'],
             ['name' => '法人轉賣股', 'risk' => '法人轉賣'],
         ],
+    ]);
+});
+
+Route::get('/search', function (Request $request) {
+    $query = trim((string) $request->query('q', ''));
+
+    if (preg_match('/^\d{4}$/', $query) === 1) {
+        $exactStock = Stock::query()->where('symbol', $query)->first();
+
+        if ($exactStock) {
+            return redirect('/s/'.$exactStock->symbol);
+        }
+    }
+
+    $stocks = collect();
+
+    if ($query !== '') {
+        $stocks = Stock::query()
+            ->where(function ($builder) use ($query) {
+                $builder
+                    ->where('symbol', 'like', $query.'%')
+                    ->orWhere('name', 'like', '%'.$query.'%')
+                    ->orWhere('industry', 'like', '%'.$query.'%');
+            })
+            ->orderByRaw("CASE WHEN symbol LIKE ? THEN 0 ELSE 1 END", [$query.'%'])
+            ->orderBy('symbol')
+            ->limit(50)
+            ->get();
+    }
+
+    return view('search', [
+        'query' => $query,
+        'stocks' => $stocks,
     ]);
 });
 
@@ -137,3 +171,4 @@ Route::get('/admin', function () {
         ],
     ]);
 });
+

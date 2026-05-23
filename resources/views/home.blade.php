@@ -6,8 +6,8 @@
             <h1>今日全球 × 台股狀態中心</h1>
             <p class="lead">從全球市場、重大事件、題材熱度一路收斂到台股個股決策分數。</p>
         </div>
-        <form class="search" action="/s/2382" method="get">
-            <input name="q" placeholder="搜尋股票代號、名稱、題材或產業">
+        <form class="search" action="/search" method="get">
+            <input name="q" value="{{ request('q') }}" placeholder="搜尋股票代號、名稱、產業">
             <button type="submit">搜尋</button>
         </form>
     </section>
