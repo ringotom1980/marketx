@@ -1,86 +1,10 @@
 <?php
 
 use App\Models\Stock;
+use App\Support\MarketDisplay;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Route;
-
-if (! function_exists('mxIndicatorName')) {
-function mxIndicatorName(string $indicator): string
-{
-    return [
-        'S&P 500' => '標普 500',
-        'NASDAQ' => '那斯達克',
-        'SOX' => '費城半導體',
-        'VIX' => 'VIX 恐慌指數',
-        'DXY' => '美元指數',
-        'US10Y' => '美國十年債殖利率',
-        'Crude Oil' => '原油',
-        'Gold' => '黃金',
-        'TSM ADR' => '台積電 ADR',
-    ][$indicator] ?? $indicator;
-}
-}
-
-if (! function_exists('mxStateName')) {
-function mxStateName(?string $state): string
-{
-    return [
-        'strong' => '強勢',
-        'positive' => '偏強',
-        'soft' => '偏弱',
-        'weak' => '弱勢',
-        'low_risk' => '低風險',
-        'neutral' => '中性',
-        'high_risk' => '高風險',
-        'pressure_down' => '壓力下降',
-        'pressure_up' => '壓力上升',
-        'unknown' => '待判讀',
-    ][$state ?? 'unknown'] ?? '待判讀';
-}
-}
-
-if (! function_exists('mxTone')) {
-function mxTone(?string $state, ?float $changePct = null): string
-{
-    if (in_array($state, ['strong', 'positive', 'low_risk', 'pressure_down'], true)) {
-        return 'green';
-    }
-
-    if (in_array($state, ['weak', 'high_risk', 'pressure_up'], true)) {
-        return 'red';
-    }
-
-    return $changePct !== null && $changePct >= 0 ? 'green' : 'amber';
-}
-}
-
-if (! function_exists('mxEventTitle')) {
-function mxEventTitle(object $event): string
-{
-    $source = $event->source ?: '全球消息';
-    $category = $event->category ?: '全球';
-
-    return match ($source) {
-        'Federal Reserve' => 'Fed 最新公告',
-        'NVIDIA Blog' => 'NVIDIA AI 與運算更新',
-        'Apple Newsroom' => 'Apple 產品與服務消息',
-        'Microsoft Blog' => 'Microsoft AI 與雲端更新',
-        default => $category.' 事件',
-    };
-}
-}
-
-if (! function_exists('mxEventBody')) {
-function mxEventBody(object $event): string
-{
-    $date = $event->event_date ? date('Y-m-d H:i', strtotime($event->event_date)) : '日期待補';
-    $category = $event->category ?: '全球';
-    $impact = $event->impact_score === null ? '待 AI 判讀' : $event->impact_score.'/100';
-
-    return '日期：'.$date.'｜分類：'.$category.'｜影響分數：'.$impact.'｜來源已收錄，中文摘要待 AI 解釋引擎產生。';
-}
-}
 
 Route::get('/', function () {
     $markets = DB::table('global_market_data')
@@ -88,9 +12,9 @@ Route::get('/', function () {
         ->limit(5)
         ->get()
         ->map(fn ($row) => [
-            'name' => mxIndicatorName($row->indicator),
-            'state' => mxStateName($row->state),
-            'tone' => mxTone($row->state, $row->change_pct === null ? null : (float) $row->change_pct),
+            'name' => MarketDisplay::indicatorName($row->indicator),
+            'state' => MarketDisplay::stateName($row->state),
+            'tone' => MarketDisplay::tone($row->state, $row->change_pct === null ? null : (float) $row->change_pct),
         ]);
 
     if ($markets->isEmpty()) {
@@ -123,8 +47,8 @@ Route::get('/', function () {
         ->limit(4)
         ->get()
         ->map(fn ($event) => [
-            'title' => mxEventTitle($event),
-            'impact' => mxEventBody($event),
+            'title' => MarketDisplay::eventTitle($event),
+            'impact' => MarketDisplay::eventBody($event),
         ]);
 
     if ($events->isEmpty()) {
@@ -256,11 +180,11 @@ Route::get('/global', function () {
         ->get();
 
     $items = $marketRows->map(fn ($row) => [
-        'title' => mxIndicatorName($row->indicator).'｜'.$row->trade_date,
-        'body' => '狀態：'.mxStateName($row->state).'｜數值：'.number_format((float) $row->value, 2).'｜漲跌幅：'.($row->change_pct === null ? '無資料' : number_format((float) $row->change_pct, 2).'%'),
+        'title' => MarketDisplay::indicatorName($row->indicator).'｜'.$row->trade_date,
+        'body' => '狀態：'.MarketDisplay::stateName($row->state).'｜數值：'.number_format((float) $row->value, 2).'｜漲跌幅：'.($row->change_pct === null ? '無資料' : number_format((float) $row->change_pct, 2).'%'),
     ])->merge($eventRows->map(fn ($row) => [
-        'title' => mxEventTitle($row),
-        'body' => mxEventBody($row),
+        'title' => MarketDisplay::eventTitle($row),
+        'body' => MarketDisplay::eventBody($row),
     ]));
 
     if ($items->isEmpty()) {
