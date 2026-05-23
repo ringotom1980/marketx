@@ -1,8 +1,14 @@
 <?php
 
+use App\Models\Stock;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/', function () {
+    $seededStocks = Stock::query()
+        ->whereIn('symbol', ['2382', '3017'])
+        ->get()
+        ->keyBy('symbol');
+
     return view('home', [
         'markets' => [
             ['name' => '美股', 'state' => '偏強', 'tone' => 'green'],
@@ -23,8 +29,18 @@ Route::get('/', function () {
             ['name' => '光通訊', 'score' => 81],
         ],
         'topStocks' => [
-            ['symbol' => '2382', 'name' => '廣達', 'decision' => '買進', 'score' => 82],
-            ['symbol' => '3017', 'name' => '奇鋐', 'decision' => '強力買進', 'score' => 88],
+            [
+                'symbol' => '2382',
+                'name' => $seededStocks->get('2382')?->name ?? '廣達',
+                'decision' => '買進',
+                'score' => 82,
+            ],
+            [
+                'symbol' => '3017',
+                'name' => $seededStocks->get('3017')?->name ?? '奇鋐',
+                'decision' => '強力買進',
+                'score' => 88,
+            ],
         ],
         'riskStocks' => [
             ['name' => '高檔爆量股', 'risk' => '高檔爆量'],
@@ -35,17 +51,28 @@ Route::get('/', function () {
 });
 
 Route::get('/s/{symbol}', function (string $symbol) {
+    $stockRecord = Stock::query()
+        ->where('symbol', $symbol)
+        ->firstOrFail();
+
+    $decisionPack = match ($stockRecord->symbol) {
+        '3017' => ['decision' => '強力買進', 'score' => 88, 'confidence' => 76],
+        '2330' => ['decision' => '買進', 'score' => 80, 'confidence' => 74],
+        '3324' => ['decision' => '買進', 'score' => 77, 'confidence' => 70],
+        default => ['decision' => '買進', 'score' => 78, 'confidence' => 72],
+    };
+
     return view('stock', [
         'stock' => [
-            'symbol' => $symbol,
-            'name' => $symbol === '3017' ? '奇鋐' : '廣達',
-            'market' => 'TWSE',
+            'symbol' => $stockRecord->symbol,
+            'name' => $stockRecord->name,
+            'market' => $stockRecord->market,
             'close' => '待串接',
             'change' => '待串接',
             'volume' => '待串接',
-            'decision' => $symbol === '3017' ? '強力買進' : '買進',
-            'score' => $symbol === '3017' ? 88 : 78,
-            'confidence' => $symbol === '3017' ? 76 : 72,
+            'decision' => $decisionPack['decision'],
+            'score' => $decisionPack['score'],
+            'confidence' => $decisionPack['confidence'],
         ],
         'modules' => [
             ['name' => '全球宏觀', 'score' => 68],
@@ -108,3 +135,4 @@ Route::get('/admin', function () {
         ],
     ]);
 });
+
