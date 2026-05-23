@@ -2,6 +2,7 @@
 
 use Illuminate\Foundation\Application;
 use App\Console\Commands\BackfillTaiwanPrices;
+use App\Console\Commands\CalculateTechnicalScores;
 use App\Console\Commands\ImportTaiwanStocks;
 use App\Console\Commands\MarketDataStatus;
 use Illuminate\Foundation\Configuration\Exceptions;
@@ -15,6 +16,7 @@ return Application::configure(basePath: dirname(__DIR__))
     )
     ->withCommands([
         BackfillTaiwanPrices::class,
+        CalculateTechnicalScores::class,
         ImportTaiwanStocks::class,
         MarketDataStatus::class,
     ])

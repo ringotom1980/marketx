@@ -86,16 +86,24 @@ Route::get('/search', function (Request $request) {
 
 Route::get('/s/{symbol}', function (string $symbol) {
     $stockRecord = Stock::query()
-        ->with(['dailyPrices' => fn ($query) => $query->latest('trade_date')->limit(1)])
+        ->with([
+            'dailyPrices' => fn ($query) => $query->latest('trade_date')->limit(1),
+            'latestScore',
+        ])
         ->where('symbol', $symbol)
         ->firstOrFail();
-    $latestPrice = $stockRecord->dailyPrices->first();
 
-    $decisionPack = match ($stockRecord->symbol) {
-        '3017' => ['decision' => '強力買進', 'score' => 88, 'confidence' => 76],
-        '2330' => ['decision' => '買進', 'score' => 80, 'confidence' => 74],
-        '3324' => ['decision' => '買進', 'score' => 77, 'confidence' => 70],
-        default => ['decision' => '買進', 'score' => 78, 'confidence' => 72],
+    $latestPrice = $stockRecord->dailyPrices->first();
+    $latestScore = $stockRecord->latestScore;
+    $technicalScore = $latestScore?->technical_score ?? 0;
+    $technicalPayload = $latestScore?->technical_payload;
+
+    $decisionPack = match (true) {
+        $technicalScore >= 85 => ['decision' => '強力買進', 'score' => $technicalScore, 'confidence' => 65],
+        $technicalScore >= 70 => ['decision' => '買進', 'score' => $technicalScore, 'confidence' => 62],
+        $technicalScore >= 55 => ['decision' => '續抱', 'score' => $technicalScore, 'confidence' => 58],
+        $technicalScore >= 40 => ['decision' => '減碼', 'score' => $technicalScore, 'confidence' => 55],
+        default => ['decision' => '賣出', 'score' => $technicalScore, 'confidence' => 50],
     };
 
     return view('stock', [
@@ -111,20 +119,19 @@ Route::get('/s/{symbol}', function (string $symbol) {
             'confidence' => $decisionPack['confidence'],
         ],
         'modules' => [
-            ['name' => '全球宏觀', 'score' => 68],
-            ['name' => '全球事件', 'score' => 82],
-            ['name' => '題材熱度', 'score' => 88],
-            ['name' => '技術結構', 'score' => 76],
-            ['name' => '籌碼', 'score' => 79],
-            ['name' => '財務營收', 'score' => 71],
+            ['name' => '全球宏觀', 'score' => 0],
+            ['name' => '全球事件', 'score' => 0],
+            ['name' => '題材熱度', 'score' => 0],
+            ['name' => '技術結構', 'score' => $technicalScore],
+            ['name' => '籌碼', 'score' => 0],
+            ['name' => '財務營收', 'score' => 0],
         ],
+        'technical' => $technicalPayload,
         'chain' => [
-            'NVIDIA 財報優於預期',
-            '-> AI Server 資本支出提升',
-            '-> 散熱與伺服器供應鏈需求增加',
-            '-> 相關台股受惠程度上升',
+            '全球事件引擎尚未啟用',
+            '-> Phase 8 將建立事件分類、產業分類與個股映射',
         ],
-        'summary' => 'AI 題材熱度仍維持高檔，外資籌碼偏正向，技術結構維持中期上升趨勢。但目前估值與高檔震盪風險需要同步追蹤。',
+        'summary' => '目前決策卡先以 Technical Score 顯示技術結構分數；Macro、Event、Theme、Chip、Fundamental 與 AI Explain 將依規劃分階段接上。',
     ]);
 });
 

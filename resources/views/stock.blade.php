@@ -42,7 +42,22 @@
     <section class="grid two" style="margin-top:16px">
         <div class="panel">
             <h2>K 線與技術分析</h2>
-            <div class="placeholder-chart">TradingView Lightweight Charts 接入區</div>
+            @if ($technical)
+                <table class="table">
+                    <tbody>
+                    <tr><th>SMA 5</th><td>{{ $technical['sma5'] ?? '-' }}</td></tr>
+                    <tr><th>SMA 20</th><td>{{ $technical['sma20'] ?? '-' }}</td></tr>
+                    <tr><th>SMA 60</th><td>{{ $technical['sma60'] ?? '-' }}</td></tr>
+                    <tr><th>EMA 12 / 26</th><td>{{ $technical['ema12'] ?? '-' }} / {{ $technical['ema26'] ?? '-' }}</td></tr>
+                    <tr><th>20 日漲跌幅</th><td>{{ $technical['return20'] ?? '-' }}%</td></tr>
+                    <tr><th>20 日量比</th><td>{{ $technical['volume_ratio20'] ?? '-' }}</td></tr>
+                    <tr><th>20 日波動</th><td>{{ $technical['volatility20'] ?? '-' }}%</td></tr>
+                    <tr><th>Breakout</th><td>{{ ($technical['breakout20'] ?? false) ? '是' : '否' }}</td></tr>
+                    </tbody>
+                </table>
+            @else
+                <p class="lead">尚未計算技術分數。</p>
+            @endif
         </div>
         <div class="panel">
             <h2>AI 分析摘要</h2>
@@ -50,4 +65,3 @@
         </div>
     </section>
 @endsection
-
