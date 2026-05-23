@@ -66,9 +66,9 @@ class MarketDisplay
     {
         $date = $event->event_date ? date('Y-m-d H:i', strtotime($event->event_date)) : '日期待補';
         $category = self::categoryName($event->category ?: 'Global');
-        $impact = $event->impact_score === null ? '待 AI 判讀' : $event->impact_score.'/100';
+        $impact = $event->impact_score === null ? '規則式判讀中' : $event->impact_score.'/100';
 
-        return '日期：'.$date.'｜分類：'.$category.'｜影響分數：'.$impact.'｜來源已收錄，中文摘要待 AI 解釋引擎產生。';
+        return '日期：'.$date.'｜分類：'.$category.'｜影響判讀：'.$impact.'｜來源已收錄，將由免費規則式事件引擎持續歸類。';
     }
 
     public static function categoryName(string $category): string
