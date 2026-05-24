@@ -113,7 +113,7 @@
         </div>
 
         <div class="panel">
-            <h2>規則式中文摘要</h2>
+            <h2>評價</h2>
             <p class="lead">{{ $summary }}</p>
         </div>
     </section>
