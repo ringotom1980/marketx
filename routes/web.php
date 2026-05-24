@@ -2,6 +2,7 @@
 
 use App\Models\Stock;
 use App\Support\ChipSignalAnalyzer;
+use App\Support\FundamentalSignalAnalyzer;
 use App\Support\MarketDisplay;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -166,6 +167,9 @@ Route::get('/s/{symbol}', function (string $symbol) {
     $recentChips = $stockRecord->chips()->latest('trade_date')->limit(5)->get();
     $recentPrices = $stockRecord->dailyPrices()->latest('trade_date')->limit(20)->get();
     $chipSignals = app(ChipSignalAnalyzer::class)->analyze($stockRecord, $recentChips, $recentPrices);
+    $latestFinancial = DB::table('stock_financials')->where('stock_id', $stockRecord->id)->orderByDesc('period')->first();
+    $latestRevenue = DB::table('stock_revenues')->where('stock_id', $stockRecord->id)->orderByDesc('year_month')->first();
+    $fundamentalSignals = app(FundamentalSignalAnalyzer::class)->analyze($stockRecord, $latestFinancial, $latestRevenue);
 
     $latestReport = DB::table('stock_reports')
         ->where('stock_id', $stockRecord->id)
@@ -195,6 +199,7 @@ Route::get('/s/{symbol}', function (string $symbol) {
         'technical' => $technicalPayload,
         'chip' => $latestChip,
         'chipSignals' => $chipSignals,
+        'fundamentalSignals' => $fundamentalSignals,
         'chain' => [
             '全球市場與事件',
             '→ 產業與題材影響',
