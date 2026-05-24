@@ -105,6 +105,32 @@ class ChipSignalAnalyzer
             }
         }
 
+        if ($latestChip->foreign_held_ratio !== null) {
+            $ratio = (float) $latestChip->foreign_held_ratio;
+
+            if ($ratio >= 45) {
+                $signals[] = ['tone' => 'green', 'title' => '外資持股比重高', 'body' => '外資持股比率偏高，代表中長線國際資金參與度高。'];
+            } elseif ($ratio <= 8) {
+                $signals[] = ['tone' => 'amber', 'title' => '外資持股比重低', 'body' => '外資持股比率偏低，籌碼較不受外資長線資金支撐。'];
+            }
+        }
+
+        if ($latestChip->lending_available_volume !== null && $avgVolume20 > 0) {
+            $lendingRatio = $latestChip->lending_available_volume / $avgVolume20;
+
+            if ($lendingRatio >= 8) {
+                $signals[] = ['tone' => 'amber', 'title' => '可借券賣出量偏高', 'body' => '可借券賣出股數相對成交量偏高，若股價轉弱，借券賣壓空間較大。'];
+            } elseif ($lendingRatio <= 1) {
+                $signals[] = ['tone' => 'green', 'title' => '借券賣壓空間較低', 'body' => '可借券賣出股數相對成交量不高，借券賣壓壓力較輕。'];
+            }
+        }
+
+        if ($latestChip->day_trade_eligible === true && $latestChip->day_trade_suspended === false) {
+            $signals[] = ['tone' => 'amber', 'title' => '可當沖標的', 'body' => '此股為可當沖標的，短線交易活躍時波動可能放大。'];
+        } elseif ($latestChip->day_trade_suspended === true) {
+            $signals[] = ['tone' => 'amber', 'title' => '當沖限制警示', 'body' => '此股目前存在當沖限制或暫停先賣後買狀態，短線交易條件較不穩定。'];
+        }
+
         $signals = array_merge($signals, $this->dayTradeSignals($stock, $latestPrice, $volume));
 
         return array_slice($signals, 0, 8);

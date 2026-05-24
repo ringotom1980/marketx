@@ -21,6 +21,13 @@ class StockChip1d extends Model
         'institutional_net_buy',
         'margin_balance',
         'short_balance',
+        'day_trade_eligible',
+        'day_trade_suspended',
+        'lending_available_volume',
+        'foreign_available_shares',
+        'foreign_held_shares',
+        'foreign_available_ratio',
+        'foreign_held_ratio',
         'raw_payload',
     ];
 
@@ -28,6 +35,8 @@ class StockChip1d extends Model
     {
         return [
             'trade_date' => 'date',
+            'day_trade_eligible' => 'boolean',
+            'day_trade_suspended' => 'boolean',
             'raw_payload' => 'array',
         ];
     }
@@ -37,4 +46,3 @@ class StockChip1d extends Model
         return $this->belongsTo(Stock::class);
     }
 }
-

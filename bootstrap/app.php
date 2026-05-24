@@ -12,6 +12,8 @@ use App\Console\Commands\GenerateStockReports;
 use App\Console\Commands\ImportGlobalEvents;
 use App\Console\Commands\ImportGlobalMarketData;
 use App\Console\Commands\ImportBrokerTradesFromCsv;
+use App\Console\Commands\ImportOfficialFinancialStatements;
+use App\Console\Commands\ImportOfficialFreeChipMetrics;
 use App\Console\Commands\ImportTaiwanChips;
 use App\Console\Commands\ImportTaiwanMargins;
 use App\Console\Commands\ImportTaiwanRevenues;
@@ -44,6 +46,8 @@ return Application::configure(basePath: dirname(__DIR__))
         ImportGlobalEvents::class,
         ImportGlobalMarketData::class,
         ImportBrokerTradesFromCsv::class,
+        ImportOfficialFinancialStatements::class,
+        ImportOfficialFreeChipMetrics::class,
         ImportTaiwanChips::class,
         ImportTaiwanMargins::class,
         ImportTaiwanRevenues::class,
