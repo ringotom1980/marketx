@@ -79,6 +79,10 @@ class EventClusterDisplay
             return 'Apple 服務與平台治理消息增加，市場會觀察服務營收與生態系黏著度。';
         }
 
+        if (Str::contains($text, ['pipeline', 'oil spill', 'oil leak'])) {
+            return '能源基礎設施與供應消息增加，市場會觀察油價、成本與能源股反應。';
+        }
+
         if (Str::contains($text, ['shipping', 'freight', 'container', 'Baltic Dry', 'Red Sea'])) {
             return '航運與貨櫃運價變化可能影響航運股、供應鏈成本與通膨預期。';
         }

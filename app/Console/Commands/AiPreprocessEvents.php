@@ -19,7 +19,7 @@ class AiPreprocessEvents extends Command
     public function handle(GroqProvider $groq, AiPipelineService $pipeline, AiUsageLimiter $limiter): int
     {
         $task = 'event_preprocess';
-        $limit = max(1, min(20, (int) $this->option('limit')));
+        $limit = max(1, min(5, (int) $this->option('limit')));
         $live = (bool) $this->option('live');
 
         if (! $limiter->canRun($task)) {
@@ -122,10 +122,10 @@ class AiPreprocessEvents extends Command
     {
         return implode("\n", [
             '你是《股市在幹嘛》的 Groq 前處理層。',
-            '任務：把已由程式聚合過的事件群整理成事件摘要、情緒方向、題材分類、產業分類。',
+            '任務：把已由程式依今日熱度聚合過的前五事件群，整理成白話事件摘要、情緒方向、題材分類、產業分類。',
             '限制：不要預測價格，不要給買賣建議。',
             '請輸出 JSON array，每筆包含 cluster_id, summary_zh, sentiment, themes, industries, related_symbols, importance_score。',
-            'summary_zh 必須是繁體中文白話短句，像是寫給一般投資人看的，不要保留英文長標題。',
+            'summary_zh 必須是繁體中文白話短句，像是寫給一般投資人看的，不要保留英文長標題，並說明對市場真正重要的原因。',
             'sentiment 只能用 positive、neutral、negative。',
             'themes 與 industries 可中英混用，但優先使用繁體中文題材名稱。',
             '只輸出 JSON，不要 markdown，不要解釋，不要補充說明。',

@@ -89,7 +89,7 @@ Route::get('/', function () {
     $events = DB::table('global_event_clusters')
         ->orderByDesc('cluster_date')
         ->orderByDesc('importance_score')
-        ->limit(4)
+        ->limit(5)
         ->get(['title', 'summary', 'category', 'region', 'importance_score', 'sentiment', 'themes'])
         ->map(fn ($cluster) => [
             'title' => EventClusterDisplay::title($cluster),
