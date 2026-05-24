@@ -57,10 +57,13 @@
             border-radius: 8px;
             margin-top: 16px;
             padding: 12px 14px;
-            background: #16202a;
+            background: #c1121f;
             color: #fff;
             font-weight: 800;
             cursor: pointer;
+        }
+        button:hover {
+            background: #9f0f1a;
         }
         .error {
             margin: 0 0 14px;

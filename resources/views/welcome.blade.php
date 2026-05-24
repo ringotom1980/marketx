@@ -15,6 +15,8 @@
             --line: #dbe1e8;
             --green: #147d55;
             --red: #b42318;
+            --button: #c1121f;
+            --button-hover: #9f0f1a;
             --blue: #1d4ed8;
             --amber: #b45309;
         }
@@ -148,13 +150,16 @@
         .button {
             border: 0;
             border-radius: 8px;
-            background: var(--ink);
+            background: var(--button);
             color: #fff;
             padding: 12px 14px;
             font-weight: 800;
             cursor: pointer;
             white-space: nowrap;
         }
+
+        .search button:hover,
+        .button:hover { background: var(--button-hover); }
 
         .grid { display: grid; gap: 12px; }
         .grid.two,
