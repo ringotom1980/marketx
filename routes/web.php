@@ -571,10 +571,17 @@ Route::post('/watchlist/{symbol}/ai-report', function (string $symbol, AiUsageLi
     ]);
 
     $output = trim(Artisan::output());
+    $generated = str_contains($output, 'Gemini stock reports generated: 1');
+    $alreadySkipped = str_contains($output, 'Skipped: 1');
 
     return back()->with(
         $exitCode === 0 ? 'status' : 'error',
-        $output !== '' ? $output : $stock->name.' AI 報告任務已完成。'
+        match (true) {
+            $exitCode !== 0 => 'AI 報告產生失敗，請稍後再試。',
+            $generated => $stock->name.' AI 報告已產生完成。',
+            $alreadySkipped => $stock->name.' 今日已經有 AI 報告，不需要重複產生。',
+            default => $stock->name.' AI 報告任務已完成。',
+        }
     );
 });
 
@@ -633,9 +640,15 @@ Route::post('/admin/ai/watchlist-reports', function (Request $request) {
     ]);
 
     $output = trim(Artisan::output());
+    preg_match('/Gemini stock reports generated:\s*(\d+)/', $output, $generatedMatch);
+    preg_match('/Skipped:\s*(\d+)/', $output, $skippedMatch);
+    $generated = (int) ($generatedMatch[1] ?? 0);
+    $skipped = (int) ($skippedMatch[1] ?? 0);
 
     return back()->with(
         $exitCode === 0 ? 'status' : 'error',
-        $output !== '' ? $output : 'AI 任務已執行完成。'
+        $exitCode === 0
+            ? '追蹤清單 AI 任務完成：產生 '.$generated.' 檔，略過 '.$skipped.' 檔。'
+            : 'AI 任務執行失敗，請查看最近 AI 紀錄。'
     );
 });
