@@ -33,7 +33,7 @@ class ClusterGlobalEvents extends Command
             ->get(['id', 'event_date', 'source', 'title', 'summary', 'category', 'region', 'impact_score']);
 
         $clusters = $events
-            ->groupBy(fn ($event) => $this->clusterKey($event))
+            ->groupBy(fn ($event) => $this->primaryClusterKey($event))
             ->map(fn ($group, string $key) => $this->clusterPayload($key, $group->values(), $clusterDate))
             ->sortByDesc('importance_score')
             ->values();
@@ -77,6 +77,17 @@ class ClusterGlobalEvents extends Command
         return Str::slug($category.'-'.$topic) ?: 'global-general';
     }
 
+    private function primaryClusterKey(object $event): string
+    {
+        $text = Str::lower(($event->title ?? '').' '.($event->summary ?? '').' '.($event->category ?? ''));
+
+        if (str_contains($text, 'ai') || str_contains($text, 'nvidia') || str_contains($text, 'gpu') || str_contains($text, 'server') || str_contains($text, 'cloud')) {
+            return 'ai-infrastructure';
+        }
+
+        return $this->clusterKey($event);
+    }
+
     private function clusterPayload(string $key, mixed $events, string $clusterDate): array
     {
         $first = $events->first();
@@ -93,7 +104,7 @@ class ClusterGlobalEvents extends Command
             'category' => $first->category ?: $this->category($text),
             'region' => $first->region ?: $this->region($text),
             'importance_score' => $importance,
-            'sentiment' => $this->sentiment($text),
+            'sentiment' => $this->sentiment($text, $themes),
             'themes' => $themes,
             'industries' => $industries,
             'related_symbols' => $this->symbols($text),
@@ -230,9 +241,9 @@ class ClusterGlobalEvents extends Command
         return array_values(array_unique($symbols));
     }
 
-    private function sentiment(string $text): string
+    private function sentiment(string $text, array $themes): string
     {
-        $negative = ['restriction', 'ban', 'tariff', 'war', 'risk', 'inflation', 'higher rate'];
+        $negative = ['restriction', 'ban', 'tariff', 'war', 'geopolitical risk', 'higher rate'];
         $positive = ['growth', 'strong', 'record', 'demand', 'expand', 'partnership'];
 
         foreach ($negative as $keyword) {
@@ -245,6 +256,10 @@ class ClusterGlobalEvents extends Command
             if (str_contains($text, $keyword)) {
                 return 'positive';
             }
+        }
+
+        if (array_intersect($themes, ['AI Server', '雲端與資料中心', '半導體']) !== []) {
+            return 'positive';
         }
 
         return 'neutral';

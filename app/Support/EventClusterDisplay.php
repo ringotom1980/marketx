@@ -11,7 +11,7 @@ class EventClusterDisplay
         $themes = self::jsonList($cluster->themes ?? null);
         $category = (string) ($cluster->category ?? '');
 
-        if (in_array('AI Server', $themes, true)) {
+        if (in_array('AI Server', $themes, true) || in_array('AI 伺服器', $themes, true)) {
             return 'AI 伺服器題材持續升溫';
         }
 
@@ -39,10 +39,11 @@ class EventClusterDisplay
         $themes = self::jsonList($cluster->themes ?? null);
         $themeText = $themes === [] ? '題材待分類' : '相關題材：'.implode('、', $themes);
         $summary = self::plainSummary((string) ($cluster->summary ?? ''), $themes, (string) ($cluster->category ?? ''));
+        $sentiment = self::sentiment((string) ($cluster->sentiment ?? 'neutral'), $themes, $summary);
 
         return $summary
             .'｜重要度：'.(int) ($cluster->importance_score ?? 0).'/100'
-            .'｜市場解讀：'.self::sentiment((string) ($cluster->sentiment ?? 'neutral'))
+            .'｜市場解讀：'.$sentiment
             .'｜'.$themeText;
     }
 
@@ -81,11 +82,17 @@ class EventClusterDisplay
         return mb_substr($text, 0, 90);
     }
 
-    private static function sentiment(string $sentiment): string
+    private static function sentiment(string $sentiment, array $themes, string $summary): string
     {
+        if (array_intersect($themes, ['AI Server', 'AI 伺服器', '雲端與資料中心', '半導體']) !== [] && str_contains($summary, '需求')) {
+            return strtolower($sentiment) === 'negative'
+                ? '偏正向，但留意外部風險'
+                : '偏正向';
+        }
+
         return match (strtolower($sentiment)) {
             'positive' => '偏正向',
-            'negative' => '偏保守',
+            'negative' => '偏保守，需觀察風險',
             'neutral' => '中性觀察',
             default => '觀察中',
         };
