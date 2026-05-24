@@ -41,6 +41,38 @@ class CalculateFundamentalScores extends Command
                     $score += min(20, max(-20, ((float) $latestRevenue->yoy_pct) * 0.5));
                 }
 
+                if ($latestFinancial?->per !== null) {
+                    $per = (float) $latestFinancial->per;
+
+                    if ($per > 0 && $per <= 12) {
+                        $score += 8;
+                    } elseif ($per > 25 && $per <= 40) {
+                        $score -= 5;
+                    } elseif ($per > 40) {
+                        $score -= 10;
+                    }
+                }
+
+                if ($latestFinancial?->pb_ratio !== null) {
+                    $pb = (float) $latestFinancial->pb_ratio;
+
+                    if ($pb > 0 && $pb <= 1.2) {
+                        $score += 5;
+                    } elseif ($pb > 4) {
+                        $score -= 6;
+                    }
+                }
+
+                if ($latestFinancial?->dividend_yield !== null) {
+                    $yield = (float) $latestFinancial->dividend_yield;
+
+                    if ($yield >= 4) {
+                        $score += 4;
+                    } elseif ($yield > 0 && $yield < 1) {
+                        $score -= 2;
+                    }
+                }
+
                 $score = max(0, min(100, (int) round($score)));
                 $base = $stock->latestScore;
 

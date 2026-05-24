@@ -31,6 +31,7 @@ class RunDailyPipeline extends Command
                 ['taiwan_chips', 'market:import-chips', []],
                 ['taiwan_margins', 'market:import-margins', []],
                 ['taiwan_revenues', 'market:import-revenues', []],
+                ['taiwan_valuations', 'market:import-valuations', []],
                 ['technical_scores', 'market:calculate-technical-scores', ['--min-days' => 10]],
                 ['fundamental_scores', 'market:calculate-fundamental-scores', []],
                 ['global_influence', 'market:calculate-global-influence', []],

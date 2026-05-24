@@ -14,6 +14,7 @@ use App\Console\Commands\ImportTaiwanChips;
 use App\Console\Commands\ImportTaiwanMargins;
 use App\Console\Commands\ImportTaiwanRevenues;
 use App\Console\Commands\ImportTaiwanStocks;
+use App\Console\Commands\ImportTaiwanValuations;
 use App\Console\Commands\MarketDataStatus;
 use App\Console\Commands\RunDailyPipeline;
 use App\Console\Commands\SeedThemeMappings;
@@ -42,6 +43,7 @@ return Application::configure(basePath: dirname(__DIR__))
         ImportTaiwanMargins::class,
         ImportTaiwanRevenues::class,
         ImportTaiwanStocks::class,
+        ImportTaiwanValuations::class,
         MarketDataStatus::class,
         RunDailyPipeline::class,
         SeedThemeMappings::class,
