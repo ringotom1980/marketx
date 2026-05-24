@@ -7,7 +7,11 @@
             <p class="lead">{{ $stock['market'] }}｜收盤 {{ $stock['close'] }}｜漲跌 {{ $stock['change'] }}｜成交量 {{ $stock['volume'] }}</p>
         </div>
         <div class="panel">
-            <div class="badge green">{{ $stock['decision'] }}</div>
+            @php
+                $decisionTone = str_contains($stock['decision'], '買') ? 'red'
+                    : (str_contains($stock['decision'], '賣') || str_contains($stock['decision'], '減') ? 'green' : 'amber');
+            @endphp
+            <div class="badge {{ $decisionTone }}">{{ $stock['decision'] }}</div>
             <div class="score" style="margin-top:12px">{{ $stock['score'] }} / 100</div>
             <p class="lead">信心度 {{ $stock['confidence'] }}%</p>
         </div>
@@ -42,36 +46,28 @@
     <section class="grid two" style="margin-top:16px">
         <div class="panel">
             <h2>K 線與技術分析</h2>
-            @if ($technical)
-                @if (! empty($technical['signals']))
-                    <div class="signal-list">
-                        @foreach ($technical['signals'] as $signal)
-                            <div class="signal-item">
-                                <span class="badge {{ $signal['tone'] ?? '' }}">{{ $signal['title'] ?? '技術訊號' }}</span>
-                                <p>{{ $signal['body'] ?? '' }}</p>
-                            </div>
-                        @endforeach
-                    </div>
-                @endif
-                <table class="table">
-                    <tbody>
-                    <tr><th>SMA 5 / 20 / 60</th><td>{{ $technical['sma5'] ?? '-' }} / {{ $technical['sma20'] ?? '-' }} / {{ $technical['sma60'] ?? '-' }}</td></tr>
-                    <tr><th>EMA 12 / 26</th><td>{{ $technical['ema12'] ?? '-' }} / {{ $technical['ema26'] ?? '-' }}</td></tr>
-                    <tr><th>RSI 14</th><td>{{ $technical['rsi14'] ?? '-' }}</td></tr>
-                    <tr><th>MACD / Signal / Histogram</th><td>{{ $technical['macd'] ?? '-' }} / {{ $technical['macd_signal'] ?? '-' }} / {{ $technical['macd_histogram'] ?? '-' }}</td></tr>
-                    <tr><th>KD 9</th><td>K {{ $technical['k9'] ?? '-' }} / D {{ $technical['d9'] ?? '-' }}</td></tr>
-                    <tr><th>布林通道 20</th><td>上 {{ $technical['bollinger_upper20'] ?? '-' }} / 中 {{ $technical['bollinger_middle20'] ?? '-' }} / 下 {{ $technical['bollinger_lower20'] ?? '-' }}</td></tr>
-                    <tr><th>ATR 14</th><td>{{ $technical['atr14'] ?? '-' }}</td></tr>
-                    <tr><th>20 日報酬</th><td>{{ $technical['return20'] ?? '-' }}%</td></tr>
-                    <tr><th>20 日量比</th><td>{{ $technical['volume_ratio20'] ?? '-' }}</td></tr>
-                    <tr><th>20 日波動</th><td>{{ $technical['volatility20'] ?? '-' }}%</td></tr>
-                    <tr><th>20 日突破</th><td>{{ ($technical['breakout20'] ?? false) ? '是' : '否' }}</td></tr>
-                    </tbody>
-                </table>
+            @if ($technical && ! empty($technical['signals']))
+                <div class="signal-list">
+                    @foreach ($technical['signals'] as $signal)
+                        @php
+                            $toneClass = match ($signal['tone'] ?? '') {
+                                'green' => 'red',
+                                'red' => 'green',
+                                'amber' => 'amber',
+                                default => '',
+                            };
+                        @endphp
+                        <div class="signal-item">
+                            <span class="badge {{ $toneClass }}">{{ $signal['title'] ?? '技術訊號' }}</span>
+                            <p>{{ $signal['body'] ?? '' }}</p>
+                        </div>
+                    @endforeach
+                </div>
             @else
-                <p class="lead">尚未產生技術分析。</p>
+                <p class="lead">目前技術資料不足，等待更多日 K 資料回補後產生分析。</p>
             @endif
         </div>
+
         <div class="panel">
             <h2>籌碼分析</h2>
             @if ($chip)
@@ -82,19 +78,19 @@
                     <tr><th>投信買賣超</th><td>{{ number_format($chip->investment_trust_net_buy) }}</td></tr>
                     <tr><th>自營商買賣超</th><td>{{ number_format($chip->dealer_net_buy) }}</td></tr>
                     <tr><th>三大法人合計</th><td>{{ number_format($chip->institutional_net_buy) }}</td></tr>
-                    <tr><th>融資餘額</th><td>{{ $chip->margin_balance === null ? '無資料' : number_format($chip->margin_balance) }}</td></tr>
-                    <tr><th>融券餘額</th><td>{{ $chip->short_balance === null ? '無資料' : number_format($chip->short_balance) }}</td></tr>
+                    <tr><th>融資餘額</th><td>{{ $chip->margin_balance === null ? '未取得' : number_format($chip->margin_balance) }}</td></tr>
+                    <tr><th>融券餘額</th><td>{{ $chip->short_balance === null ? '未取得' : number_format($chip->short_balance) }}</td></tr>
                     </tbody>
                 </table>
             @else
-                <p class="lead">尚未匯入籌碼資料。</p>
+                <p class="lead">目前尚未匯入籌碼資料。</p>
             @endif
         </div>
     </section>
 
     <section class="grid two" style="margin-top:16px">
         <div class="panel">
-            <h2>規則式中文解釋</h2>
+            <h2>AI 分析摘要</h2>
             <p class="lead">{{ $summary }}</p>
         </div>
     </section>
