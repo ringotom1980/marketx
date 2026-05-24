@@ -21,6 +21,7 @@ use App\Console\Commands\ImportTaiwanRevenues;
 use App\Console\Commands\ImportTaiwanStocks;
 use App\Console\Commands\ImportTaiwanValuations;
 use App\Console\Commands\ImportTwseBrokerTrades;
+use App\Console\Commands\MapDynamicThemes;
 use App\Console\Commands\MarketDataStatus;
 use App\Console\Commands\RunDailyPipeline;
 use App\Console\Commands\SeedThemeMappings;
@@ -57,6 +58,7 @@ return Application::configure(basePath: dirname(__DIR__))
         ImportTaiwanStocks::class,
         ImportTaiwanValuations::class,
         ImportTwseBrokerTrades::class,
+        MapDynamicThemes::class,
         MarketDataStatus::class,
         RunDailyPipeline::class,
         SeedThemeMappings::class,
