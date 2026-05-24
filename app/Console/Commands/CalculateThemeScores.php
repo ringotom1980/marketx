@@ -24,30 +24,28 @@ class CalculateThemeScores extends Command
                 ->where('theme_id', $theme->id)
                 ->pluck('stock_id');
 
-            if ($mapped->isEmpty()) {
-                $skipped++;
-                return;
-            }
-
-            $scores = DB::table('stock_scores')
-                ->select('stock_id', 'technical_score', 'chip_score', 'total_score')
-                ->whereIn('stock_id', $mapped)
-                ->whereNotNull('technical_score')
-                ->orderByDesc('score_date')
-                ->get()
-                ->unique('stock_id');
-
-            if ($scores->isEmpty()) {
-                $skipped++;
-                return;
-            }
-
-            $priceScore = (int) round($scores->avg('technical_score'));
-            $chipScore = (int) round($scores->avg('chip_score'));
             $eventMatches = DB::table('theme_event_matches')
                 ->where('theme_id', $theme->id)
                 ->where('created_at', '>=', CarbonImmutable::parse($scoreDate, 'Asia/Taipei')->subDays(7))
                 ->get();
+
+            if ($mapped->isEmpty() && $eventMatches->isEmpty()) {
+                $skipped++;
+                return;
+            }
+
+            $scores = $mapped->isEmpty()
+                ? collect()
+                : DB::table('stock_scores')
+                    ->select('stock_id', 'technical_score', 'chip_score', 'total_score')
+                    ->whereIn('stock_id', $mapped)
+                    ->whereNotNull('technical_score')
+                    ->orderByDesc('score_date')
+                    ->get()
+                    ->unique('stock_id');
+
+            $priceScore = $scores->isEmpty() ? null : (int) round($scores->avg('technical_score'));
+            $chipScore = $scores->isEmpty() ? null : (int) round($scores->avg('chip_score'));
             $newsScore = $eventMatches->isEmpty()
                 ? null
                 : max(0, min(100, (int) round(min(100, $eventMatches->sum('match_score') / 3))));
@@ -62,7 +60,7 @@ class CalculateThemeScores extends Command
                 [
                     'heat_score' => max(0, min(100, $heatScore)),
                     'news_score' => $newsScore,
-                    'price_score' => max(0, min(100, $priceScore)),
+                    'price_score' => $priceScore === null ? null : max(0, min(100, $priceScore)),
                     'chip_score' => $chipScore ? max(0, min(100, $chipScore)) : null,
                     'payload' => json_encode([
                         'mapped_stock_count' => $mapped->count(),
