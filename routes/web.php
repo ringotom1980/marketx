@@ -311,6 +311,56 @@ Route::get('/global', function () {
 });
 
 Route::get('/themes', function () {
+    $themePhase = function (int $score, int $newsScore, int $priceScore): string {
+        if ($score >= 85 && ($newsScore >= 75 || $priceScore >= 75)) {
+            return '高檔延續';
+        }
+
+        if ($score >= 70) {
+            return '升溫中';
+        }
+
+        if ($score >= 55) {
+            return '觀察延續';
+        }
+
+        if ($score >= 40) {
+            return '熱度降溫';
+        }
+
+        return '題材退潮';
+    };
+    $themeTone = fn (int $score): string => match (true) {
+        $score >= 70 => 'red',
+        $score >= 45 => 'amber',
+        default => 'green',
+    };
+    $themeReason = function (string $name, int $eventCount, int $mappedCount, mixed $newsScore, mixed $priceScore, mixed $chipScore): string {
+        $parts = [];
+
+        if ($eventCount > 0 || (int) ($newsScore ?? 0) > 0) {
+            $parts[] = '近期新聞與事件有命中';
+        }
+
+        if ((int) ($priceScore ?? 0) >= 65) {
+            $parts[] = '題材內股票技術面偏強';
+        }
+
+        if ((int) ($chipScore ?? 0) >= 65) {
+            $parts[] = '題材內籌碼偏正向';
+        }
+
+        if ($mappedCount > 0) {
+            $parts[] = '目前已連到 '.$mappedCount.' 檔相關股票';
+        }
+
+        if ($parts === []) {
+            return $name.'目前資料仍在累積，先列入觀察。';
+        }
+
+        return $name.'主要因為'.implode('，', $parts).'。';
+    };
+
     $themes = DB::table('themes')
         ->leftJoin('theme_scores', function ($join) {
             $join->on('themes.id', '=', 'theme_scores.theme_id')
@@ -320,36 +370,47 @@ Route::get('/themes', function () {
         ->where('themes.is_active', true)
         ->orderByDesc('theme_scores.heat_score')
         ->orderBy('themes.name')
+        ->limit(20)
         ->get()
-        ->map(function ($theme) {
+        ->map(function ($theme) use ($themePhase, $themeTone, $themeReason) {
             $mappedCount = DB::table('stock_theme_map')->where('theme_id', $theme->id)->count();
             $eventCount = DB::table('theme_event_matches')->where('theme_id', $theme->id)->count();
-            $score = $theme->heat_score === null ? '尚未計分' : ((int) $theme->heat_score).' / 100';
+            $score = (int) ($theme->heat_score ?? 0);
+            $priceScore = $theme->price_score === null ? '無' : (string) $theme->price_score;
+            $chipScore = $theme->chip_score === null ? '無' : (string) $theme->chip_score;
+            $topStocks = DB::table('stock_theme_map')
+                ->join('stocks', 'stocks.id', '=', 'stock_theme_map.stock_id')
+                ->leftJoin('stock_scores', function ($join) {
+                    $join->on('stocks.id', '=', 'stock_scores.stock_id')
+                        ->whereRaw('stock_scores.score_date = (select max(ss.score_date) from stock_scores ss where ss.stock_id = stocks.id)');
+                })
+                ->where('stock_theme_map.theme_id', $theme->id)
+                ->whereNotNull('stock_scores.total_score')
+                ->orderByDesc('stock_scores.total_score')
+                ->limit(4)
+                ->get(['stocks.symbol', 'stocks.name', 'stock_scores.total_score'])
+                ->map(fn ($stock) => [
+                    'symbol' => $stock->symbol,
+                    'name' => $stock->name,
+                    'score' => $stock->total_score,
+                ])
+                ->all();
 
             return [
-                'title' => $theme->name.'｜熱度 '.$score,
-                'body' => ($theme->description ?: '由事件、關鍵字與市場資料動態維護的題材。')
-                    .'｜映射股票：'.$mappedCount.' 檔'
-                    .'｜新聞事件：'.$eventCount.' 筆'
-                    .'｜新聞分數：'.($theme->news_score ?? '無')
-                    .'｜技術分數：'.($theme->price_score ?? '無')
-                    .'｜籌碼分數：'.($theme->chip_score ?? '無')
-                    .'｜AI 狀態：'.($theme->ai_status ?? '預留')
-                    .'｜更新日：'.($theme->score_date ?? '尚未更新'),
+                'name' => $theme->name,
+                'score' => $score,
+                'phase' => $themePhase($score, (int) ($theme->news_score ?? 0), (int) ($theme->price_score ?? 0)),
+                'tone' => $themeTone($score),
+                'reason' => $themeReason($theme->name, $eventCount, $mappedCount, $theme->news_score, $theme->price_score, $theme->chip_score),
+                'event_count' => $eventCount,
+                'stock_count' => $mappedCount,
+                'price_score' => $priceScore,
+                'chip_score' => $chipScore,
+                'top_stocks' => $topStocks,
             ];
         });
 
-    if ($themes->isEmpty()) {
-        $themes = collect([
-            ['title' => '題材資料準備中', 'body' => '尚未產生題材熱度資料。'],
-        ]);
-    }
-
-    return view('simple', [
-        'heading' => '題材雷達',
-        'description' => '依新聞事件、題材關鍵字、股票映射、技術分數與籌碼分數計算題材熱度。AI 欄位已預留，目前先使用免費規則式版本。',
-        'items' => $themes,
-    ]);
+    return view('themes', ['themes' => $themes]);
 });
 
 Route::get('/watchlist', function () {
