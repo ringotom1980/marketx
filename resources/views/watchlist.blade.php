@@ -120,12 +120,14 @@
                             <button class="button" type="submit">移除</button>
                         </form>
                     </div>
-                    <form method="post" action="/watchlist/{{ $item['symbol'] }}/ai-report" style="margin-top:8px">
-                        @csrf
-                        <button class="button" type="submit" style="width:100%" {{ $aiUsage['remaining'] <= 0 ? 'disabled' : '' }}>
-                            產生這檔 AI 報告（剩 {{ $aiUsage['remaining'] }} / {{ $aiUsage['limit'] }}）
-                        </button>
-                    </form>
+                    @if (! $item['report_is_ai'])
+                        <form method="post" action="/watchlist/{{ $item['symbol'] }}/ai-report" style="margin-top:8px">
+                            @csrf
+                            <button class="button" type="submit" style="width:100%" {{ $aiUsage['remaining'] <= 0 ? 'disabled' : '' }}>
+                                產生AI報告
+                            </button>
+                        </form>
+                    @endif
                 </article>
             @endforeach
         </section>
