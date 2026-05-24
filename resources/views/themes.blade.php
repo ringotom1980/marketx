@@ -23,13 +23,11 @@
                     <span style="width: {{ min(100, max(0, $theme['score'])) }}%"></span>
                 </div>
 
-                <p class="lead">{{ $theme['reason'] }}</p>
-
                 <table class="table" style="margin-top:12px">
                     <tbody>
                     <tr>
                         <th>新聞事件</th>
-                        <td>{{ $theme['event_count'] }} 筆</td>
+                        <td>台灣 {{ $theme['taiwan_event_count'] }} / 國際 {{ $theme['global_event_count'] }}</td>
                     </tr>
                     <tr>
                         <th>相關股票</th>
@@ -51,6 +49,23 @@
                     @endif
                     </tbody>
                 </table>
+
+                @if ($theme['related_stocks'] !== [])
+                    <details style="margin-top:12px">
+                        <summary class="button" style="display:inline-flex">查看相關股票 {{ $theme['stock_count'] }} 檔</summary>
+                        <table class="table" style="margin-top:10px">
+                            <tbody>
+                            @foreach ($theme['related_stocks'] as $stock)
+                                <tr>
+                                    <th><a href="/s/{{ $stock['symbol'] }}">{{ $stock['name'] }}</a></th>
+                                    <td>{{ $stock['decision'] ?? '等待計算' }}</td>
+                                    <td>{{ $stock['score'] }}</td>
+                                </tr>
+                            @endforeach
+                            </tbody>
+                        </table>
+                    </details>
+                @endif
             </article>
         @empty
             <div class="panel">

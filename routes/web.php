@@ -335,32 +335,6 @@ Route::get('/themes', function () {
         $score >= 45 => 'amber',
         default => 'green',
     };
-    $themeReason = function (string $name, int $eventCount, int $mappedCount, mixed $newsScore, mixed $priceScore, mixed $chipScore): string {
-        $parts = [];
-
-        if ($eventCount > 0 || (int) ($newsScore ?? 0) > 0) {
-            $parts[] = '近期新聞與事件有命中';
-        }
-
-        if ((int) ($priceScore ?? 0) >= 65) {
-            $parts[] = '題材內股票技術面偏強';
-        }
-
-        if ((int) ($chipScore ?? 0) >= 65) {
-            $parts[] = '題材內籌碼偏正向';
-        }
-
-        if ($mappedCount > 0) {
-            $parts[] = '目前已連到 '.$mappedCount.' 檔相關股票';
-        }
-
-        if ($parts === []) {
-            return $name.'目前資料仍在累積，先列入觀察。';
-        }
-
-        return $name.'主要因為'.implode('，', $parts).'。';
-    };
-
     $themes = DB::table('themes')
         ->leftJoin('theme_scores', function ($join) {
             $join->on('themes.id', '=', 'theme_scores.theme_id')
@@ -372,13 +346,19 @@ Route::get('/themes', function () {
         ->orderBy('themes.name')
         ->limit(20)
         ->get()
-        ->map(function ($theme) use ($themePhase, $themeTone, $themeReason) {
+        ->map(function ($theme) use ($themePhase, $themeTone) {
             $mappedCount = DB::table('stock_theme_map')->where('theme_id', $theme->id)->count();
             $eventCount = DB::table('theme_event_matches')->where('theme_id', $theme->id)->count();
+            $eventRegions = DB::table('theme_event_matches')
+                ->leftJoin('global_events', 'global_events.id', '=', 'theme_event_matches.global_event_id')
+                ->where('theme_event_matches.theme_id', $theme->id)
+                ->selectRaw("sum(case when lower(coalesce(global_events.region, '')) in ('tw', 'taiwan', '台灣') or lower(coalesce(global_events.source, '')) like '%taiwan%' then 1 else 0 end) as taiwan_count")
+                ->selectRaw("sum(case when lower(coalesce(global_events.region, '')) in ('tw', 'taiwan', '台灣') or lower(coalesce(global_events.source, '')) like '%taiwan%' then 0 else 1 end) as global_count")
+                ->first();
             $score = (int) ($theme->heat_score ?? 0);
             $priceScore = $theme->price_score === null ? '無' : (string) $theme->price_score;
             $chipScore = $theme->chip_score === null ? '無' : (string) $theme->chip_score;
-            $topStocks = DB::table('stock_theme_map')
+            $relatedStocks = DB::table('stock_theme_map')
                 ->join('stocks', 'stocks.id', '=', 'stock_theme_map.stock_id')
                 ->leftJoin('stock_scores', function ($join) {
                     $join->on('stocks.id', '=', 'stock_scores.stock_id')
@@ -387,12 +367,13 @@ Route::get('/themes', function () {
                 ->where('stock_theme_map.theme_id', $theme->id)
                 ->whereNotNull('stock_scores.total_score')
                 ->orderByDesc('stock_scores.total_score')
-                ->limit(4)
-                ->get(['stocks.symbol', 'stocks.name', 'stock_scores.total_score'])
+                ->limit(20)
+                ->get(['stocks.symbol', 'stocks.name', 'stock_scores.total_score', 'stock_scores.decision'])
                 ->map(fn ($stock) => [
                     'symbol' => $stock->symbol,
                     'name' => $stock->name,
                     'score' => $stock->total_score,
+                    'decision' => $stock->decision,
                 ])
                 ->all();
 
@@ -401,12 +382,14 @@ Route::get('/themes', function () {
                 'score' => $score,
                 'phase' => $themePhase($score, (int) ($theme->news_score ?? 0), (int) ($theme->price_score ?? 0)),
                 'tone' => $themeTone($score),
-                'reason' => $themeReason($theme->name, $eventCount, $mappedCount, $theme->news_score, $theme->price_score, $theme->chip_score),
                 'event_count' => $eventCount,
+                'taiwan_event_count' => (int) ($eventRegions->taiwan_count ?? 0),
+                'global_event_count' => (int) ($eventRegions->global_count ?? 0),
                 'stock_count' => $mappedCount,
                 'price_score' => $priceScore,
                 'chip_score' => $chipScore,
-                'top_stocks' => $topStocks,
+                'top_stocks' => array_slice($relatedStocks, 0, 4),
+                'related_stocks' => $relatedStocks,
             ];
         });
 
