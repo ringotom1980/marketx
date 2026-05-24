@@ -35,7 +35,7 @@
                 @foreach ($modules as $module)
                     <tr>
                         <th>{{ $module['name'] }}</th>
-                        <td><div class="meter"><span style="width: {{ $module['score'] }}%"></span></div></td>
+                        <td><div class="meter"><span style="width: {{ min(100, max(0, $module['score'])) }}%"></span></div></td>
                         <td>{{ $module['score'] }}</td>
                     </tr>
                 @endforeach
@@ -66,7 +66,7 @@
                     @endforeach
                 </div>
             @else
-                <p class="lead">目前技術資料不足，等待更多日 K 資料回補後產生分析。</p>
+                <p class="lead">目前技術資料不足，等待更多日 K 資料後會產生均線、KD、MACD、RSI、布林通道與量價訊號。</p>
             @endif
         </div>
 
@@ -82,30 +82,30 @@
                     @endforeach
                 </div>
             @else
-                <p class="lead">目前籌碼資料不足，等待法人與融資融券資料更新後產生分析。</p>
+                <p class="lead">目前籌碼資料不足，等待三大法人、融資融券、借券與外資持股資料後會產生分析。</p>
             @endif
         </div>
     </section>
 
     <section class="grid two" style="margin-top:16px">
         <div class="panel">
-            <h2>財報分析</h2>
+            <h2>財務營收分析</h2>
             @if (! empty($fundamentalSignals))
                 <div class="signal-list">
                     @foreach ($fundamentalSignals as $signal)
                         <div class="signal-item">
-                            <span class="badge {{ $badgeTone($signal['tone'] ?? '') }}">{{ $signal['title'] ?? '財報訊號' }}</span>
+                            <span class="badge {{ $badgeTone($signal['tone'] ?? '') }}">{{ $signal['title'] ?? '財務訊號' }}</span>
                             <p>{{ $signal['body'] ?? '' }}</p>
                         </div>
                     @endforeach
                 </div>
             @else
-                <p class="lead">目前財報資料不足，等待官方財報與月營收資料更新後產生分析。</p>
+                <p class="lead">目前財務資料不足，等待月營收、EPS、ROE、毛利率與本益比資料後會產生分析。</p>
             @endif
         </div>
 
         <div class="panel">
-            <h2>AI 分析摘要</h2>
+            <h2>規則式中文摘要</h2>
             <p class="lead">{{ $summary }}</p>
         </div>
     </section>

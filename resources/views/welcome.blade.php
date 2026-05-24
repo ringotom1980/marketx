@@ -20,7 +20,6 @@
         }
 
         * { box-sizing: border-box; }
-
         html { -webkit-text-size-adjust: 100%; }
 
         body {
@@ -32,7 +31,6 @@
         }
 
         a { color: inherit; text-decoration: none; }
-
         .shell { min-height: 100vh; }
 
         .topbar {
@@ -70,7 +68,7 @@
         }
 
         .brand span {
-            font-weight: 800;
+            font-weight: 900;
             font-size: 18px;
             white-space: nowrap;
         }
@@ -142,7 +140,7 @@
             min-width: 0;
             border: 1px solid var(--line);
             border-radius: 8px;
-            padding: 12px 12px;
+            padding: 12px;
             font-size: 16px;
         }
 
@@ -153,7 +151,7 @@
             background: var(--ink);
             color: #fff;
             padding: 12px 14px;
-            font-weight: 700;
+            font-weight: 800;
             cursor: pointer;
             white-space: nowrap;
         }
@@ -196,7 +194,7 @@
         .table th {
             width: 42%;
             color: var(--muted);
-            font-weight: 600;
+            font-weight: 700;
             padding-right: 10px;
         }
 
