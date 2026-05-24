@@ -30,6 +30,7 @@ class RunDailyPipeline extends Command
             : [
                 ['global_market', 'market:import-global-market', []],
                 ['global_events', 'market:import-global-events', []],
+                ['event_clusters', 'market:cluster-global-events', []],
                 ['taiwan_stocks', 'market:import-stocks', ['--deactivate-missing' => true]],
                 ['taiwan_chips', 'market:import-chips', []],
                 ['taiwan_margins', 'market:import-margins', []],

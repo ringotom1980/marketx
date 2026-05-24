@@ -85,14 +85,29 @@ Route::get('/', function () {
             'score' => $stock->total_score ?? 0,
         ]);
 
-    $events = DB::table('global_events')
-        ->orderByDesc('event_date')
+    $events = DB::table('global_event_clusters')
+        ->orderByDesc('cluster_date')
+        ->orderByDesc('importance_score')
         ->limit(4)
-        ->get()
-        ->map(fn ($event) => [
-            'title' => MarketDisplay::eventTitle($event),
-            'impact' => MarketDisplay::eventBody($event),
+        ->get(['title', 'summary', 'category', 'region', 'importance_score', 'sentiment', 'themes'])
+        ->map(fn ($cluster) => [
+            'title' => $cluster->title,
+            'impact' => trim(($cluster->summary ?: '事件摘要整理中')
+                .'｜重要度 '.$cluster->importance_score.'/100'
+                .'｜情緒 '.($cluster->sentiment ?: 'neutral')
+                .'｜題材 '.implode('、', json_decode($cluster->themes ?: '[]', true) ?: ['待分類'])),
         ]);
+
+    if ($events->isEmpty()) {
+        $events = DB::table('global_events')
+            ->orderByDesc('event_date')
+            ->limit(4)
+            ->get()
+            ->map(fn ($event) => [
+                'title' => MarketDisplay::eventTitle($event),
+                'impact' => MarketDisplay::eventBody($event),
+            ]);
+    }
 
     if ($events->isEmpty()) {
         $events = collect([
