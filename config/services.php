@@ -40,6 +40,14 @@ return [
         'global_event_feed' => env('MARKETX_GLOBAL_EVENT_FEED'),
         'ai_model' => env('MARKETX_AI_MODEL', 'gpt-4.1-mini'),
         'admin_password_hash' => env('MARKETX_ADMIN_PASSWORD_HASH'),
+        'ai_pipeline_enabled' => env('AI_PIPELINE_ENABLED', false),
+        'gemini_api_key' => env('GEMINI_API_KEY'),
+        'gemini_model' => env('GEMINI_MODEL', 'gemini-1.5-flash'),
+        'groq_api_key' => env('GROQ_API_KEY'),
+        'groq_model' => env('GROQ_MODEL', 'llama-3.1-8b-instant'),
+        'max_event_ai_per_day' => env('MAX_EVENT_AI_PER_DAY', 20),
+        'max_stock_ai_per_day' => env('MAX_STOCK_AI_PER_DAY', 50),
+        'max_dynamic_ai_per_day' => env('MAX_DYNAMIC_AI_PER_DAY', 20),
     ],
 
 ];
