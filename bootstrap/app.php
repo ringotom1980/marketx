@@ -8,6 +8,7 @@ use App\Console\Commands\CalculateFundamentalScores;
 use App\Console\Commands\CalculateGlobalInfluenceScores;
 use App\Console\Commands\CalculateTechnicalScores;
 use App\Console\Commands\CalculateThemeScores;
+use App\Console\Commands\DetectDynamicThemes;
 use App\Console\Commands\GenerateStockReports;
 use App\Console\Commands\ImportGlobalEvents;
 use App\Console\Commands\ImportGlobalMarketData;
@@ -23,6 +24,7 @@ use App\Console\Commands\ImportTwseBrokerTrades;
 use App\Console\Commands\MarketDataStatus;
 use App\Console\Commands\RunDailyPipeline;
 use App\Console\Commands\SeedThemeMappings;
+use App\Console\Commands\SeedThemeKeywords;
 use App\Console\Commands\SeedThemes;
 use App\Http\Middleware\EnsureMarketxAdmin;
 use Illuminate\Foundation\Configuration\Exceptions;
@@ -42,6 +44,7 @@ return Application::configure(basePath: dirname(__DIR__))
         CalculateGlobalInfluenceScores::class,
         CalculateTechnicalScores::class,
         CalculateThemeScores::class,
+        DetectDynamicThemes::class,
         GenerateStockReports::class,
         ImportGlobalEvents::class,
         ImportGlobalMarketData::class,
@@ -57,6 +60,7 @@ return Application::configure(basePath: dirname(__DIR__))
         MarketDataStatus::class,
         RunDailyPipeline::class,
         SeedThemeMappings::class,
+        SeedThemeKeywords::class,
         SeedThemes::class,
     ])
     ->withMiddleware(function (Middleware $middleware): void {

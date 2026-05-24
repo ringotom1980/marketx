@@ -8,11 +8,14 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Theme extends Model
 {
-    protected $fillable = ['name', 'slug', 'description', 'is_active'];
+    protected $fillable = ['name', 'slug', 'description', 'source', 'ai_status', 'ai_payload', 'is_active'];
 
     protected function casts(): array
     {
-        return ['is_active' => 'boolean'];
+        return [
+            'ai_payload' => 'array',
+            'is_active' => 'boolean',
+        ];
     }
 
     public function stocks(): BelongsToMany
@@ -25,4 +28,3 @@ class Theme extends Model
         return $this->hasMany(ThemeScore::class);
     }
 }
-

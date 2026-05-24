@@ -44,18 +44,31 @@ class CalculateThemeScores extends Command
 
             $priceScore = (int) round($scores->avg('technical_score'));
             $chipScore = (int) round($scores->avg('chip_score'));
-            $heatScore = (int) round(collect([$priceScore, $chipScore ?: null])->filter(fn ($value) => $value !== null)->avg());
+            $eventMatches = DB::table('theme_event_matches')
+                ->where('theme_id', $theme->id)
+                ->where('created_at', '>=', CarbonImmutable::parse($scoreDate, 'Asia/Taipei')->subDays(7))
+                ->get();
+            $newsScore = $eventMatches->isEmpty()
+                ? null
+                : max(0, min(100, (int) round(min(100, $eventMatches->sum('match_score') / 3))));
+            $heatScore = (int) round(collect([
+                $priceScore,
+                $chipScore ?: null,
+                $newsScore,
+            ])->filter(fn ($value) => $value !== null)->avg());
 
             DB::table('theme_scores')->updateOrInsert(
                 ['theme_id' => $theme->id, 'score_date' => $scoreDate],
                 [
                     'heat_score' => max(0, min(100, $heatScore)),
+                    'news_score' => $newsScore,
                     'price_score' => max(0, min(100, $priceScore)),
                     'chip_score' => $chipScore ? max(0, min(100, $chipScore)) : null,
                     'payload' => json_encode([
                         'mapped_stock_count' => $mapped->count(),
                         'scored_stock_count' => $scores->count(),
-                        'source' => 'stock_theme_map + stock_scores',
+                        'event_match_count' => $eventMatches->count(),
+                        'source' => 'theme_event_matches + stock_theme_map + stock_scores',
                     ], JSON_UNESCAPED_SLASHES),
                     'updated_at' => now(),
                     'created_at' => now(),
