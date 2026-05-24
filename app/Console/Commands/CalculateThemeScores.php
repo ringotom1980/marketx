@@ -88,11 +88,12 @@ class CalculateThemeScores extends Command
     private function updateStockThemeScores(): int
     {
         $latestThemeScores = DB::table('theme_scores')
-            ->join('themes', 'themes.id', '=', 'theme_scores.theme_id')
             ->select('theme_scores.theme_id', 'theme_scores.heat_score')
-            ->whereRaw('theme_scores.score_date = (select max(ts.score_date) from theme_scores ts where ts.theme_id = theme_scores.theme_id)')
             ->whereNotNull('theme_scores.heat_score')
+            ->orderByDesc('theme_scores.score_date')
+            ->orderByDesc('theme_scores.id')
             ->get()
+            ->unique('theme_id')
             ->keyBy('theme_id');
 
         if ($latestThemeScores->isEmpty()) {
@@ -123,12 +124,19 @@ class CalculateThemeScores extends Command
                 $weightSum = array_sum(array_column($weighted, 'weight'));
                 $score = (int) round(array_sum(array_map(fn ($row) => $row['score'] * $row['weight'], $weighted)) / $weightSum);
 
-                DB::table('stock_scores')
+                $latestScoreId = DB::table('stock_scores')
                     ->where('stock_id', $stockId)
-                    ->whereRaw('score_date = (select max(ss.score_date) from stock_scores ss where ss.stock_id = stock_scores.stock_id)')
-                    ->update(['theme_score' => max(0, min(100, $score)), 'updated_at' => now()]);
+                    ->orderByDesc('score_date')
+                    ->orderByDesc('id')
+                    ->value('id');
 
-                $updated++;
+                if (! $latestScoreId) {
+                    return;
+                }
+
+                $updated += DB::table('stock_scores')
+                    ->where('id', $latestScoreId)
+                    ->update(['theme_score' => max(0, min(100, $score)), 'updated_at' => now()]);
             });
 
         return $updated;
