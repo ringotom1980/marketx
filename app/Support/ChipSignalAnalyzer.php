@@ -4,6 +4,7 @@ namespace App\Support;
 
 use App\Models\Stock;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\DB;
 
 class ChipSignalAnalyzer
 {
@@ -104,9 +105,100 @@ class ChipSignalAnalyzer
             }
         }
 
-        $signals[] = ['tone' => 'amber', 'title' => '隔日沖券商佔比尚未接入', 'body' => '目前尚未建立券商分點與隔日沖辨識資料表，因此不產生占比判斷，避免使用假資料。'];
+        $signals = array_merge($signals, $this->dayTradeSignals($stock, $latestPrice, $volume));
 
         return array_slice($signals, 0, 8);
+    }
+
+    /**
+     * @return array<int, array{tone: string, title: string, body: string}>
+     */
+    private function dayTradeSignals(Stock $stock, mixed $latestPrice, int $volume): array
+    {
+        $latestDate = $latestPrice?->trade_date?->toDateString();
+
+        if (! $latestDate) {
+            return [[
+                'tone' => 'amber',
+                'title' => '隔日沖資料等待日 K',
+                'body' => '尚未取得最新交易日，暫不判斷隔日沖券商分點。',
+            ]];
+        }
+
+        $recentPatterns = DB::table('broker_daytrade_patterns')
+            ->join('broker_branches', 'broker_branches.id', '=', 'broker_daytrade_patterns.broker_branch_id')
+            ->where('broker_daytrade_patterns.stock_id', $stock->id)
+            ->where(function ($query) use ($latestDate) {
+                $query->where('broker_daytrade_patterns.buy_date', $latestDate)
+                    ->orWhere('broker_daytrade_patterns.sell_date', $latestDate);
+            })
+            ->orderByDesc('broker_daytrade_patterns.sellback_ratio')
+            ->limit(5)
+            ->get([
+                'broker_branches.name',
+                'broker_branches.code',
+                'broker_daytrade_patterns.buy_date',
+                'broker_daytrade_patterns.sell_date',
+                'broker_daytrade_patterns.buy_volume',
+                'broker_daytrade_patterns.sell_volume',
+                'broker_daytrade_patterns.sellback_ratio',
+                'broker_daytrade_patterns.confidence_score',
+            ]);
+
+        if ($recentPatterns->isEmpty()) {
+            $totalImported = DB::table('stock_broker_trades_1d')->where('stock_id', $stock->id)->count();
+
+            if ($totalImported === 0) {
+                return [[
+                    'tone' => 'amber',
+                    'title' => '尚未匯入券商分點資料',
+                    'body' => '目前沒有此股的官方券商分點買賣日報資料，因此不產生隔日沖名單。',
+                ]];
+            }
+
+            return [[
+                'tone' => 'amber',
+                'title' => '未偵測到明顯隔日沖分點',
+                'body' => '已匯入的分點資料中，最新交易日沒有符合大量買進後快速回吐的模式。',
+            ]];
+        }
+
+        $buyToday = $recentPatterns->where('buy_date', $latestDate);
+        $sellToday = $recentPatterns->where('sell_date', $latestDate);
+        $signals = [];
+
+        if ($sellToday->isNotEmpty()) {
+            $sellVolume = (int) $sellToday->sum('sell_volume');
+            $ratio = $volume > 0 ? round(($sellVolume / $volume) * 100, 2) : null;
+            $branches = $this->branchNames($sellToday);
+            $signals[] = [
+                'tone' => 'red',
+                'title' => '隔日沖分點回吐賣壓',
+                'body' => $branches.' 今日疑似回吐賣出，賣出量約占成交量 '.($ratio === null ? '無法估算' : $ratio.'%').'，短線賣壓需留意。',
+            ];
+        }
+
+        if ($buyToday->isNotEmpty()) {
+            $buyVolume = (int) $buyToday->sum('buy_volume');
+            $ratio = $volume > 0 ? round(($buyVolume / $volume) * 100, 2) : null;
+            $branches = $this->branchNames($buyToday);
+            $signals[] = [
+                'tone' => 'amber',
+                'title' => '疑似隔日沖分點進場',
+                'body' => $branches.' 今日疑似短線買超，買超量約占成交量 '.($ratio === null ? '無法估算' : $ratio.'%').'，隔日需觀察是否反手賣出。',
+            ];
+        }
+
+        return $signals;
+    }
+
+    private function branchNames(Collection $patterns): string
+    {
+        return $patterns
+            ->map(fn ($row) => ($row->name ?: '券商分點').'('.$row->code.')')
+            ->unique()
+            ->take(3)
+            ->implode('、');
     }
 
     private function average(array $values): float

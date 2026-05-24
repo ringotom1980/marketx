@@ -2,6 +2,7 @@
 
 use Illuminate\Foundation\Application;
 use App\Console\Commands\BackfillTaiwanPrices;
+use App\Console\Commands\CalculateBrokerDayTradePatterns;
 use App\Console\Commands\CalculateDecisionScores;
 use App\Console\Commands\CalculateFundamentalScores;
 use App\Console\Commands\CalculateGlobalInfluenceScores;
@@ -10,6 +11,7 @@ use App\Console\Commands\CalculateThemeScores;
 use App\Console\Commands\GenerateStockReports;
 use App\Console\Commands\ImportGlobalEvents;
 use App\Console\Commands\ImportGlobalMarketData;
+use App\Console\Commands\ImportBrokerTradesFromCsv;
 use App\Console\Commands\ImportTaiwanChips;
 use App\Console\Commands\ImportTaiwanMargins;
 use App\Console\Commands\ImportTaiwanRevenues;
@@ -31,6 +33,7 @@ return Application::configure(basePath: dirname(__DIR__))
     )
     ->withCommands([
         BackfillTaiwanPrices::class,
+        CalculateBrokerDayTradePatterns::class,
         CalculateDecisionScores::class,
         CalculateFundamentalScores::class,
         CalculateGlobalInfluenceScores::class,
@@ -39,6 +42,7 @@ return Application::configure(basePath: dirname(__DIR__))
         GenerateStockReports::class,
         ImportGlobalEvents::class,
         ImportGlobalMarketData::class,
+        ImportBrokerTradesFromCsv::class,
         ImportTaiwanChips::class,
         ImportTaiwanMargins::class,
         ImportTaiwanRevenues::class,
