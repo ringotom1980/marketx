@@ -19,6 +19,18 @@ class EventClusterDisplay
             return '雲端與資料中心需求受關注';
         }
 
+        if (in_array('Apple 生態系', $themes, true) || in_array('平台經濟', $themes, true)) {
+            return 'Apple 與平台服務動態受關注';
+        }
+
+        if (in_array('航運運費', $themes, true)) {
+            return '航運與貨櫃運價變化受關注';
+        }
+
+        if (in_array('貴金屬', $themes, true)) {
+            return '黃金與避險資產動向受關注';
+        }
+
         if (in_array('金融與利率', $themes, true) || $category === 'Fed') {
             return '利率與金融政策仍是市場焦點';
         }
@@ -60,7 +72,19 @@ class EventClusterDisplay
         }
 
         if (Str::contains($text, ['App Store', 'GeForce NOW', 'stream'])) {
-            return '科技平台與雲端服務消息增加，市場會觀察是否帶動資料中心與高階運算需求。';
+            return '大型科技平台服務持續擴張，市場會觀察訂閱、雲端與數位內容需求變化。';
+        }
+
+        if (Str::contains($text, ['Apple Sports', 'Sports expands', 'App Store stopped', 'fraudulent transactions'])) {
+            return 'Apple 服務與平台治理消息增加，市場會觀察服務營收與生態系黏著度。';
+        }
+
+        if (Str::contains($text, ['shipping', 'freight', 'container', 'Baltic Dry', 'Red Sea'])) {
+            return '航運與貨櫃運價變化可能影響航運股、供應鏈成本與通膨預期。';
+        }
+
+        if (Str::contains($text, ['gold', 'precious metals', 'safe haven'])) {
+            return '黃金與貴金屬動向反映避險需求、美元與利率預期變化。';
         }
 
         if (in_array('能源', $themes, true)) {

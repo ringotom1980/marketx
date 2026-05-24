@@ -140,9 +140,12 @@ class ClusterGlobalEvents extends Command
             'ai' => ['ai', 'nvidia', 'gpu', 'accelerated computing', 'server'],
             'fed' => ['fed', 'federal reserve', 'rate', 'inflation', 'cpi'],
             'apple' => ['apple', 'iphone', 'vision pro'],
+            'platform' => ['app store', 'sports expands', 'fraudulent transactions', 'subscription', 'stream'],
             'microsoft' => ['microsoft', 'azure', 'copilot'],
             'china' => ['china', 'export', 'tariff', 'geopolitical'],
-            'energy' => ['oil', 'crude', 'brent', 'wti', 'power'],
+            'energy' => ['oil', 'crude', 'brent', 'wti', 'opec', 'fuel', 'gasoline', 'power'],
+            'precious-metals' => ['gold', 'precious metal', 'safe haven', 'bullion'],
+            'shipping' => ['shipping', 'freight', 'container', 'baltic dry', 'red sea'],
         ] as $topic => $keywords) {
             foreach ($keywords as $keyword) {
                 if (str_contains($text, $keyword)) {
@@ -160,9 +163,12 @@ class ClusterGlobalEvents extends Command
             'ai' => 'AI',
             'fed' => 'Fed',
             'apple' => 'Apple',
+            'platform' => 'Platform',
             'microsoft' => 'Microsoft',
             'china' => 'Geopolitics',
             'energy' => 'Energy',
+            'precious-metals' => 'Precious Metals',
+            'shipping' => 'Shipping',
             default => 'Global',
         };
     }
@@ -184,7 +190,11 @@ class ClusterGlobalEvents extends Command
             '雲端與資料中心' => ['cloud', 'azure', 'datacenter', 'data center'],
             '金融與利率' => ['fed', 'rate', 'inflation'],
             '地緣政治' => ['china', 'export', 'tariff', 'geopolitical'],
-            '能源' => ['oil', 'crude', 'power', 'energy'],
+            '能源' => ['oil', 'crude', 'brent', 'wti', 'opec', 'fuel', 'power', 'energy'],
+            '貴金屬' => ['gold', 'precious metal', 'safe haven', 'bullion'],
+            '航運運費' => ['shipping', 'freight', 'container', 'baltic dry', 'red sea'],
+            'Apple 生態系' => ['apple', 'iphone', 'app store', 'sports expands'],
+            '平台經濟' => ['app store', 'stream', 'subscription', 'fraudulent transactions'],
         ] as $theme => $keywords) {
             foreach ($keywords as $keyword) {
                 if (str_contains($text, $keyword)) {
@@ -207,6 +217,9 @@ class ClusterGlobalEvents extends Command
             '軟體雲端' => ['cloud', 'azure', 'copilot'],
             '金融' => ['fed', 'rate', 'inflation'],
             '能源' => ['oil', 'crude', 'energy', 'power'],
+            '航運' => ['shipping', 'freight', 'container', 'baltic dry', 'red sea'],
+            '貴金屬' => ['gold', 'precious metal', 'safe haven', 'bullion'],
+            '平台服務' => ['apple', 'app store', 'stream', 'subscription'],
         ] as $industry => $keywords) {
             foreach ($keywords as $keyword) {
                 if (str_contains($text, $keyword)) {

@@ -18,6 +18,12 @@ class ImportGlobalEvents extends Command
         ['source' => 'NVIDIA Blog', 'url' => 'https://blogs.nvidia.com/feed/'],
         ['source' => 'Apple Newsroom', 'url' => 'https://www.apple.com/newsroom/rss-feed.rss'],
         ['source' => 'Microsoft Blog', 'url' => 'https://blogs.microsoft.com/feed/'],
+        ['source' => 'EIA Today in Energy', 'url' => 'https://www.eia.gov/rss/todayinenergy.xml'],
+        ['source' => 'EIA Fuel Update', 'url' => 'https://www.eia.gov/petroleum/gasdiesel/includes/gas_diesel_rss.xml'],
+        ['source' => 'Google News - War Risk', 'url' => 'https://news.google.com/rss/search?q=war%20OR%20Ukraine%20OR%20Middle%20East%20OR%20Red%20Sea&hl=en-US&gl=US&ceid=US:en'],
+        ['source' => 'Google News - Oil', 'url' => 'https://news.google.com/rss/search?q=crude%20oil%20OR%20Brent%20OR%20WTI%20OR%20OPEC&hl=en-US&gl=US&ceid=US:en'],
+        ['source' => 'Google News - Gold', 'url' => 'https://news.google.com/rss/search?q=gold%20price%20OR%20precious%20metals%20OR%20safe%20haven&hl=en-US&gl=US&ceid=US:en'],
+        ['source' => 'Google News - Shipping', 'url' => 'https://news.google.com/rss/search?q=container%20freight%20rates%20OR%20shipping%20rates%20OR%20Baltic%20Dry%20Index%20OR%20Red%20Sea%20shipping&hl=en-US&gl=US&ceid=US:en'],
     ];
 
     public function handle(): int
@@ -138,6 +144,10 @@ class ImportGlobalEvents extends Command
             str_contains($lower, 'fed') || str_contains($lower, 'rate') || str_contains($lower, 'inflation') => 'Fed',
             str_contains($lower, 'ai') || str_contains($lower, 'nvidia') || str_contains($lower, 'gpu') => 'AI',
             str_contains($lower, 'china') || str_contains($lower, 'export') || str_contains($lower, 'geopolitical') => 'Geopolitics',
+            str_contains($lower, 'war') || str_contains($lower, 'ukraine') || str_contains($lower, 'middle east') || str_contains($lower, 'red sea') => 'Geopolitics',
+            str_contains($lower, 'oil') || str_contains($lower, 'brent') || str_contains($lower, 'wti') || str_contains($lower, 'opec') || str_contains($lower, 'fuel') => 'Energy',
+            str_contains($lower, 'gold') || str_contains($lower, 'precious metal') || str_contains($lower, 'safe haven') => 'Precious Metals',
+            str_contains($lower, 'shipping') || str_contains($lower, 'freight') || str_contains($lower, 'container') || str_contains($lower, 'baltic dry') => 'Shipping',
             str_contains($lower, 'iphone') || str_contains($lower, 'apple') => 'Apple',
             str_contains($lower, 'microsoft') || str_contains($lower, 'azure') => 'Microsoft',
             default => 'Global',
