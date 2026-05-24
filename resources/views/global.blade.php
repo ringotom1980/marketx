@@ -17,10 +17,25 @@
     <section class="grid three">
         @foreach ($radar['indicators'] as $indicator)
             <div class="panel">
-                <h2>{{ $indicator['name'] }}</h2>
-                <span class="badge {{ $indicator['tone'] }}">{{ $indicator['state'] }}</span>
+                <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:10px">
+                    <h2 style="margin-bottom:0">{{ $indicator['name'] }}</h2>
+                    <span class="badge {{ $indicator['tone'] }}">{{ $indicator['state'] }}</span>
+                </div>
                 <p class="lead" style="margin-top:10px">數值 {{ $indicator['value'] }}｜漲跌 {{ $indicator['change'] }}</p>
-                <p class="lead">{{ $indicator['note'] }}</p>
+                <div class="signal-list" style="margin-top:12px;margin-bottom:0">
+                    <div class="signal-item">
+                        <span class="badge amber">市場解讀</span>
+                        <p>{{ $indicator['read'] }}</p>
+                    </div>
+                    <div class="signal-item">
+                        <span class="badge red">台股影響</span>
+                        <p>{{ $indicator['impact'] }}</p>
+                    </div>
+                    <div class="signal-item">
+                        <span class="badge">觀察重點</span>
+                        <p>{{ $indicator['watch'] }}</p>
+                    </div>
+                </div>
             </div>
         @endforeach
     </section>

@@ -129,14 +129,21 @@ class GlobalRadarBuilder
     private function indicatorCards(Collection $markets): array
     {
         return $markets
-            ->map(fn ($row) => [
-                'name' => MarketDisplay::indicatorName($row->indicator),
-                'state' => MarketDisplay::stateName($row->state),
-                'tone' => MarketDisplay::tone($row->state, $row->change_pct === null ? null : (float) $row->change_pct),
-                'value' => number_format((float) $row->value, 2),
-                'change' => $row->change_pct === null ? '無資料' : number_format((float) $row->change_pct, 2).'%',
-                'note' => $this->indicatorNote($row->indicator, $row->state),
-            ])
+            ->map(function ($row) {
+                $change = $row->change_pct === null ? null : (float) $row->change_pct;
+
+                return [
+                    'name' => MarketDisplay::indicatorName($row->indicator),
+                    'state' => MarketDisplay::stateName($row->state),
+                    'tone' => MarketDisplay::tone($row->state, $change),
+                    'value' => number_format((float) $row->value, 2),
+                    'change' => $change === null ? '無資料' : number_format($change, 2).'%',
+                    'note' => $this->indicatorNote($row->indicator, $row->state),
+                    'read' => $this->indicatorRead($row->indicator, $row->state, $change),
+                    'impact' => $this->indicatorImpact($row->indicator, $row->state, $change),
+                    'watch' => $this->indicatorWatch($row->indicator, $row->state, $change),
+                ];
+            })
             ->values()
             ->all();
     }
@@ -153,6 +160,102 @@ class GlobalRadarBuilder
             'TSM ADR' => '觀察台積電與台股權值股風向',
             default => '觀察全球資金風向',
         };
+    }
+
+    private function indicatorRead(string $indicator, ?string $state, ?float $change): string
+    {
+        return match ($indicator) {
+            'S&P 500' => $this->isPositive($state, $change)
+                ? '美股大型股維持偏強，代表國際資金目前願意承擔風險。'
+                : ($this->isNegative($state, $change) ? '美股大型股轉弱，市場資金偏保守。' : '美股大型股方向不明，市場還在等待新的催化因素。'),
+            'NASDAQ' => $this->isPositive($state, $change)
+                ? '科技股買盤仍在，成長股與高本益比族群的氣氛較有支撐。'
+                : ($this->isNegative($state, $change) ? '科技股承壓，市場對成長股評價變得挑剔。' : '科技股沒有明顯方向，短線先看大型科技股能否重新帶量。'),
+            'SOX' => $this->isPositive($state, $change)
+                ? '費半偏強，半導體與 AI 硬體供應鏈仍是全球資金焦點。'
+                : ($this->isNegative($state, $change) ? '費半轉弱，半導體族群短線容易出現獲利了結。' : '費半震盪整理，半導體族群需要新的基本面或財報支撐。'),
+            'VIX' => $state === 'low_risk'
+                ? 'VIX 偏低，市場目前沒有明顯恐慌，風險胃納較好。'
+                : ($state === 'high_risk' ? 'VIX 升高，代表避險需求增加，盤面容易出現急漲急跌。' : 'VIX 處於中性區間，市場情緒沒有極端訊號。'),
+            'DXY' => $state === 'pressure_up'
+                ? '美元偏強，資金容易回流美元資產，新興市場承受壓力。'
+                : ($state === 'pressure_down' ? '美元壓力下降，外資風險偏好通常會比較友善。' : '美元沒有明顯方向，外資流向仍需搭配美債與股市一起看。'),
+            'US10Y' => $state === 'pressure_up'
+                ? '美債殖利率上升，市場折現率提高，高估值股票較敏感。'
+                : ($state === 'pressure_down' ? '美債殖利率回落，成長股和科技股的估值壓力較低。' : '美債殖利率變化不大，利率因素暫時不是主要壓力。'),
+            'Crude Oil' => $this->isPositive($state, $change)
+                ? '油價上升，市場會重新評估通膨、運輸與能源成本。'
+                : ($this->isNegative($state, $change) ? '油價回落，通膨與成本壓力短線稍微降溫。' : '油價變化有限，暫時不是市場主軸，但仍會牽動通膨預期。'),
+            'Gold' => $this->isPositive($state, $change)
+                ? '黃金走強，通常代表避險需求或降息預期升溫。'
+                : ($this->isNegative($state, $change) ? '黃金轉弱，避險需求降溫或美元利率壓力回升。' : '黃金盤整，市場避險情緒沒有明顯升溫。'),
+            'TSM ADR' => $this->isPositive($state, $change)
+                ? '台積電 ADR 偏強，有利隔日台股權值股與半導體情緒。'
+                : ($this->isNegative($state, $change) ? '台積電 ADR 轉弱，隔日台股電子權值股容易承壓。' : '台積電 ADR 變化不大，台股仍需看本地量能與外資動向。'),
+            default => '目前作為全球資金風向參考，需搭配其他指標一起判斷。',
+        };
+    }
+
+    private function indicatorImpact(string $indicator, ?string $state, ?float $change): string
+    {
+        return match ($indicator) {
+            'S&P 500' => $this->isPositive($state, $change)
+                ? '對台股是偏正向背景，尤其有助權值股與大型電子股維持人氣。'
+                : '若持續轉弱，台股開盤情緒與外資買盤可能變保守。',
+            'NASDAQ' => $this->isPositive($state, $change)
+                ? 'AI、雲端、半導體、伺服器與高本益比電子股較容易受惠。'
+                : '科技股壓力會傳到台股電子族群，短線分數要更重視技術面支撐。',
+            'SOX' => $this->isPositive($state, $change)
+                ? '半導體、IC 設計、設備、先進封裝與 AI 供應鏈會是優先觀察區。'
+                : '半導體若失去支撐，台股高分股名單容易出現降溫或輪動。',
+            'VIX' => $state === 'low_risk'
+                ? '低波動環境有利題材股延續，但也要防止追高過熱。'
+                : '波動升高時，系統會更重視風險旗標與減碼訊號。',
+            'DXY' => $state === 'pressure_up'
+                ? '美元強會壓抑外資風險偏好，台股容易偏向個股表現。'
+                : '美元轉弱通常有利外資回補亞洲科技股。',
+            'US10Y' => $state === 'pressure_up'
+                ? '殖利率上升會壓縮評價，AI 與高本益比股要看營收能否撐住估值。'
+                : '利率壓力下降時，成長股與電子權值股比較容易被重新評價。',
+            'Crude Oil' => $this->isPositive($state, $change)
+                ? '油價上升會影響航運、塑化、航空與高耗能產業成本。'
+                : '油價回落有助成本壓力下降，對通膨與運輸成本較友善。',
+            'Gold' => $this->isPositive($state, $change)
+                ? '黃金偏強時，需留意市場是否正在提高避險部位。'
+                : '黃金偏弱時，市場可能把資金轉回股票或美元資產。',
+            'TSM ADR' => $this->isPositive($state, $change)
+                ? '台積電 ADR 是台股隔日電子權值股的重要先行參考。'
+                : '若 ADR 轉弱，即使題材熱，台股也可能先震盪消化。',
+            default => '對台股影響需與美元、美債、費半和事件熱度一起判讀。',
+        };
+    }
+
+    private function indicatorWatch(string $indicator, ?string $state, ?float $change): string
+    {
+        return match ($indicator) {
+            'S&P 500' => '觀察是否連續守在短期均線上方，以及漲勢是否由少數權值股擴散。',
+            'NASDAQ' => '觀察大型科技股財報、AI 資本支出與雲端服務需求是否延續。',
+            'SOX' => '觀察 NVIDIA、台積電 ADR、記憶體與設備股是否同步強勢。',
+            'VIX' => '觀察是否突然跳升；若快速升高，通常代表市場風險偏好變差。',
+            'DXY' => '觀察美元是否突破近期高點；美元越強，外資越可能保守。',
+            'US10Y' => '觀察 10 年債殖利率是否持續走升，這會影響科技股評價。',
+            'Crude Oil' => '觀察是否由供給中斷或地緣政治推升，這種油價上漲比較容易造成壓力。',
+            'Gold' => '觀察黃金與美元是否同漲；若同漲，通常代表避險需求更明顯。',
+            'TSM ADR' => '觀察 ADR 與台股現貨是否同步；若不同步，隔日容易修正價差。',
+            default => '觀察是否和其他全球指標形成同方向訊號。',
+        };
+    }
+
+    private function isPositive(?string $state, ?float $change): bool
+    {
+        return in_array($state, ['strong', 'positive', 'pressure_up'], true)
+            || ($change !== null && $change > 0.3);
+    }
+
+    private function isNegative(?string $state, ?float $change): bool
+    {
+        return in_array($state, ['weak', 'soft', 'high_risk'], true)
+            || ($change !== null && $change < -0.3);
     }
 
     private function impactChains(Collection $markets, Collection $events): array
