@@ -20,35 +20,35 @@
             width: min(420px, calc(100vw - 32px));
             background: #fff;
             border-radius: 12px;
-            padding: 28px;
+            padding: 36px 28px 28px;
             box-shadow: 0 20px 70px rgba(0, 0, 0, .35);
         }
         .brand {
             display: flex;
             flex-direction: column;
             align-items: center;
-            gap: 8px;
-            margin-bottom: 26px;
+            gap: 6px;
+            margin-bottom: 30px;
             text-align: center;
         }
         .brand img {
-            width: 112px;
-            height: 112px;
+            width: 142px;
+            height: 142px;
             border-radius: 0;
             object-fit: cover;
         }
         h1 {
             margin: 0;
-            font-size: 34px;
+            font-size: 31px;
             line-height: 1.05;
             color: #222831;
         }
         .tagline {
             margin: 4px 0 0;
             color: #6b7280;
-            font-size: 13px;
+            font-size: 12px;
             font-weight: 700;
-            letter-spacing: .34em;
+            letter-spacing: .3em;
         }
         label {
             display: block;
