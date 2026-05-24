@@ -4,10 +4,12 @@ namespace App\Console\Commands;
 
 use App\Models\Stock;
 use App\Models\StockPrice1d;
+use App\Models\SystemJob;
 use Carbon\CarbonImmutable;
 use Carbon\CarbonPeriod;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Http;
+use Throwable;
 
 class BackfillTaiwanPrices extends Command
 {
@@ -16,7 +18,11 @@ class BackfillTaiwanPrices extends Command
         {--from= : Start month in YYYY-MM format}
         {--to= : End month in YYYY-MM format}
         {--months=1 : Number of recent months when --from is not provided}
-        {--sleep-ms=150 : Delay between official API requests}';
+        {--sleep-ms=150 : Delay between official API requests}
+        {--batch-size=0 : Stop after this many stock-month requests, 0 means no limit}
+        {--resume : Continue from the latest unfinished system_jobs cursor}
+        {--resume-only : Exit instead of starting a new job when no unfinished cursor exists}
+        {--job-name=price-backfill : system_jobs name used for progress tracking}';
 
     protected $description = 'Backfill historical daily K data from official TWSE and TPEx monthly quote endpoints.';
 
@@ -29,6 +35,17 @@ class BackfillTaiwanPrices extends Command
         $stocks = $this->stocks();
         $months = $this->months();
         $sleepMs = max(0, (int) $this->option('sleep-ms'));
+        $batchSize = max(0, (int) $this->option('batch-size'));
+        $startedAt = microtime(true);
+        $job = $this->startJob($months);
+
+        if (! $job) {
+            $this->info('No unfinished backfill job found.');
+
+            return self::SUCCESS;
+        }
+
+        $resumeCursor = $this->option('resume') ? data_get($job->context, 'cursor') : null;
 
         if ($stocks->isEmpty()) {
             $this->warn('No active stocks found.');
@@ -44,23 +61,50 @@ class BackfillTaiwanPrices extends Command
             $months[count($months) - 1]->format('Y-m'),
         ));
 
-        $totalRows = 0;
+        $totalRows = (int) data_get($job->context, 'total_rows', 0);
+        $requestCount = 0;
+        $skipping = $resumeCursor !== null;
 
-        foreach ($stocks as $stock) {
-            foreach ($months as $month) {
-                $count = match ($stock->market) {
-                    'TWSE' => $this->backfillTwseMonth($stock, $month),
-                    'TPEx' => $this->backfillTpexMonth($stock, $month),
-                    default => 0,
-                };
+        try {
+            foreach ($stocks as $stock) {
+                foreach ($months as $month) {
+                    if ($skipping) {
+                        $skipping = ! $this->isResumeCursor($stock, $month, $resumeCursor);
 
-                $totalRows += $count;
-                $this->line(sprintf('%s %s %s rows: %d', $stock->symbol, $stock->market, $month->format('Y-m'), $count));
+                        continue;
+                    }
 
-                if ($sleepMs > 0) {
-                    usleep($sleepMs * 1000);
+                    $count = match ($stock->market) {
+                        'TWSE' => $this->backfillTwseMonth($stock, $month),
+                        'TPEx' => $this->backfillTpexMonth($stock, $month),
+                        default => 0,
+                    };
+
+                    $totalRows += $count;
+                    $requestCount++;
+
+                    $this->updateJobProgress($job, $stock, $month, $totalRows, $requestCount);
+                    $this->line(sprintf('%s %s %s rows: %d', $stock->symbol, $stock->market, $month->format('Y-m'), $count));
+
+                    if ($batchSize > 0 && $requestCount >= $batchSize) {
+                        $this->finishJob($job, 'partial', $startedAt, $totalRows, $requestCount);
+                        $this->info('Batch limit reached. Resume with --resume to continue.');
+                        $this->info('Historical price rows upserted: '.$totalRows);
+
+                        return self::SUCCESS;
+                    }
+
+                    if ($sleepMs > 0) {
+                        usleep($sleepMs * 1000);
+                    }
                 }
             }
+
+            $this->finishJob($job, 'completed', $startedAt, $totalRows, $requestCount);
+        } catch (Throwable $exception) {
+            $this->finishJob($job, 'failed', $startedAt, $totalRows, $requestCount, $exception->getMessage());
+
+            throw $exception;
         }
 
         $this->info('Historical price rows upserted: '.$totalRows);
@@ -77,6 +121,95 @@ class BackfillTaiwanPrices extends Command
             ->orderBy('market')
             ->orderBy('symbol')
             ->get();
+    }
+
+    private function startJob(array $months): ?SystemJob
+    {
+        $jobName = (string) $this->option('job-name');
+        $params = [
+            'symbol' => $this->option('symbol'),
+            'from' => $months[0]->format('Y-m'),
+            'to' => $months[count($months) - 1]->format('Y-m'),
+            'months' => count($months),
+        ];
+
+        if ($this->option('resume')) {
+            $job = SystemJob::query()
+                ->where('job_name', $jobName)
+                ->whereIn('status', ['running', 'partial', 'failed'])
+                ->orderByDesc('id')
+                ->first();
+
+            if ($job) {
+                $job->update([
+                    'status' => 'running',
+                    'started_at' => now(),
+                    'finished_at' => null,
+                    'error_message' => null,
+                    'context' => array_replace_recursive($job->context ?? [], ['params' => $params]),
+                ]);
+
+                return $job;
+            }
+
+            if ($this->option('resume-only')) {
+                return null;
+            }
+        }
+
+        return SystemJob::query()->create([
+            'job_name' => $jobName,
+            'status' => 'running',
+            'started_at' => now(),
+            'context' => [
+                'params' => $params,
+                'total_rows' => 0,
+                'processed_requests' => 0,
+            ],
+        ]);
+    }
+
+    private function isResumeCursor(Stock $stock, CarbonImmutable $month, array $cursor): bool
+    {
+        return $stock->market === ($cursor['market'] ?? null)
+            && $stock->symbol === ($cursor['symbol'] ?? null)
+            && $month->format('Y-m') === ($cursor['month'] ?? null);
+    }
+
+    private function updateJobProgress(SystemJob $job, Stock $stock, CarbonImmutable $month, int $totalRows, int $requestCount): void
+    {
+        $context = $job->context ?? [];
+        $context['cursor'] = [
+            'market' => $stock->market,
+            'symbol' => $stock->symbol,
+            'month' => $month->format('Y-m'),
+        ];
+        $context['total_rows'] = $totalRows;
+        $context['processed_requests'] = (int) ($context['processed_requests'] ?? 0) + 1;
+        $context['last_batch_requests'] = $requestCount;
+
+        $job->update(['context' => $context]);
+    }
+
+    private function finishJob(
+        SystemJob $job,
+        string $status,
+        float $startedAt,
+        int $totalRows,
+        int $requestCount,
+        ?string $errorMessage = null,
+    ): void {
+        $context = $job->context ?? [];
+        $context['total_rows'] = $totalRows;
+        $context['last_batch_requests'] = $requestCount;
+
+        $job->update([
+            'status' => $status,
+            'finished_at' => now(),
+            'duration_ms' => (int) round((microtime(true) - $startedAt) * 1000),
+            'error_message' => $errorMessage,
+            'context' => $context,
+        ]);
     }
 
     /**
