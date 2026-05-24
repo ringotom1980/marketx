@@ -4,6 +4,7 @@ use App\Models\Stock;
 use App\Support\ChipSignalAnalyzer;
 use App\Support\EventClusterDisplay;
 use App\Support\FundamentalSignalAnalyzer;
+use App\Support\GlobalRadarBuilder;
 use App\Support\MarketDisplay;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -274,40 +275,8 @@ Route::get('/s/{symbol}', function (string $symbol) {
     ]);
 });
 
-Route::get('/global', function () {
-    $marketRows = DB::table('global_market_data')
-        ->orderByDesc('trade_date')
-        ->orderBy('indicator')
-        ->limit(12)
-        ->get();
-
-    $eventRows = DB::table('global_events')
-        ->orderByDesc('event_date')
-        ->orderByDesc('id')
-        ->limit(8)
-        ->get();
-
-    $items = $marketRows->map(fn ($row) => [
-        'title' => MarketDisplay::indicatorName($row->indicator).'｜'.$row->trade_date,
-        'body' => '狀態：'.MarketDisplay::stateName($row->state)
-            .'｜數值：'.number_format((float) $row->value, 2)
-            .'｜漲跌：'.($row->change_pct === null ? '無資料' : number_format((float) $row->change_pct, 2).'%'),
-    ])->merge($eventRows->map(fn ($row) => [
-        'title' => MarketDisplay::eventTitle($row),
-        'body' => MarketDisplay::eventBody($row),
-    ]));
-
-    if ($items->isEmpty()) {
-        $items = collect([
-            ['title' => '全球雷達資料準備中', 'body' => '尚未匯入全球市場與事件資料。'],
-        ]);
-    }
-
-    return view('simple', [
-        'heading' => '全球雷達',
-        'description' => '追蹤美股、費半、VIX、美債、美元、原油、黃金與台積電 ADR，並整理全球事件對台股題材的可能影響。',
-        'items' => $items,
-    ]);
+Route::get('/global', function (GlobalRadarBuilder $builder) {
+    return view('global', ['radar' => $builder->build()]);
 });
 
 Route::get('/themes', function () {
