@@ -56,22 +56,37 @@
         .brand {
             display: inline-flex;
             align-items: center;
-            gap: 10px;
+            gap: 12px;
             min-width: 0;
         }
 
         .brand img {
-            width: 42px;
-            height: 42px;
-            border-radius: 8px;
+            width: 58px;
+            height: 58px;
+            border-radius: 0;
             object-fit: cover;
             display: block;
-            box-shadow: 0 0 0 1px rgba(22, 32, 42, .08);
         }
 
-        .brand span {
+        .brand-mark {
+            display: grid;
+            gap: 2px;
+            min-width: 0;
+        }
+
+        .brand-name {
             font-weight: 900;
-            font-size: 18px;
+            font-size: 24px;
+            line-height: 1.05;
+            white-space: nowrap;
+            color: #222831;
+        }
+
+        .brand-tagline {
+            color: var(--muted);
+            font-size: 11px;
+            font-weight: 700;
+            letter-spacing: .34em;
             white-space: nowrap;
         }
 
@@ -276,8 +291,10 @@
                 gap: 24px;
             }
 
-            .brand img { width: 48px; height: 48px; }
-            .brand span { font-size: 20px; }
+            .brand { gap: 14px; }
+            .brand img { width: 72px; height: 72px; }
+            .brand-name { font-size: 34px; }
+            .brand-tagline { font-size: 13px; }
             .nav { flex-wrap: wrap; justify-content: flex-end; overflow: visible; }
             .nav a { padding: 0; border: 0; background: transparent; }
             .nav a.active,
@@ -310,7 +327,10 @@
         <div class="topbar-inner">
             <a class="brand" href="/">
                 <img src="/assets/marketx-logo.png?v=20260524-logo2" alt="股市在幹嘛">
-                <span>股市在幹嘛</span>
+                <span class="brand-mark">
+                    <span class="brand-name">股市在幹嘛</span>
+                    <span class="brand-tagline">看懂市場・掌握機會</span>
+                </span>
             </a>
             <nav class="nav">
                 <a class="{{ request()->is('/') ? 'active' : '' }}" href="/">今日狀態</a>
