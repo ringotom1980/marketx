@@ -202,6 +202,53 @@ Route::get('/s/{symbol}', function (string $symbol, StockEventChainBuilder $even
     $latestFinancial = DB::table('stock_financials')->where('stock_id', $stockRecord->id)->orderByDesc('period')->first();
     $latestRevenue = DB::table('stock_revenues')->where('stock_id', $stockRecord->id)->orderByDesc('year_month')->first();
     $fundamentalSignals = app(FundamentalSignalAnalyzer::class)->analyze($stockRecord, $latestFinancial, $latestRevenue);
+    $priceRows = $stockRecord->dailyPrices()
+        ->whereNotNull('open')
+        ->whereNotNull('high')
+        ->whereNotNull('low')
+        ->whereNotNull('close')
+        ->orderBy('trade_date')
+        ->limit(1400)
+        ->get(['trade_date', 'open', 'high', 'low', 'close', 'volume']);
+    $dailyK = $priceRows
+        ->slice(-260)
+        ->values()
+        ->map(fn ($row) => [
+            'time' => $row->trade_date->toDateString(),
+            'open' => (float) $row->open,
+            'high' => (float) $row->high,
+            'low' => (float) $row->low,
+            'close' => (float) $row->close,
+            'volume' => (int) ($row->volume ?? 0),
+        ])
+        ->all();
+    $aggregateK = function ($rows, callable $keyResolver): array {
+        return $rows
+            ->groupBy($keyResolver)
+            ->map(function ($group, $key) {
+                $first = $group->first();
+                $last = $group->last();
+
+                return [
+                    'time' => (string) $key,
+                    'open' => (float) $first->open,
+                    'high' => (float) $group->max('high'),
+                    'low' => (float) $group->min('low'),
+                    'close' => (float) $last->close,
+                    'volume' => (int) $group->sum('volume'),
+                ];
+            })
+            ->values()
+            ->all();
+    };
+    $weeklyK = array_slice($aggregateK(
+        $priceRows,
+        fn ($row) => $row->trade_date->format('o-\WW')
+    ), -160);
+    $yearlyK = $aggregateK(
+        $priceRows,
+        fn ($row) => $row->trade_date->format('Y')
+    );
     $stockThemes = DB::table('stock_theme_map')
         ->join('themes', 'themes.id', '=', 'stock_theme_map.theme_id')
         ->leftJoin('theme_scores', function ($join) {
@@ -270,6 +317,12 @@ Route::get('/s/{symbol}', function (string $symbol, StockEventChainBuilder $even
             ['name' => '財務營收', 'score' => $latestScore?->fundamental_score ?? 0],
         ],
         'technical' => $technicalPayload,
+        'chartData' => [
+            'intraday' => [],
+            'daily' => $dailyK,
+            'weekly' => $weeklyK,
+            'yearly' => $yearlyK,
+        ],
         'chip' => $latestChip,
         'chipSignals' => $chipSignals,
         'stockThemes' => $stockThemes,
