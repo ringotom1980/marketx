@@ -1,10 +1,12 @@
 <?php
 
 use App\Models\Stock;
+use App\Models\User;
 use App\Support\ChipSignalAnalyzer;
 use App\Support\EventClusterDisplay;
 use App\Support\FundamentalSignalAnalyzer;
 use App\Support\GlobalRadarBuilder;
+use App\Support\MarketxAuth;
 use App\Support\MarketDisplay;
 use App\Support\Ai\AiPipelineService;
 use App\Support\Ai\AiUsageLimiter;
@@ -16,34 +18,88 @@ use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/login', function () {
-    if (session()->get('marketx_admin') === true) {
+    if (session()->get('marketx_admin') === true || session()->has('marketx_user_id')) {
         return redirect('/');
     }
 
-    return view('login');
+    return view('login', ['mode' => 'login']);
 });
 
 Route::post('/login', function (Request $request) {
     $request->validate([
+        'email' => ['nullable', 'email'],
         'password' => ['required', 'string'],
+        'admin_login' => ['nullable', 'boolean'],
     ]);
 
-    $hash = config('services.marketx.admin_password_hash');
+    if ($request->boolean('admin_login') || ! $request->filled('email')) {
+        $hash = config('services.marketx.admin_password_hash');
 
-    if (! $hash || ! Hash::check($request->string('password')->toString(), $hash)) {
+        if (! $hash || ! Hash::check($request->string('password')->toString(), $hash)) {
+            return back()
+                ->withErrors(['password' => '管理員密碼錯誤'])
+                ->onlyInput();
+        }
+
+        $request->session()->regenerate();
+        $request->session()->put('marketx_admin', true);
+        $request->session()->put('marketx_user_name', '管理者');
+        $request->session()->put('marketx_is_admin', true);
+
+        return redirect()->intended('/');
+    }
+
+    $user = User::query()->where('email', $request->string('email')->lower()->toString())->first();
+
+    if (! $user || ! Hash::check($request->string('password')->toString(), $user->password)) {
         return back()
-            ->withErrors(['password' => '密碼錯誤'])
-            ->onlyInput();
+            ->withErrors(['email' => '帳號或密碼錯誤'])
+            ->onlyInput('email');
     }
 
     $request->session()->regenerate();
-    $request->session()->put('marketx_admin', true);
+    $request->session()->put('marketx_user_id', $user->id);
+    $request->session()->put('marketx_user_name', $user->name);
+    $request->session()->put('marketx_is_admin', (bool) $user->is_admin);
 
     return redirect()->intended('/');
 });
 
+Route::get('/register', function () {
+    if (session()->get('marketx_admin') === true || session()->has('marketx_user_id')) {
+        return redirect('/');
+    }
+
+    return view('login', ['mode' => 'register']);
+});
+
+Route::post('/register', function (Request $request) {
+    $validated = $request->validate([
+        'name' => ['required', 'string', 'max:50'],
+        'email' => ['required', 'email', 'max:255', 'unique:users,email'],
+        'password' => ['required', 'string', 'min:8', 'confirmed'],
+    ]);
+
+    $user = User::query()->create([
+        'name' => $validated['name'],
+        'email' => strtolower($validated['email']),
+        'password' => $validated['password'],
+        'is_admin' => false,
+    ]);
+
+    $request->session()->regenerate();
+    $request->session()->put('marketx_user_id', $user->id);
+    $request->session()->put('marketx_user_name', $user->name);
+    $request->session()->put('marketx_is_admin', false);
+
+    return redirect('/');
+});
+
 Route::match(['get', 'post'], '/logout', function (Request $request) {
     $request->session()->forget('marketx_admin');
+    $request->session()->forget('marketx_user_id');
+    $request->session()->forget('marketx_user_name');
+    $request->session()->forget('marketx_is_admin');
     $request->session()->regenerateToken();
 
     return redirect('/login');
@@ -192,7 +248,7 @@ Route::get('/s/{symbol}', function (string $symbol, StockEventChainBuilder $even
     $latestChip = $stockRecord->latestChip;
     $latestScore = $stockRecord->latestScore;
     $isWatched = DB::table('watchlist')
-        ->whereNull('user_id')
+        ->when(MarketxAuth::userId() === null, fn ($query) => $query->whereNull('user_id'), fn ($query) => $query->where('user_id', MarketxAuth::userId()))
         ->where('stock_id', $stockRecord->id)
         ->exists();
     $technicalPayload = $latestScore?->technical_payload;
@@ -424,7 +480,7 @@ Route::get('/themes', function () {
 });
 
 Route::get('/watchlist', function (AiUsageLimiter $aiLimiter) {
-    $items = DB::table('watchlist')
+    $items = MarketxAuth::watchlistQuery()
         ->join('stocks', 'stocks.id', '=', 'watchlist.stock_id')
         ->leftJoin('stock_prices_1d', function ($join) {
             $join->on('stocks.id', '=', 'stock_prices_1d.stock_id')
@@ -438,7 +494,6 @@ Route::get('/watchlist', function (AiUsageLimiter $aiLimiter) {
             $join->on('stocks.id', '=', 'stock_reports.stock_id')
                 ->whereRaw('stock_reports.report_date = (select max(sr.report_date) from stock_reports sr where sr.stock_id = stocks.id)');
         })
-        ->whereNull('watchlist.user_id')
         ->orderByDesc('watchlist.created_at')
         ->get([
             'stocks.symbol',
@@ -504,6 +559,7 @@ Route::get('/watchlist', function (AiUsageLimiter $aiLimiter) {
 
     return view('watchlist', [
         'items' => $items,
+        'isAdmin' => MarketxAuth::isAdmin(),
         'aiUsage' => [
             'used' => $aiLimiter->usedToday('stock_research'),
             'limit' => $aiLimiter->limit('stock_research'),
@@ -530,7 +586,7 @@ Route::post('/watchlist', function (Request $request) {
     }
 
     DB::table('watchlist')->updateOrInsert(
-        ['user_id' => null, 'stock_id' => $stock->id],
+        ['user_id' => MarketxAuth::userId(), 'stock_id' => $stock->id],
         ['created_at' => now(), 'updated_at' => now()]
     );
 
@@ -540,8 +596,7 @@ Route::post('/watchlist', function (Request $request) {
 Route::delete('/watchlist/{symbol}', function (string $symbol) {
     $stock = Stock::query()->where('symbol', $symbol)->firstOrFail();
 
-    DB::table('watchlist')
-        ->whereNull('user_id')
+    MarketxAuth::watchlistQuery()
         ->where('stock_id', $stock->id)
         ->delete();
 
@@ -549,9 +604,10 @@ Route::delete('/watchlist/{symbol}', function (string $symbol) {
 });
 
 Route::post('/watchlist/{symbol}/ai-report', function (string $symbol, AiUsageLimiter $aiLimiter) {
+    MarketxAuth::requireAdmin();
+
     $stock = Stock::query()->where('symbol', $symbol)->firstOrFail();
-    $isWatched = DB::table('watchlist')
-        ->whereNull('user_id')
+    $isWatched = MarketxAuth::watchlistQuery()
         ->where('stock_id', $stock->id)
         ->exists();
 
@@ -604,6 +660,8 @@ Route::post('/watchlist/{symbol}/ai-report', function (string $symbol, AiUsageLi
 });
 
 Route::get('/admin', function (AiPipelineService $aiPipeline) {
+    MarketxAuth::requireAdmin();
+
     $stats = [
         ['title' => '股票檔數', 'body' => (string) DB::table('stocks')->count()],
         ['title' => '日 K 筆數', 'body' => (string) DB::table('stock_prices_1d')->count()],
@@ -623,7 +681,8 @@ Route::get('/admin', function (AiPipelineService $aiPipeline) {
 
     $today = now('Asia/Taipei')->toDateString();
     $aiStatus = $aiPipeline->status();
-    $watchlistCount = DB::table('watchlist')->whereNull('user_id')->count();
+
+    $watchlistCount = DB::table('watchlist')->count();
     $todayAiReports = DB::table('stock_reports')
         ->whereDate('report_date', $today)
         ->where('model', 'like', 'gemini:%')
@@ -643,6 +702,8 @@ Route::get('/admin', function (AiPipelineService $aiPipeline) {
 });
 
 Route::post('/admin/ai/watchlist-reports', function (Request $request) {
+    MarketxAuth::requireAdmin();
+
     $validated = $request->validate([
         'limit' => ['nullable', 'integer', 'min:1', 'max:5'],
     ]);

@@ -10,7 +10,9 @@ class EnsureMarketxAdmin
 {
     public function handle(Request $request, Closure $next): Response
     {
-        if ($this->isPublicPath($request) || $request->session()->get('marketx_admin') === true) {
+        if ($this->isPublicPath($request)
+            || $request->session()->get('marketx_admin') === true
+            || $request->session()->has('marketx_user_id')) {
             return $next($request);
         }
 
@@ -24,6 +26,7 @@ class EnsureMarketxAdmin
     private function isPublicPath(Request $request): bool
     {
         return $request->is('login')
+            || $request->is('register')
             || $request->is('logout')
             || $request->is('up')
             || $request->is('assets/*')

@@ -105,7 +105,14 @@
     <section class="page-head">
         <div>
             <h1>追蹤清單</h1>
-            <p class="lead">自選股集中看分數、決策、收盤價與資料完整度。今日個股 AI 報告已用 {{ $aiUsage['used'] }} / {{ $aiUsage['limit'] }}，剩餘 {{ $aiUsage['remaining'] }} 檔。</p>
+            <p class="lead">
+                自選股集中看分數、決策、收盤價與資料完整度。
+                @if ($isAdmin)
+                    今日個股 AI 報告已用 {{ $aiUsage['used'] }} / {{ $aiUsage['limit'] }}，剩餘 {{ $aiUsage['remaining'] }} 檔。
+                @else
+                    AI 分析報告僅限管理者使用。
+                @endif
+            </p>
         </div>
         <form class="search" action="/watchlist" method="post">
             @csrf
@@ -199,7 +206,7 @@
                             <button class="button" type="submit">移除</button>
                         </form>
                     </div>
-                    @if (! $item['report_is_ai'])
+                    @if ($isAdmin && ! $item['report_is_ai'])
                         <form class="ai-report-form" method="post" action="/watchlist/{{ $item['symbol'] }}/ai-report" style="margin-top:8px">
                             @csrf
                             <button class="button" type="submit" style="width:100%" {{ $aiUsage['remaining'] <= 0 ? 'disabled' : '' }}>

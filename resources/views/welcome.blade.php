@@ -337,7 +337,9 @@
                 <a class="{{ request()->is('global') ? 'active' : '' }}" href="/global">全球雷達</a>
                 <a class="{{ request()->is('themes') ? 'active' : '' }}" href="/themes">題材雷達</a>
                 <a class="{{ request()->is('watchlist') ? 'active' : '' }}" href="/watchlist">追蹤清單</a>
-                <a class="{{ request()->is('admin') ? 'active' : '' }}" href="/admin">後台</a>
+                @if (session('marketx_admin') === true || session('marketx_is_admin') === true)
+                    <a class="{{ request()->is('admin') ? 'active' : '' }}" href="/admin">後台</a>
+                @endif
                 <a href="/logout">登出</a>
             </nav>
         </div>
