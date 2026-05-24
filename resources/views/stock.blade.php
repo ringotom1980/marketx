@@ -64,7 +64,6 @@
                             <th>{{ $theme['name'] }}</th>
                             <td>
                                 <div class="meter"><span style="width: {{ min(100, max(0, $theme['score'])) }}%"></span></div>
-                                <p class="lead" style="font-size:13px">{{ $theme['reason'] }}</p>
                             </td>
                             <td>{{ $theme['score'] }}</td>
                         </tr>
