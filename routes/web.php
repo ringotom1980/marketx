@@ -2,6 +2,7 @@
 
 use App\Models\Stock;
 use App\Support\ChipSignalAnalyzer;
+use App\Support\EventClusterDisplay;
 use App\Support\FundamentalSignalAnalyzer;
 use App\Support\MarketDisplay;
 use Illuminate\Http\Request;
@@ -91,11 +92,8 @@ Route::get('/', function () {
         ->limit(4)
         ->get(['title', 'summary', 'category', 'region', 'importance_score', 'sentiment', 'themes'])
         ->map(fn ($cluster) => [
-            'title' => $cluster->title,
-            'impact' => trim(($cluster->summary ?: '事件摘要整理中')
-                .'｜重要度 '.$cluster->importance_score.'/100'
-                .'｜情緒 '.($cluster->sentiment ?: 'neutral')
-                .'｜題材 '.implode('、', json_decode($cluster->themes ?: '[]', true) ?: ['待分類'])),
+            'title' => EventClusterDisplay::title($cluster),
+            'impact' => EventClusterDisplay::body($cluster),
         ]);
 
     if ($events->isEmpty()) {
