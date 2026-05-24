@@ -125,6 +125,7 @@ class AiPreprocessEvents extends Command
             '任務：把已由程式依今日熱度聚合過的前五事件群，整理成白話新聞概述與市場解讀。',
             '限制：不要預測價格，不要給買賣建議。',
             '請輸出 JSON array，每筆只需包含 cluster_id, summary_zh, sentiment。',
+            '只能回傳輸入資料中存在的 cluster_id；輸入幾筆就最多回幾筆，不要自行補資料。',
             'summary_zh 必須是繁體中文白話短句，像是寫給一般投資人看的，不要保留英文長標題，並說明新聞內容與為什麼市場會注意。',
             'sentiment 只能用 positive、neutral、negative。',
             '只輸出 JSON，不要 markdown，不要解釋，不要補充說明。',

@@ -42,7 +42,7 @@ class ClusterGlobalEvents extends Command
 
         $upserted = 0;
 
-        foreach ($clusters->take($top) as $cluster) {
+        foreach ($this->diverseTopClusters($clusters, $top) as $cluster) {
             DB::table('global_event_clusters')->insert([
                 'cluster_date' => $clusterDate,
                 'cluster_key' => $cluster['cluster_key'],
@@ -69,6 +69,33 @@ class ClusterGlobalEvents extends Command
         $this->info('Hot clusters inserted: '.$upserted);
 
         return self::SUCCESS;
+    }
+
+    private function diverseTopClusters(Collection $clusters, int $top): Collection
+    {
+        $selected = collect();
+        $categoryCounts = [];
+
+        foreach ($clusters as $cluster) {
+            $category = $cluster['category'] ?? 'Global';
+
+            if (($categoryCounts[$category] ?? 0) >= 1 && $selected->count() < 3) {
+                continue;
+            }
+
+            if (($categoryCounts[$category] ?? 0) >= 2) {
+                continue;
+            }
+
+            $selected->push($cluster);
+            $categoryCounts[$category] = ($categoryCounts[$category] ?? 0) + 1;
+
+            if ($selected->count() >= $top) {
+                break;
+            }
+        }
+
+        return $selected;
     }
 
     private function events(CarbonImmutable $from, CarbonImmutable $to, int $limit): Collection
@@ -179,7 +206,7 @@ class ClusterGlobalEvents extends Command
                 'industries' => ['能源', '航運'],
                 'symbols' => [],
                 'heat_bonus' => 10,
-                'keywords' => ['war', 'ukraine', 'russia', 'middle east', 'israel', 'iran', 'red sea', 'geopolitical', 'missile', 'attack'],
+                'keywords' => ['war', 'ukraine', 'russia', 'middle east', 'israel', 'iran', 'red sea', 'geopolitical', 'missile', 'attack', 'shipping rate', 'freight', 'container', 'baltic dry', 'red sea shipping', 'port congestion'],
             ],
             'oil-energy' => [
                 'title' => '油價與能源供應成為市場焦點',
@@ -203,17 +230,8 @@ class ClusterGlobalEvents extends Command
                 'heat_bonus' => 6,
                 'keywords' => ['gold', 'bullion', 'precious metal', 'safe haven', 'xau'],
             ],
-            'shipping-freight' => [
-                'title' => '航運與貨櫃運價變化受關注',
-                'category' => 'Shipping',
-                'region' => 'Global',
-                'sentiment' => 'neutral',
-                'themes' => ['航運運費', '地緣政治'],
-                'industries' => ['航運'],
-                'symbols' => [],
-                'heat_bonus' => 6,
-                'keywords' => ['shipping rate', 'freight', 'container', 'baltic dry', 'red sea shipping', 'port congestion'],
-            ],
+            // Shipping terms are intentionally folded into geopolitics or energy to avoid
+            // one-day homepage duplication unless we later ingest a dedicated freight index.
             'ai-infrastructure' => [
                 'title' => 'AI 基礎建設需求持續升溫',
                 'category' => 'AI',

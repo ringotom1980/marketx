@@ -8,6 +8,12 @@ class EventClusterDisplay
 {
     public static function title(object $cluster): string
     {
+        $summary = trim((string) ($cluster->summary ?? ''));
+
+        if ($summary !== '') {
+            return self::headlineFromSummary($summary);
+        }
+
         $themes = self::jsonList($cluster->themes ?? null);
         $category = (string) ($cluster->category ?? '');
 
@@ -60,6 +66,10 @@ class EventClusterDisplay
     {
         $text = trim($summary);
 
+        if ($text !== '' && ! Str::contains($text, ['｜', '事件升溫'])) {
+            return self::cleanTitle($text);
+        }
+
         if (Str::contains($text, ['NVIDIA', 'AI', 'Google Cloud', 'GTC', 'COMPUTEX'])) {
             return 'AI 基礎建設、雲端服務與伺服器需求仍是市場關注主線，相關供應鏈熱度偏高。';
         }
@@ -105,6 +115,29 @@ class EventClusterDisplay
         $text = trim($text, " \t\n\r\0\x0B|,;；");
 
         return mb_substr($text, 0, 90);
+    }
+
+    private static function headlineFromSummary(string $summary): string
+    {
+        $summary = self::cleanTitle($summary);
+
+        if (Str::contains($summary, ['戰爭', '地緣', '紅海'])) {
+            return '戰爭與地緣政治風險升溫';
+        }
+
+        if (Str::contains($summary, ['油價', '能源', '油氣', '石油', '供應'])) {
+            return '能源供應與油價消息受關注';
+        }
+
+        if (Str::contains($summary, ['利率', '金融', '資金'])) {
+            return '利率與金融政策仍是焦點';
+        }
+
+        if (Str::contains($summary, ['航運', '貨櫃', '運價'])) {
+            return '航運與貨櫃運價變化受關注';
+        }
+
+        return mb_substr($summary, 0, 24);
     }
 
     private static function sentiment(string $sentiment, array $themes, string $summary): string
