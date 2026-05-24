@@ -244,6 +244,26 @@
 
         .chain strong { color: var(--ink); }
 
+        .signal-list {
+            display: grid;
+            gap: 10px;
+            margin-bottom: 14px;
+        }
+
+        .signal-item {
+            border: 1px solid var(--line);
+            border-radius: 8px;
+            padding: 10px;
+            background: #fafafa;
+        }
+
+        .signal-item p {
+            margin: 7px 0 0;
+            color: var(--muted);
+            font-size: 13px;
+            line-height: 1.55;
+        }
+
         @media (min-width: 821px) {
             .topbar-inner {
                 padding: 10px 20px;

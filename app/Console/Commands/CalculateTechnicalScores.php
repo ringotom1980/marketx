@@ -215,8 +215,13 @@ class CalculateTechnicalScores extends Command
             'macd' => $macd['macd'],
             'macd_signal' => $macd['signal'],
             'macd_histogram' => $macd['histogram'],
+            'macd_previous' => $macd['previous_macd'],
+            'macd_signal_previous' => $macd['previous_signal'],
+            'macd_histogram_previous' => $macd['previous_histogram'],
             'k9' => $kd['k'],
             'd9' => $kd['d'],
+            'k9_previous' => $kd['previous_k'],
+            'd9_previous' => $kd['previous_d'],
             'bollinger_upper20' => $bollinger['upper'],
             'bollinger_middle20' => $bollinger['middle'],
             'bollinger_lower20' => $bollinger['lower'],
@@ -225,8 +230,145 @@ class CalculateTechnicalScores extends Command
             'volume_ratio20' => $volumeRatio === null ? null : round($volumeRatio, 2),
             'volatility20' => $volatility20 === null ? null : round($volatility20 * 100, 2),
             'breakout20' => $close >= $high20BeforeToday && $close > $previousClose,
+            'signals' => $this->technicalSignals(
+                close: $close,
+                previousClose: $previousClose,
+                sma5: $sma5,
+                sma20: $sma20,
+                sma60: $sma60,
+                ema12: $ema12,
+                ema26: $ema26,
+                rsi14: $rsi14,
+                macd: $macd,
+                kd: $kd,
+                bollinger: $bollinger,
+                atr14: $atr14,
+                volumeRatio: $volumeRatio,
+                return20: $return20,
+                volatility20: $volatility20,
+                breakout20: $close >= $high20BeforeToday && $close > $previousClose,
+            ),
             'risk_flags' => array_values(array_unique($riskFlags)),
         ];
+    }
+
+    private function technicalSignals(
+        float $close,
+        float $previousClose,
+        ?float $sma5,
+        ?float $sma20,
+        ?float $sma60,
+        ?float $ema12,
+        ?float $ema26,
+        ?float $rsi14,
+        array $macd,
+        array $kd,
+        array $bollinger,
+        ?float $atr14,
+        ?float $volumeRatio,
+        float $return20,
+        ?float $volatility20,
+        bool $breakout20,
+    ): array {
+        $signals = [];
+
+        if ($kd['k'] !== null && $kd['d'] !== null && $kd['previous_k'] !== null && $kd['previous_d'] !== null) {
+            if ($kd['previous_k'] <= $kd['previous_d'] && $kd['k'] > $kd['d']) {
+                $signals[] = ['tone' => 'green', 'title' => 'KD 黃金交叉', 'body' => 'K 值由下往上突破 D 值，短線動能轉強。'];
+            } elseif ($kd['previous_k'] >= $kd['previous_d'] && $kd['k'] < $kd['d']) {
+                $signals[] = ['tone' => 'red', 'title' => 'KD 死亡交叉', 'body' => 'K 值跌破 D 值，短線動能轉弱。'];
+            } elseif ($kd['k'] > $kd['d'] && $kd['k'] >= 50 && $kd['k'] <= 85) {
+                $signals[] = ['tone' => 'green', 'title' => 'KD 多方排列', 'body' => 'K 值維持在 D 值之上，短線買盤仍占優勢。'];
+            } elseif ($kd['k'] < $kd['d'] && $kd['k'] < 45) {
+                $signals[] = ['tone' => 'amber', 'title' => 'KD 偏弱', 'body' => 'K 值低於 D 值且落在弱勢區，短線需觀察止穩。'];
+            }
+
+            if ($kd['k'] > 90 && $kd['d'] > 85) {
+                $signals[] = ['tone' => 'amber', 'title' => 'KD 過熱', 'body' => 'KD 已進入高檔區，追價風險提高。'];
+            }
+        }
+
+        if ($macd['macd'] !== null && $macd['signal'] !== null && $macd['histogram'] !== null) {
+            if ($macd['previous_macd'] !== null && $macd['previous_signal'] !== null) {
+                if ($macd['previous_macd'] <= $macd['previous_signal'] && $macd['macd'] > $macd['signal']) {
+                    $signals[] = ['tone' => 'green', 'title' => 'MACD 黃金交叉', 'body' => 'DIF 向上突破 MACD 線，中期動能轉強。'];
+                } elseif ($macd['previous_macd'] >= $macd['previous_signal'] && $macd['macd'] < $macd['signal']) {
+                    $signals[] = ['tone' => 'red', 'title' => 'MACD 死亡交叉', 'body' => 'DIF 跌破 MACD 線，中期動能轉弱。'];
+                }
+            }
+
+            if ($macd['previous_histogram'] !== null) {
+                if ($macd['histogram'] > 0 && $macd['previous_histogram'] <= 0) {
+                    $signals[] = ['tone' => 'green', 'title' => 'MACD 翻正', 'body' => '柱狀體由負轉正，動能開始轉為多方。'];
+                } elseif ($macd['histogram'] < 0 && $macd['previous_histogram'] < 0 && $macd['histogram'] > $macd['previous_histogram']) {
+                    $signals[] = ['tone' => 'amber', 'title' => 'MACD 負數縮減', 'body' => '柱狀體仍在零軸下，但空方力道正在收斂。'];
+                } elseif ($macd['histogram'] > 0 && $macd['histogram'] < $macd['previous_histogram']) {
+                    $signals[] = ['tone' => 'amber', 'title' => 'MACD 正數縮小', 'body' => '柱狀體仍為正，但多方力道開始降溫。'];
+                }
+            }
+        }
+
+        if ($sma5 !== null && $sma20 !== null && $sma60 !== null) {
+            if ($close > $sma5 && $sma5 > $sma20 && $sma20 > $sma60) {
+                $signals[] = ['tone' => 'green', 'title' => '均線多頭排列', 'body' => '收盤價站上短中長期均線，趨勢結構偏多。'];
+            } elseif ($close < $sma20) {
+                $signals[] = ['tone' => 'red', 'title' => '跌破月線', 'body' => '收盤價低於 20 日均線，短中線轉弱。'];
+            } elseif ($sma20 < $sma60) {
+                $signals[] = ['tone' => 'amber', 'title' => '月線低於季線', 'body' => '中期趨勢尚未轉強，仍需等待結構改善。'];
+            }
+        }
+
+        if ($ema12 !== null && $ema26 !== null) {
+            $signals[] = $ema12 > $ema26
+                ? ['tone' => 'green', 'title' => 'EMA 動能偏多', 'body' => 'EMA12 高於 EMA26，價格動能偏向多方。']
+                : ['tone' => 'amber', 'title' => 'EMA 動能偏弱', 'body' => 'EMA12 低於 EMA26，價格動能仍偏保守。'];
+        }
+
+        if ($rsi14 !== null) {
+            if ($rsi14 >= 55 && $rsi14 <= 72) {
+                $signals[] = ['tone' => 'green', 'title' => 'RSI 強勢區', 'body' => 'RSI 位於健康強勢區，買盤動能尚可。'];
+            } elseif ($rsi14 > 78) {
+                $signals[] = ['tone' => 'amber', 'title' => 'RSI 過熱', 'body' => 'RSI 偏高，短線容易出現震盪或拉回。'];
+            } elseif ($rsi14 < 35) {
+                $signals[] = ['tone' => 'red', 'title' => 'RSI 弱勢', 'body' => 'RSI 偏低，短線賣壓仍需消化。'];
+            }
+        }
+
+        if (($bollinger['upper'] ?? null) !== null && ($bollinger['lower'] ?? null) !== null) {
+            if ($close > $bollinger['upper']) {
+                $signals[] = ['tone' => 'green', 'title' => '突破布林上緣', 'body' => '價格突破布林通道上緣，代表波動放大且買盤積極。'];
+            } elseif ($close < $bollinger['lower']) {
+                $signals[] = ['tone' => 'red', 'title' => '跌破布林下緣', 'body' => '價格跌破布林通道下緣，短線弱勢或超跌風險提高。'];
+            }
+        }
+
+        if ($breakout20) {
+            $signals[] = ['tone' => 'green', 'title' => '20 日突破', 'body' => '收盤價突破近 20 日高點，價格結構轉強。'];
+        } elseif ($return20 >= 0.08) {
+            $signals[] = ['tone' => 'green', 'title' => '20 日動能強', 'body' => '近 20 日漲幅超過 8%，波段動能偏強。'];
+        } elseif ($return20 <= -0.08) {
+            $signals[] = ['tone' => 'red', 'title' => '20 日動能弱', 'body' => '近 20 日跌幅超過 8%，波段動能偏弱。'];
+        }
+
+        if ($volumeRatio !== null) {
+            if ($volumeRatio >= 1.5 && $close > $previousClose) {
+                $signals[] = ['tone' => 'green', 'title' => '價漲量增', 'body' => '成交量高於 20 日均量，且價格上漲，買盤確認度較高。'];
+            } elseif ($volumeRatio >= 1.5 && $close < $previousClose) {
+                $signals[] = ['tone' => 'red', 'title' => '高檔放量轉弱', 'body' => '成交量明顯放大但價格下跌，需留意賣壓。'];
+            } elseif ($volumeRatio < 0.7) {
+                $signals[] = ['tone' => 'amber', 'title' => '量能不足', 'body' => '成交量低於近期均量，突破或反彈的確認度較低。'];
+            }
+        }
+
+        if ($atr14 !== null && $close > 0 && ($atr14 / $close) > 0.055) {
+            $signals[] = ['tone' => 'amber', 'title' => '波動擴大', 'body' => 'ATR 占股價比重偏高，短線震盪風險較大。'];
+        }
+
+        if ($volatility20 !== null && $volatility20 > 0.045) {
+            $signals[] = ['tone' => 'amber', 'title' => '20 日波動偏高', 'body' => '近 20 日價格波動較大，操作上需保留風險空間。'];
+        }
+
+        return array_slice($signals, 0, 8);
     }
 
     private function sma(array $values, int $period): ?float
@@ -304,7 +446,7 @@ class CalculateTechnicalScores extends Command
     private function macd(array $values): array
     {
         if (count($values) < 35) {
-            return ['macd' => null, 'signal' => null, 'histogram' => null];
+            return ['macd' => null, 'signal' => null, 'histogram' => null, 'previous_macd' => null, 'previous_signal' => null, 'previous_histogram' => null];
         }
 
         $ema12 = $this->emaSeries($values, 12);
@@ -318,17 +460,22 @@ class CalculateTechnicalScores extends Command
         }
 
         if (count($macdSeries) < 9) {
-            return ['macd' => null, 'signal' => null, 'histogram' => null];
+            return ['macd' => null, 'signal' => null, 'histogram' => null, 'previous_macd' => null, 'previous_signal' => null, 'previous_histogram' => null];
         }
 
         $signalSeries = $this->emaSeries($macdSeries, 9);
         $macd = $macdSeries[count($macdSeries) - 1];
         $signal = $signalSeries[count($signalSeries) - 1] ?? null;
+        $previousMacd = $macdSeries[count($macdSeries) - 2] ?? null;
+        $previousSignal = $signalSeries[count($signalSeries) - 2] ?? null;
 
         return [
             'macd' => round($macd, 4),
             'signal' => $signal === null ? null : round($signal, 4),
             'histogram' => $signal === null ? null : round($macd - $signal, 4),
+            'previous_macd' => $previousMacd === null ? null : round($previousMacd, 4),
+            'previous_signal' => $previousSignal === null ? null : round($previousSignal, 4),
+            'previous_histogram' => $previousMacd === null || $previousSignal === null ? null : round($previousMacd - $previousSignal, 4),
         ];
     }
 
@@ -338,7 +485,7 @@ class CalculateTechnicalScores extends Command
     private function kd(array $prices, int $period, int $kSmooth, int $dSmooth): array
     {
         if (count($prices) < $period + $kSmooth + $dSmooth) {
-            return ['k' => null, 'd' => null];
+            return ['k' => null, 'd' => null, 'previous_k' => null, 'previous_d' => null];
         }
 
         $rawK = [];
@@ -357,6 +504,8 @@ class CalculateTechnicalScores extends Command
         return [
             'k' => round((float) end($kValues), 2),
             'd' => $dValues === [] ? null : round((float) end($dValues), 2),
+            'previous_k' => count($kValues) < 2 ? null : round((float) $kValues[count($kValues) - 2], 2),
+            'previous_d' => count($dValues) < 2 ? null : round((float) $dValues[count($dValues) - 2], 2),
         ];
     }
 

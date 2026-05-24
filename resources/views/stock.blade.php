@@ -43,6 +43,16 @@
         <div class="panel">
             <h2>K 線與技術分析</h2>
             @if ($technical)
+                @if (! empty($technical['signals']))
+                    <div class="signal-list">
+                        @foreach ($technical['signals'] as $signal)
+                            <div class="signal-item">
+                                <span class="badge {{ $signal['tone'] ?? '' }}">{{ $signal['title'] ?? '技術訊號' }}</span>
+                                <p>{{ $signal['body'] ?? '' }}</p>
+                            </div>
+                        @endforeach
+                    </div>
+                @endif
                 <table class="table">
                     <tbody>
                     <tr><th>SMA 5 / 20 / 60</th><td>{{ $technical['sma5'] ?? '-' }} / {{ $technical['sma20'] ?? '-' }} / {{ $technical['sma60'] ?? '-' }}</td></tr>
