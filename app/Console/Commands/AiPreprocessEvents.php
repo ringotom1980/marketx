@@ -73,6 +73,7 @@ class AiPreprocessEvents extends Command
             '任務：把新聞整理成事件摘要、情緒方向、題材分類、產業分類。',
             '限制：不要預測價格，不要給買賣建議。',
             '請輸出 JSON array，每筆包含 event_id, summary_zh, sentiment, themes, industries, related_symbols, importance_score。',
+            '只輸出 JSON，不要 markdown，不要解釋，不要補充說明。',
             '事件資料：',
             json_encode($events, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
         ]);
