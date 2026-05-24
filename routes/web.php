@@ -6,6 +6,7 @@ use App\Support\EventClusterDisplay;
 use App\Support\FundamentalSignalAnalyzer;
 use App\Support\GlobalRadarBuilder;
 use App\Support\MarketDisplay;
+use App\Support\StockEventChainBuilder;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
@@ -174,7 +175,7 @@ Route::get('/search', function (Request $request) {
     ]);
 });
 
-Route::get('/s/{symbol}', function (string $symbol) {
+Route::get('/s/{symbol}', function (string $symbol, StockEventChainBuilder $eventChainBuilder) {
     $stockRecord = Stock::query()
         ->with([
             'dailyPrices' => fn ($query) => $query->latest('trade_date')->limit(1),
@@ -233,6 +234,7 @@ Route::get('/s/{symbol}', function (string $symbol) {
         $themeWeightedScore = $stockThemes->sum(fn ($theme) => (int) $theme['score'] * max(1, (int) $theme['weight']));
         $themeModuleScore = $themeWeightSum > 0 ? (int) round($themeWeightedScore / $themeWeightSum) : 0;
     }
+    $eventChains = $eventChainBuilder->build($stockRecord, $latestScore);
 
     $latestReport = DB::table('stock_reports')
         ->where('stock_id', $stockRecord->id)
@@ -264,12 +266,7 @@ Route::get('/s/{symbol}', function (string $symbol) {
         'chipSignals' => $chipSignals,
         'stockThemes' => $stockThemes,
         'fundamentalSignals' => $fundamentalSignals,
-        'chain' => [
-            '全球市場與事件',
-            '→ 產業與題材影響',
-            '→ 台股族群資金流',
-            '→ 個股分數與風險',
-        ],
+        'eventChains' => $eventChains,
         'summary' => $latestReport?->summary
             ?: '目前先使用免費規則式中文解釋引擎，依技術、籌碼、財務與題材分數整理風險摘要。AI 介面已預留，之後可接 OpenAI 或其他模型。',
     ]);

@@ -45,11 +45,19 @@
 
         <div class="panel">
             <h2>全球事件影響鏈</h2>
-            <div class="chain">
-                @foreach ($chain as $item)
-                    <div>{{ $item }}</div>
-                @endforeach
-            </div>
+            @if (! empty($eventChains))
+                <div class="signal-list">
+                    @foreach ($eventChains as $chain)
+                        <div class="signal-item">
+                            <span class="badge amber">{{ $chain['event'] }}</span>
+                            <p>{{ $chain['path'] }}</p>
+                            <p>{{ $chain['judgement'] }}</p>
+                        </div>
+                    @endforeach
+                </div>
+            @else
+                <p class="lead">目前沒有明確全球事件直接連到此股票，先以技術、籌碼與財務分數觀察。</p>
+            @endif
         </div>
     </section>
 
