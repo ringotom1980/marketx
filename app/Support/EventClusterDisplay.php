@@ -49,14 +49,11 @@ class EventClusterDisplay
     public static function body(object $cluster): string
     {
         $themes = self::jsonList($cluster->themes ?? null);
-        $themeText = $themes === [] ? '題材待分類' : '相關題材：'.implode('、', $themes);
         $summary = self::plainSummary((string) ($cluster->summary ?? ''), $themes, (string) ($cluster->category ?? ''));
         $sentiment = self::sentiment((string) ($cluster->sentiment ?? 'neutral'), $themes, $summary);
 
         return $summary
-            .'｜重要度：'.(int) ($cluster->importance_score ?? 0).'/100'
-            .'｜市場解讀：'.$sentiment
-            .'｜'.$themeText;
+            .'｜市場解讀：'.$sentiment;
     }
 
     private static function plainSummary(string $summary, array $themes, string $category): string
