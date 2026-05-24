@@ -24,6 +24,13 @@ class ImportOfficialFreeChipMetrics extends Command
 
     private const TWSE_FOREIGN_HOLDING_URL = 'https://www.twse.com.tw/rwd/zh/fund/MI_QFIIS';
 
+    private const TWSE_FOREIGN_SELECT_TYPES = [
+        '01', '02', '03', '04', '05', '06', '07', '08',
+        '09', '10', '11', '12', '14', '15', '16', '17',
+        '18', '20', '21', '22', '23', '24', '25', '26',
+        '27', '28', '29', '30', '31', '32', '80',
+    ];
+
     public function handle(): int
     {
         $date = $this->tradeDate();
@@ -150,47 +157,52 @@ class ImportOfficialFreeChipMetrics extends Command
 
     private function importForeignHolding(CarbonImmutable $date): int
     {
-        $payload = Http::retry(3, 500)
-            ->timeout(30)
-            ->get(self::TWSE_FOREIGN_HOLDING_URL, [
-                'response' => 'json',
-                'date' => $date->format('Ymd'),
-            ])
-            ->throw()
-            ->json();
-
-        if (($payload['stat'] ?? null) !== 'OK') {
-            return 0;
-        }
-
         $count = 0;
+        $seen = [];
 
-        foreach (($payload['data'] ?? []) as $row) {
-            $symbol = trim((string) ($row[0] ?? ''));
+        foreach (self::TWSE_FOREIGN_SELECT_TYPES as $selectType) {
+            $payload = Http::retry(3, 500)
+                ->timeout(30)
+                ->get(self::TWSE_FOREIGN_HOLDING_URL, [
+                    'response' => 'json',
+                    'date' => $date->format('Ymd'),
+                    'selectType' => $selectType,
+                ])
+                ->throw()
+                ->json();
 
-            if (! $this->isCommonStockSymbol($symbol)) {
+            if (($payload['stat'] ?? null) !== 'OK') {
                 continue;
             }
 
-            $stock = Stock::query()->where('symbol', $symbol)->where('market', 'TWSE')->first();
+            foreach (($payload['data'] ?? []) as $row) {
+                $symbol = trim((string) ($row[0] ?? ''));
 
-            if (! $stock) {
-                continue;
+                if (isset($seen[$symbol]) || ! $this->isCommonStockSymbol($symbol)) {
+                    continue;
+                }
+
+                $stock = Stock::query()->where('symbol', $symbol)->where('market', 'TWSE')->first();
+
+                if (! $stock) {
+                    continue;
+                }
+
+                $chip = $this->chip($stock->id, $date);
+                $rawPayload = $chip->raw_payload ?? [];
+                $rawPayload['foreign_holding'] = ['source' => 'TWSE_MI_QFIIS', 'selectType' => $selectType, 'row' => $row];
+
+                $chip->fill([
+                    'foreign_available_shares' => $this->integer($row[4] ?? null),
+                    'foreign_held_shares' => $this->integer($row[5] ?? null),
+                    'foreign_available_ratio' => $this->decimal($row[6] ?? null),
+                    'foreign_held_ratio' => $this->decimal($row[7] ?? null),
+                    'raw_payload' => $rawPayload,
+                ])->save();
+
+                $seen[$symbol] = true;
+                $count++;
             }
-
-            $chip = $this->chip($stock->id, $date);
-            $rawPayload = $chip->raw_payload ?? [];
-            $rawPayload['foreign_holding'] = ['source' => 'TWSE_MI_QFIIS', 'row' => $row];
-
-            $chip->fill([
-                'foreign_available_shares' => $this->integer($row[4] ?? null),
-                'foreign_held_shares' => $this->integer($row[5] ?? null),
-                'foreign_available_ratio' => $this->decimal($row[6] ?? null),
-                'foreign_held_ratio' => $this->decimal($row[7] ?? null),
-                'raw_payload' => $rawPayload,
-            ])->save();
-
-            $count++;
         }
 
         return $count;
