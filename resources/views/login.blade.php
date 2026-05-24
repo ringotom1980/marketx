@@ -4,7 +4,7 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>登入｜股市在幹嘛</title>
-    <link rel="icon" type="image/png" sizes="32x32" href="/assets/favicon-32.png">
+    <link rel="icon" type="image/png" sizes="32x32" href="/assets/favicon-32.png?v=20260524-logo2">
     <style>
         * { box-sizing: border-box; }
         body {
@@ -76,7 +76,7 @@
     <form class="login" method="post" action="/login">
         @csrf
         <div class="brand">
-            <img src="/assets/marketx-logo.png" alt="股市在幹嘛">
+            <img src="/assets/marketx-logo.png?v=20260524-logo2" alt="股市在幹嘛">
             <h1>股市在幹嘛</h1>
         </div>
 

@@ -4,8 +4,8 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
     <title>{{ $title ?? '股市在幹嘛' }}</title>
-    <link rel="icon" type="image/png" sizes="32x32" href="/assets/favicon-32.png">
-    <link rel="apple-touch-icon" sizes="180x180" href="/assets/favicon-180.png">
+    <link rel="icon" type="image/png" sizes="32x32" href="/assets/favicon-32.png?v=20260524-logo2">
+    <link rel="apple-touch-icon" sizes="180x180" href="/assets/favicon-180.png?v=20260524-logo2">
     <style>
         :root {
             --bg: #f7f8fa;
@@ -309,7 +309,7 @@
     <header class="topbar">
         <div class="topbar-inner">
             <a class="brand" href="/">
-                <img src="/assets/marketx-logo.png" alt="股市在幹嘛">
+                <img src="/assets/marketx-logo.png?v=20260524-logo2" alt="股市在幹嘛">
                 <span>股市在幹嘛</span>
             </a>
             <nav class="nav">
