@@ -25,24 +25,26 @@
         }
         .brand {
             display: flex;
+            flex-direction: column;
             align-items: center;
-            gap: 12px;
-            margin-bottom: 22px;
+            gap: 8px;
+            margin-bottom: 26px;
+            text-align: center;
         }
         .brand img {
-            width: 76px;
-            height: 76px;
+            width: 112px;
+            height: 112px;
             border-radius: 0;
             object-fit: cover;
         }
         h1 {
             margin: 0;
-            font-size: 30px;
+            font-size: 34px;
             line-height: 1.05;
             color: #222831;
         }
         .tagline {
-            margin: 6px 0 0;
+            margin: 4px 0 0;
             color: #6b7280;
             font-size: 13px;
             font-weight: 700;
@@ -86,7 +88,7 @@
         @csrf
         <div class="brand">
             <img src="/assets/marketx-logo.png?v=20260524-logo2" alt="股市在幹嘛">
-            <div>
+            <div class="brand-copy">
                 <h1>股市在幹嘛</h1>
                 <p class="tagline">看懂市場・掌握機會</p>
             </div>
