@@ -556,11 +556,17 @@ Route::post('/watchlist/{symbol}/ai-report', function (string $symbol, AiUsageLi
         ->exists();
 
     if (! $isWatched) {
-        return back()->with('error', '這檔股票不在追蹤清單內。');
+        return back()->with('aiModal', [
+            'title' => '無法產生 AI 報告',
+            'body' => '這檔股票不在追蹤清單內。',
+        ]);
     }
 
     if (! $aiLimiter->canRun('stock_research')) {
-        return back()->with('error', '今日個股 AI 報告額度已用完。');
+        return back()->with('aiModal', [
+            'title' => '今日額度已用完',
+            'body' => '今日個股 AI 報告額度已用完。',
+        ]);
     }
 
     config(['services.marketx.ai_pipeline_enabled' => true]);
@@ -573,16 +579,28 @@ Route::post('/watchlist/{symbol}/ai-report', function (string $symbol, AiUsageLi
     $output = trim(Artisan::output());
     $generated = str_contains($output, 'Gemini stock reports generated: 1');
     $alreadySkipped = str_contains($output, 'Skipped: 1');
+    $used = $aiLimiter->usedToday('stock_research');
+    $limit = $aiLimiter->limit('stock_research');
+    $remaining = $aiLimiter->remaining('stock_research');
 
-    return back()->with(
-        $exitCode === 0 ? 'status' : 'error',
-        match (true) {
-            $exitCode !== 0 => 'AI 報告產生失敗，請稍後再試。',
-            $generated => $stock->name.' AI 報告已產生完成。',
-            $alreadySkipped => $stock->name.' 今日已經有 AI 報告，不需要重複產生。',
-            default => $stock->name.' AI 報告任務已完成。',
-        }
-    );
+    $body = match (true) {
+        $exitCode !== 0 => 'AI 報告產生失敗，請稍後再試。',
+        $generated => $stock->name.' AI 報告已產生完成。',
+        $alreadySkipped => $stock->name.' 今日已經有 AI 報告，不需要重複產生。',
+        default => $stock->name.' AI 報告任務已完成。',
+    };
+
+    if ($exitCode === 0) {
+        $body .= "\n今日已產生報告".$used.'檔，剩餘'.$remaining.'檔。';
+    }
+
+    return back()->with('aiModal', [
+        'title' => $exitCode === 0 ? 'AI 報告完成' : 'AI 報告失敗',
+        'body' => $body,
+        'used' => $used,
+        'limit' => $limit,
+        'remaining' => $remaining,
+    ]);
 });
 
 Route::get('/admin', function (AiPipelineService $aiPipeline) {

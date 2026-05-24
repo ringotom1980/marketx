@@ -23,6 +23,85 @@
 @endphp
 
 @section('content')
+    <style>
+        .ai-loading-overlay,
+        .ai-modal-overlay {
+            position: fixed;
+            inset: 0;
+            z-index: 100;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            padding: 24px;
+            background: rgba(22, 32, 42, .46);
+            backdrop-filter: blur(4px);
+        }
+
+        .ai-loading-overlay.active,
+        .ai-modal-overlay.active {
+            display: flex;
+        }
+
+        .ai-loading-box,
+        .ai-modal {
+            width: min(92vw, 360px);
+            border-radius: 8px;
+            border: 1px solid var(--line);
+            background: #fff;
+            padding: 22px;
+            text-align: center;
+            box-shadow: 0 18px 50px rgba(22, 32, 42, .18);
+        }
+
+        .ai-spinner {
+            width: 52px;
+            height: 52px;
+            border: 5px solid #fee4e2;
+            border-top-color: var(--button);
+            border-radius: 999px;
+            margin: 0 auto 14px;
+            animation: ai-spin .85s linear infinite;
+        }
+
+        .ai-modal h2 {
+            margin: 0 0 12px;
+            font-size: 22px;
+        }
+
+        .ai-modal p {
+            margin: 0;
+            white-space: pre-line;
+            color: var(--muted);
+            line-height: 1.7;
+        }
+
+        .ai-modal .button {
+            width: 100%;
+            margin-top: 18px;
+        }
+
+        @keyframes ai-spin {
+            to { transform: rotate(360deg); }
+        }
+    </style>
+
+    <div class="ai-loading-overlay" id="ai-loading-overlay" aria-live="polite" aria-busy="true">
+        <div class="ai-loading-box">
+            <div class="ai-spinner"></div>
+            <p class="lead">AI 報告產生中，請稍候...</p>
+        </div>
+    </div>
+
+    @if (session('aiModal'))
+        <div class="ai-modal-overlay active" id="ai-result-modal">
+            <div class="ai-modal" role="dialog" aria-modal="true" aria-labelledby="ai-result-title">
+                <h2 id="ai-result-title">{{ session('aiModal.title') }}</h2>
+                <p>{{ session('aiModal.body') }}</p>
+                <button class="button" type="button" data-close-ai-modal>知道了</button>
+            </div>
+        </div>
+    @endif
+
     <section class="page-head">
         <div>
             <h1>追蹤清單</h1>
@@ -121,7 +200,7 @@
                         </form>
                     </div>
                     @if (! $item['report_is_ai'])
-                        <form method="post" action="/watchlist/{{ $item['symbol'] }}/ai-report" style="margin-top:8px">
+                        <form class="ai-report-form" method="post" action="/watchlist/{{ $item['symbol'] }}/ai-report" style="margin-top:8px">
                             @csrf
                             <button class="button" type="submit" style="width:100%" {{ $aiUsage['remaining'] <= 0 ? 'disabled' : '' }}>
                                 產生AI報告
@@ -132,4 +211,23 @@
             @endforeach
         </section>
     @endif
+
+    <script>
+        (() => {
+            const loadingOverlay = document.getElementById('ai-loading-overlay');
+
+            document.querySelectorAll('.ai-report-form').forEach((form) => {
+                form.addEventListener('submit', () => {
+                    loadingOverlay?.classList.add('active');
+                    form.querySelector('button[type="submit"]')?.setAttribute('disabled', 'disabled');
+                });
+            });
+
+            document.querySelectorAll('[data-close-ai-modal]').forEach((button) => {
+                button.addEventListener('click', () => {
+                    document.getElementById('ai-result-modal')?.classList.remove('active');
+                });
+            });
+        })();
+    </script>
 @endsection
