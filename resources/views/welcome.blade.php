@@ -109,6 +109,35 @@
             white-space: nowrap;
         }
 
+        .site-stats {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            color: var(--muted);
+            font-size: 12px;
+            line-height: 1;
+            white-space: nowrap;
+        }
+
+        .site-stats span {
+            display: inline-flex;
+            align-items: center;
+            gap: 3px;
+        }
+
+        .site-stats strong {
+            color: var(--button);
+            font-size: 12px;
+            font-weight: 900;
+        }
+
+        .site-stats .dot {
+            width: 3px;
+            height: 3px;
+            border-radius: 999px;
+            background: var(--line);
+        }
+
         .nav {
             display: flex;
             gap: 8px;
@@ -314,6 +343,7 @@
             .brand img { width: 72px; height: 72px; }
             .brand-name { font-size: 34px; }
             .brand-tagline { font-size: 13px; }
+            .site-stats { margin-left: auto; font-size: 12px; }
             .nav { flex-wrap: wrap; justify-content: flex-end; overflow: visible; }
             .nav a { padding: 0; border: 0; background: transparent; }
             .nav a.active,
@@ -351,6 +381,11 @@
                     <span class="brand-tagline">看懂市場・掌握機會</span>
                 </span>
             </a>
+            <div class="site-stats" aria-label="網站狀態">
+                <span>會員 <strong>{{ number_format($siteStats['members'] ?? 0) }}</strong></span>
+                <i class="dot" aria-hidden="true"></i>
+                <span>線上 <strong>{{ number_format($siteStats['online'] ?? 0) }}</strong></span>
+            </div>
             <nav class="nav">
                 <a class="{{ request()->is('/') ? 'active' : '' }}" href="/">今日狀態</a>
                 <a class="{{ request()->is('global') ? 'active' : '' }}" href="/global">全球雷達</a>
