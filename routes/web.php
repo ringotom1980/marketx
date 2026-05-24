@@ -206,6 +206,13 @@ Route::get('/s/{symbol}', function (string $symbol) {
             'chipScore' => $theme->chip_score,
             'date' => $theme->score_date,
         ]);
+    $themeModuleScore = (int) ($latestScore?->theme_score ?? 0);
+
+    if ($themeModuleScore <= 0 && $stockThemes->isNotEmpty()) {
+        $themeWeightSum = $stockThemes->sum(fn ($theme) => max(1, (int) $theme['weight']));
+        $themeWeightedScore = $stockThemes->sum(fn ($theme) => (int) $theme['score'] * max(1, (int) $theme['weight']));
+        $themeModuleScore = $themeWeightSum > 0 ? (int) round($themeWeightedScore / $themeWeightSum) : 0;
+    }
 
     $latestReport = DB::table('stock_reports')
         ->where('stock_id', $stockRecord->id)
@@ -227,7 +234,7 @@ Route::get('/s/{symbol}', function (string $symbol) {
         'modules' => [
             ['name' => '全球宏觀', 'score' => $latestScore?->macro_score ?? 0],
             ['name' => '全球事件', 'score' => $latestScore?->event_score ?? 0],
-            ['name' => '題材熱度', 'score' => $latestScore?->theme_score ?? 0],
+            ['name' => '題材熱度', 'score' => $themeModuleScore],
             ['name' => '技術結構', 'score' => $latestScore?->technical_score ?? 0],
             ['name' => '籌碼', 'score' => $latestScore?->chip_score ?? 0],
             ['name' => '財務營收', 'score' => $latestScore?->fundamental_score ?? 0],
