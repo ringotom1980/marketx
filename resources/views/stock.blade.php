@@ -70,20 +70,25 @@
 
         <div class="panel">
             <h2>籌碼分析</h2>
-            @if ($chip)
-                <table class="table">
-                    <tbody>
-                    <tr><th>交易日</th><td>{{ $chip->trade_date->toDateString() }}</td></tr>
-                    <tr><th>外資買賣超</th><td>{{ number_format($chip->foreign_net_buy) }}</td></tr>
-                    <tr><th>投信買賣超</th><td>{{ number_format($chip->investment_trust_net_buy) }}</td></tr>
-                    <tr><th>自營商買賣超</th><td>{{ number_format($chip->dealer_net_buy) }}</td></tr>
-                    <tr><th>三大法人合計</th><td>{{ number_format($chip->institutional_net_buy) }}</td></tr>
-                    <tr><th>融資餘額</th><td>{{ $chip->margin_balance === null ? '未取得' : number_format($chip->margin_balance) }}</td></tr>
-                    <tr><th>融券餘額</th><td>{{ $chip->short_balance === null ? '未取得' : number_format($chip->short_balance) }}</td></tr>
-                    </tbody>
-                </table>
+            @if (! empty($chipSignals))
+                <div class="signal-list">
+                    @foreach ($chipSignals as $signal)
+                        @php
+                            $toneClass = match ($signal['tone'] ?? '') {
+                                'green' => 'red',
+                                'red' => 'green',
+                                'amber' => 'amber',
+                                default => '',
+                            };
+                        @endphp
+                        <div class="signal-item">
+                            <span class="badge {{ $toneClass }}">{{ $signal['title'] ?? '籌碼訊號' }}</span>
+                            <p>{{ $signal['body'] ?? '' }}</p>
+                        </div>
+                    @endforeach
+                </div>
             @else
-                <p class="lead">目前尚未匯入籌碼資料。</p>
+                <p class="lead">目前籌碼資料不足，等待法人與融資融券資料更新後產生分析。</p>
             @endif
         </div>
     </section>
