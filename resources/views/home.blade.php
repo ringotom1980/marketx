@@ -12,6 +12,16 @@
         </form>
     </section>
 
+    <section class="panel" style="margin-bottom:16px;border-color:#fcd34d;background:#fffbeb">
+        <h2>使用聲明</h2>
+        <p class="lead">
+            投資有風險，本站資訊僅供研究與自我判斷參考，不構成任何買賣建議、收益保證或投資邀約。
+            本站主要依公開資料、官方資料、全球市場行情、新聞事件、題材規則、技術面、籌碼與財務營收資料整理分析；
+            台股資料以每日盤後更新為主，全球市場與新聞事件會依資料來源可用時間分批更新，實際更新狀態仍以系統後台紀錄為準。
+            AI 與規則式引擎只負責摘要、分類與白話解讀，不預測價格，也不取代個人風險控管。
+        </p>
+    </section>
+
     <section class="grid two">
         <div class="panel">
             <h2>全球市場摘要</h2>
