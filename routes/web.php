@@ -378,6 +378,10 @@ Route::get('/watchlist', function () {
             $join->on('stocks.id', '=', 'stock_scores.stock_id')
                 ->whereRaw('stock_scores.score_date = (select max(ss.score_date) from stock_scores ss where ss.stock_id = stocks.id)');
         })
+        ->leftJoin('stock_reports', function ($join) {
+            $join->on('stocks.id', '=', 'stock_reports.stock_id')
+                ->whereRaw('stock_reports.report_date = (select max(sr.report_date) from stock_reports sr where sr.stock_id = stocks.id)');
+        })
         ->whereNull('watchlist.user_id')
         ->orderByDesc('watchlist.created_at')
         ->get([
@@ -397,6 +401,9 @@ Route::get('/watchlist', function () {
             'stock_scores.technical_score',
             'stock_scores.chip_score',
             'stock_scores.fundamental_score',
+            'stock_reports.report_date',
+            'stock_reports.model',
+            'stock_reports.summary',
         ])
         ->map(function ($item) {
             $moduleScores = collect([
@@ -432,6 +439,10 @@ Route::get('/watchlist', function () {
                 'confidence' => $item->confidence_score,
                 'complete_modules' => $moduleScores->count(),
                 'weak_modules' => $weakModules,
+                'report_date' => $item->report_date,
+                'report_model' => $item->model,
+                'report_is_ai' => str_starts_with((string) $item->model, 'gemini:'),
+                'report_summary' => $item->summary,
             ];
         });
 

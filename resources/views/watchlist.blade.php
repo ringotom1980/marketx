@@ -98,6 +98,20 @@
                         <p class="lead">資料日期：{{ $item['trade_date'] ?? '無資料' }}</p>
                     </div>
 
+                    @if (! empty($item['report_summary']))
+                        <div class="signal-item" style="margin-top:12px">
+                            <span class="badge {{ $item['report_is_ai'] ? 'red' : 'amber' }}">
+                                {{ $item['report_is_ai'] ? 'AI 報告' : '規則式評價' }} {{ $item['report_date'] }}
+                            </span>
+                            <p>{!! nl2br(e(\Illuminate\Support\Str::limit($item['report_summary'], 180))) !!}</p>
+                        </div>
+                    @else
+                        <div class="signal-item" style="margin-top:12px">
+                            <span class="badge amber">尚未產生 AI 報告</span>
+                            <p>之後執行追蹤清單 AI 任務後，這裡會顯示 Gemini 四段式研究摘要。</p>
+                        </div>
+                    @endif
+
                     <div style="display:grid;grid-template-columns:1fr auto;gap:8px;margin-top:14px">
                         <a class="button" href="/s/{{ $item['symbol'] }}" style="text-align:center">查看</a>
                         <form method="post" action="/watchlist/{{ $item['symbol'] }}">

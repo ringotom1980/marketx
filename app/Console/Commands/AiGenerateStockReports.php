@@ -16,6 +16,7 @@ class AiGenerateStockReports extends Command
 {
     protected $signature = 'market:ai-generate-stock-reports
         {--symbol= : Generate for one stock symbol}
+        {--watchlist : Only generate reports for stocks in the watchlist}
         {--limit=5 : Max stocks when symbol is not provided}
         {--live : Actually call Gemini. Without this option, only builds prompts and logs skipped results}';
 
@@ -38,6 +39,11 @@ class AiGenerateStockReports extends Command
             ->with(['latestScore', 'latestChip'])
             ->whereHas('latestScore', fn ($query) => $query->whereNotNull('total_score'))
             ->when($this->option('symbol'), fn ($query, $symbol) => $query->where('symbol', $symbol))
+            ->when($this->option('watchlist'), function ($query) {
+                $query->whereIn('stocks.id', DB::table('watchlist')
+                    ->whereNull('user_id')
+                    ->select('stock_id'));
+            })
             ->orderByDesc(
                 DB::raw('(select total_score from stock_scores where stock_scores.stock_id = stocks.id order by score_date desc limit 1)'),
             )
@@ -112,12 +118,14 @@ class AiGenerateStockReports extends Command
             '你是《股市在幹嘛》的 Gemini 研究解讀層。',
             '你只能做市場狀態解讀、事件脈絡整理、個股研究報告。',
             '禁止預測價格，禁止明牌，禁止即時交易建議。',
+            '請用一般投資人看得懂的白話，但保持專業、精簡、可執行。',
             '請使用繁體中文，固定輸出以下四段標題：',
             '1｜當前階段判定',
             '2｜關鍵依據',
             '3｜觀察重點',
             '4｜失效條件',
             '關鍵依據 3 到 5 條，觀察重點固定 3 條，失效條件 2 到 3 條。',
+            '請優先解釋分數、技術訊號、籌碼、財務、題材與事件鏈之間的關係。',
             'Data Pack:',
             json_encode($dataPack, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_PRETTY_PRINT),
         ]);

@@ -127,7 +127,7 @@
 
         <div class="panel">
             <h2>評價</h2>
-            <p class="lead">{{ $summary }}</p>
+            <p class="lead">{!! nl2br(e($summary)) !!}</p>
         </div>
     </section>
 @endsection

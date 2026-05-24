@@ -21,6 +21,9 @@ use App\Console\Commands\ImportTaiwanRevenues;
 use App\Console\Commands\ImportTaiwanStocks;
 use App\Console\Commands\ImportTaiwanValuations;
 use App\Console\Commands\ImportTwseBrokerTrades;
+use App\Console\Commands\AiGenerateStockReports;
+use App\Console\Commands\AiPreprocessEvents;
+use App\Console\Commands\AiStatus;
 use App\Console\Commands\MapDynamicThemes;
 use App\Console\Commands\MarketDataStatus;
 use App\Console\Commands\RunDailyPipeline;
@@ -38,6 +41,9 @@ return Application::configure(basePath: dirname(__DIR__))
         health: '/up',
     )
     ->withCommands([
+        AiGenerateStockReports::class,
+        AiPreprocessEvents::class,
+        AiStatus::class,
         BackfillTaiwanPrices::class,
         CalculateBrokerDayTradePatterns::class,
         CalculateDecisionScores::class,
