@@ -110,7 +110,7 @@
                 @if ($isAdmin)
                     今日個股 AI 報告已用 {{ $aiUsage['used'] }} / {{ $aiUsage['limit'] }}，剩餘 {{ $aiUsage['remaining'] }} 檔。
                 @else
-                    AI 分析報告僅限管理者使用。
+                    已產生的 AI 報告可查看，產生新報告僅限管理者使用。
                 @endif
             </p>
         </div>
