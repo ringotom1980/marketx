@@ -32,6 +32,7 @@ class CalculateTechnicalScores extends Command
                 ->limit(120)
                 ->get()
                 ->sortBy('trade_date')
+                ->filter(fn ($price) => (float) ($price->close ?? 0) > 0)
                 ->values();
 
             if ($prices->count() < $minDays) {
@@ -72,7 +73,7 @@ class CalculateTechnicalScores extends Command
         $latest = $prices[count($prices) - 1];
         $previous = $prices[count($prices) - 2] ?? null;
         $closes = array_map(fn ($price) => (float) $price->close, $prices);
-        $highs = array_map(fn ($price) => (float) $price->high, $prices);
+        $highs = array_map(fn ($price) => (float) ($price->high ?: $price->close), $prices);
         $volumes = array_map(fn ($price) => (float) $price->volume, $prices);
 
         $close = (float) $latest->close;
@@ -92,7 +93,8 @@ class CalculateTechnicalScores extends Command
         $returns20 = $this->returns(array_slice($closes, -21));
         $volatility20 = $this->standardDeviation($returns20);
         $high20BeforeToday = max(array_slice($highs, -21, 20) ?: [$close]);
-        $return20 = count($closes) >= 21 ? ($close / $closes[count($closes) - 21] - 1) : 0.0;
+        $base20 = count($closes) >= 21 ? $closes[count($closes) - 21] : null;
+        $return20 = $base20 && $base20 > 0 ? ($close / $base20 - 1) : 0.0;
 
         $score = 50;
         $riskFlags = [];
@@ -344,7 +346,7 @@ class CalculateTechnicalScores extends Command
         for ($i = $period - 1; $i < count($prices); $i++) {
             $slice = array_slice($prices, $i - $period + 1, $period);
             $high = max(array_map(fn ($price) => (float) $price->high, $slice));
-            $low = min(array_map(fn ($price) => (float) $price->low, $slice));
+            $low = min(array_map(fn ($price) => (float) ($price->low ?: $price->close), $slice));
             $close = (float) $prices[$i]->close;
             $rawK[] = $high == $low ? 50.0 : (($close - $low) / ($high - $low)) * 100;
         }
@@ -391,8 +393,8 @@ class CalculateTechnicalScores extends Command
         $trueRanges = [];
 
         for ($i = 1; $i < count($prices); $i++) {
-            $high = (float) $prices[$i]->high;
-            $low = (float) $prices[$i]->low;
+            $high = (float) ($prices[$i]->high ?: $prices[$i]->close);
+            $low = (float) ($prices[$i]->low ?: $prices[$i]->close);
             $previousClose = (float) $prices[$i - 1]->close;
             $trueRanges[] = max($high - $low, abs($high - $previousClose), abs($low - $previousClose));
         }
