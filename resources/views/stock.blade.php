@@ -24,6 +24,19 @@
             <div class="badge {{ $decisionTone }}">{{ $stock['decision'] }}</div>
             <div class="score" style="margin-top:12px">{{ $stock['score'] }} / 100</div>
             <p class="lead">信心度 {{ $stock['confidence'] }}%</p>
+            @if ($stock['isWatched'])
+                <form method="post" action="/watchlist/{{ $stock['symbol'] }}" style="margin-top:12px">
+                    @csrf
+                    @method('DELETE')
+                    <button class="button" type="submit" style="width:100%">取消追蹤</button>
+                </form>
+            @else
+                <form method="post" action="/watchlist" style="margin-top:12px">
+                    @csrf
+                    <input type="hidden" name="symbol" value="{{ $stock['symbol'] }}">
+                    <button class="button" type="submit" style="width:100%">加入追蹤</button>
+                </form>
+            @endif
         </div>
     </section>
 

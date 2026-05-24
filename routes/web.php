@@ -188,6 +188,10 @@ Route::get('/s/{symbol}', function (string $symbol, StockEventChainBuilder $even
     $latestPrice = $stockRecord->dailyPrices->first();
     $latestChip = $stockRecord->latestChip;
     $latestScore = $stockRecord->latestScore;
+    $isWatched = DB::table('watchlist')
+        ->whereNull('user_id')
+        ->where('stock_id', $stockRecord->id)
+        ->exists();
     $technicalPayload = $latestScore?->technical_payload;
     $recentChips = $stockRecord->chips()->latest('trade_date')->limit(5)->get();
     $recentPrices = $stockRecord->dailyPrices()->latest('trade_date')->limit(20)->get();
@@ -252,6 +256,7 @@ Route::get('/s/{symbol}', function (string $symbol, StockEventChainBuilder $even
             'decision' => $latestScore?->decision ?? '等待計算',
             'score' => $latestScore?->total_score ?? $latestScore?->technical_score ?? 0,
             'confidence' => $latestScore?->confidence_score ?? 0,
+            'isWatched' => $isWatched,
         ],
         'modules' => [
             ['name' => '全球宏觀', 'score' => $latestScore?->macro_score ?? 0],
@@ -363,14 +368,110 @@ Route::get('/themes', function () {
 });
 
 Route::get('/watchlist', function () {
-    return view('simple', [
-        'heading' => '追蹤清單',
-        'description' => '自選股功能將用來集中查看每日分數、風險變化與規則式摘要。',
-        'items' => [
-            ['title' => '追蹤清單資料表已預留', 'body' => '下一階段可加入新增、刪除與每日報告功能。'],
-            ['title' => '每日摘要可串接', 'body' => '之後可依自選股產生盤後重點整理。'],
-        ],
+    $items = DB::table('watchlist')
+        ->join('stocks', 'stocks.id', '=', 'watchlist.stock_id')
+        ->leftJoin('stock_prices_1d', function ($join) {
+            $join->on('stocks.id', '=', 'stock_prices_1d.stock_id')
+                ->whereRaw('stock_prices_1d.trade_date = (select max(sp.trade_date) from stock_prices_1d sp where sp.stock_id = stocks.id)');
+        })
+        ->leftJoin('stock_scores', function ($join) {
+            $join->on('stocks.id', '=', 'stock_scores.stock_id')
+                ->whereRaw('stock_scores.score_date = (select max(ss.score_date) from stock_scores ss where ss.stock_id = stocks.id)');
+        })
+        ->whereNull('watchlist.user_id')
+        ->orderByDesc('watchlist.created_at')
+        ->get([
+            'stocks.symbol',
+            'stocks.name',
+            'stocks.market',
+            'stocks.industry',
+            'stock_prices_1d.close',
+            'stock_prices_1d.change',
+            'stock_prices_1d.trade_date',
+            'stock_scores.decision',
+            'stock_scores.total_score',
+            'stock_scores.confidence_score',
+            'stock_scores.macro_score',
+            'stock_scores.event_score',
+            'stock_scores.theme_score',
+            'stock_scores.technical_score',
+            'stock_scores.chip_score',
+            'stock_scores.fundamental_score',
+        ])
+        ->map(function ($item) {
+            $moduleScores = collect([
+                $item->macro_score,
+                $item->event_score,
+                $item->theme_score,
+                $item->technical_score,
+                $item->chip_score,
+                $item->fundamental_score,
+            ])->filter(fn ($score) => $score !== null && (int) $score > 0);
+
+            $weakModules = [];
+            if ((int) ($item->theme_score ?? 0) <= 0) {
+                $weakModules[] = '題材未接上';
+            }
+            if ((int) ($item->fundamental_score ?? 0) <= 0) {
+                $weakModules[] = '財務不足';
+            }
+            if ((int) ($item->chip_score ?? 0) <= 0) {
+                $weakModules[] = '籌碼不足';
+            }
+
+            return [
+                'symbol' => $item->symbol,
+                'name' => $item->name,
+                'market' => $item->market,
+                'industry' => $item->industry ?: '未分類',
+                'close' => $item->close,
+                'change' => $item->change,
+                'trade_date' => $item->trade_date,
+                'decision' => $item->decision ?: '尚未評分',
+                'score' => $item->total_score,
+                'confidence' => $item->confidence_score,
+                'complete_modules' => $moduleScores->count(),
+                'weak_modules' => $weakModules,
+            ];
+        });
+
+    return view('watchlist', ['items' => $items]);
+});
+
+Route::post('/watchlist', function (Request $request) {
+    $validated = $request->validate([
+        'symbol' => ['required', 'string', 'max:16'],
     ]);
+
+    $keyword = trim($validated['symbol']);
+    $stock = Stock::query()
+        ->where('symbol', strtoupper($keyword))
+        ->orWhere('name', $keyword)
+        ->first();
+
+    if (! $stock) {
+        return back()
+            ->withErrors(['symbol' => '找不到這檔股票，請輸入正確股票代號。'])
+            ->withInput();
+    }
+
+    DB::table('watchlist')->updateOrInsert(
+        ['user_id' => null, 'stock_id' => $stock->id],
+        ['created_at' => now(), 'updated_at' => now()]
+    );
+
+    return back()->with('status', $stock->name.' 已加入追蹤清單。');
+});
+
+Route::delete('/watchlist/{symbol}', function (string $symbol) {
+    $stock = Stock::query()->where('symbol', $symbol)->firstOrFail();
+
+    DB::table('watchlist')
+        ->whereNull('user_id')
+        ->where('stock_id', $stock->id)
+        ->delete();
+
+    return back()->with('status', $stock->name.' 已取消追蹤。');
 });
 
 Route::get('/admin', function () {
