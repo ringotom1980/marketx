@@ -7,6 +7,7 @@ use App\Support\FundamentalSignalAnalyzer;
 use App\Support\GlobalRadarBuilder;
 use App\Support\MarketDisplay;
 use App\Support\Ai\AiPipelineService;
+use App\Support\Ai\AiUsageLimiter;
 use App\Support\StockEventChainBuilder;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Artisan;
@@ -369,7 +370,7 @@ Route::get('/themes', function () {
     return view('themes', ['themes' => $themes]);
 });
 
-Route::get('/watchlist', function () {
+Route::get('/watchlist', function (AiUsageLimiter $aiLimiter) {
     $items = DB::table('watchlist')
         ->join('stocks', 'stocks.id', '=', 'watchlist.stock_id')
         ->leftJoin('stock_prices_1d', function ($join) {
@@ -448,7 +449,14 @@ Route::get('/watchlist', function () {
             ];
         });
 
-    return view('watchlist', ['items' => $items]);
+    return view('watchlist', [
+        'items' => $items,
+        'aiUsage' => [
+            'used' => $aiLimiter->usedToday('stock_research'),
+            'limit' => $aiLimiter->limit('stock_research'),
+            'remaining' => $aiLimiter->remaining('stock_research'),
+        ],
+    ]);
 });
 
 Route::post('/watchlist', function (Request $request) {
@@ -485,6 +493,36 @@ Route::delete('/watchlist/{symbol}', function (string $symbol) {
         ->delete();
 
     return back()->with('status', $stock->name.' 已取消追蹤。');
+});
+
+Route::post('/watchlist/{symbol}/ai-report', function (string $symbol, AiUsageLimiter $aiLimiter) {
+    $stock = Stock::query()->where('symbol', $symbol)->firstOrFail();
+    $isWatched = DB::table('watchlist')
+        ->whereNull('user_id')
+        ->where('stock_id', $stock->id)
+        ->exists();
+
+    if (! $isWatched) {
+        return back()->with('error', '這檔股票不在追蹤清單內。');
+    }
+
+    if (! $aiLimiter->canRun('stock_research')) {
+        return back()->with('error', '今日個股 AI 報告額度已用完。');
+    }
+
+    config(['services.marketx.ai_pipeline_enabled' => true]);
+
+    $exitCode = Artisan::call('market:ai-generate-stock-reports', [
+        '--symbol' => $stock->symbol,
+        '--live' => true,
+    ]);
+
+    $output = trim(Artisan::output());
+
+    return back()->with(
+        $exitCode === 0 ? 'status' : 'error',
+        $output !== '' ? $output : $stock->name.' AI 報告任務已完成。'
+    );
 });
 
 Route::get('/admin', function (AiPipelineService $aiPipeline) {

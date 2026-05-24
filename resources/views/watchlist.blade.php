@@ -26,7 +26,7 @@
     <section class="page-head">
         <div>
             <h1>追蹤清單</h1>
-            <p class="lead">自選股集中看分數、決策、收盤價與資料完整度。之後每日報告會先從這裡產生。</p>
+            <p class="lead">自選股集中看分數、決策、收盤價與資料完整度。今日個股 AI 報告已用 {{ $aiUsage['used'] }} / {{ $aiUsage['limit'] }}，剩餘 {{ $aiUsage['remaining'] }} 檔。</p>
         </div>
         <form class="search" action="/watchlist" method="post">
             @csrf
@@ -35,9 +35,9 @@
         </form>
     </section>
 
-    @if (session('status'))
+    @if (session('status') || session('error'))
         <section class="panel" style="margin-bottom:16px;border-color:#fecaca;background:#fff7f7">
-            <p class="lead" style="color:var(--red)">{{ session('status') }}</p>
+            <p class="lead" style="white-space:pre-line;color:{{ session('error') ? 'var(--amber)' : 'var(--red)' }}">{{ session('status') ?? session('error') }}</p>
         </section>
     @endif
 
@@ -120,6 +120,12 @@
                             <button class="button" type="submit">移除</button>
                         </form>
                     </div>
+                    <form method="post" action="/watchlist/{{ $item['symbol'] }}/ai-report" style="margin-top:8px">
+                        @csrf
+                        <button class="button" type="submit" style="width:100%" {{ $aiUsage['remaining'] <= 0 ? 'disabled' : '' }}>
+                            產生這檔 AI 報告（剩 {{ $aiUsage['remaining'] }} / {{ $aiUsage['limit'] }}）
+                        </button>
+                    </form>
                 </article>
             @endforeach
         </section>
