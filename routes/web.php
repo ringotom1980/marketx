@@ -6,8 +6,10 @@ use App\Support\EventClusterDisplay;
 use App\Support\FundamentalSignalAnalyzer;
 use App\Support\GlobalRadarBuilder;
 use App\Support\MarketDisplay;
+use App\Support\Ai\AiPipelineService;
 use App\Support\StockEventChainBuilder;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Route;
@@ -485,7 +487,7 @@ Route::delete('/watchlist/{symbol}', function (string $symbol) {
     return back()->with('status', $stock->name.' 已取消追蹤。');
 });
 
-Route::get('/admin', function () {
+Route::get('/admin', function (AiPipelineService $aiPipeline) {
     $stats = [
         ['title' => '股票檔數', 'body' => (string) DB::table('stocks')->count()],
         ['title' => '日 K 筆數', 'body' => (string) DB::table('stock_prices_1d')->count()],
@@ -503,9 +505,46 @@ Route::get('/admin', function () {
         ['title' => 'AI 紀錄', 'body' => (string) DB::table('ai_logs')->count()],
     ];
 
-    return view('simple', [
-        'heading' => '後台',
-        'description' => '查看資料匯入、Job 狀態、AI 預留紀錄與目前資料庫累積狀態。',
-        'items' => $stats,
+    $today = now('Asia/Taipei')->toDateString();
+    $aiStatus = $aiPipeline->status();
+    $watchlistCount = DB::table('watchlist')->whereNull('user_id')->count();
+    $todayAiReports = DB::table('stock_reports')
+        ->whereDate('report_date', $today)
+        ->where('model', 'like', 'gemini:%')
+        ->count();
+    $latestAiLogs = DB::table('ai_logs')
+        ->orderByDesc('created_at')
+        ->limit(8)
+        ->get(['task', 'model', 'status', 'error_message', 'created_at']);
+
+    return view('admin', [
+        'stats' => $stats,
+        'aiStatus' => $aiStatus,
+        'watchlistCount' => $watchlistCount,
+        'todayAiReports' => $todayAiReports,
+        'latestAiLogs' => $latestAiLogs,
     ]);
+});
+
+Route::post('/admin/ai/watchlist-reports', function (Request $request) {
+    $validated = $request->validate([
+        'limit' => ['nullable', 'integer', 'min:1', 'max:5'],
+    ]);
+
+    $limit = (int) ($validated['limit'] ?? 3);
+
+    config(['services.marketx.ai_pipeline_enabled' => true]);
+
+    $exitCode = Artisan::call('market:ai-generate-stock-reports', [
+        '--watchlist' => true,
+        '--limit' => $limit,
+        '--live' => true,
+    ]);
+
+    $output = trim(Artisan::output());
+
+    return back()->with(
+        $exitCode === 0 ? 'status' : 'error',
+        $output !== '' ? $output : 'AI 任務已執行完成。'
+    );
 });
