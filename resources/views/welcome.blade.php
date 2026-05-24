@@ -4,8 +4,27 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
     <title>{{ $title ?? '股市在幹嘛' }}</title>
+    <meta name="description" content="股市在幹嘛：看懂市場，掌握機會。">
+    <meta name="theme-color" content="#c1121f">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-title" content="股市在幹嘛">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
+    <meta property="og:site_name" content="股市在幹嘛">
+    <meta property="og:type" content="website">
+    <meta property="og:title" content="股市在幹嘛">
+    <meta property="og:description" content="看懂市場，掌握機會。">
+    <meta property="og:url" content="{{ url()->current() }}">
+    <meta property="og:image" content="{{ config('app.url') }}/assets/og-marketx.png?v=20260525-pwa1">
+    <meta property="og:image:width" content="1200">
+    <meta property="og:image:height" content="630">
+    <meta property="og:image:alt" content="股市在幹嘛">
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="股市在幹嘛">
+    <meta name="twitter:description" content="看懂市場，掌握機會。">
+    <meta name="twitter:image" content="{{ config('app.url') }}/assets/og-marketx.png?v=20260525-pwa1">
+    <link rel="manifest" href="/manifest.json?v=20260525-pwa1">
     <link rel="icon" type="image/png" sizes="32x32" href="/assets/favicon-32.png?v=20260524-logo2">
-    <link rel="apple-touch-icon" sizes="180x180" href="/assets/favicon-180.png?v=20260524-logo2">
+    <link rel="apple-touch-icon" sizes="180x180" href="/assets/app-icon-180.png?v=20260525-pwa1">
     <style>
         :root {
             --bg: #f7f8fa;
@@ -349,5 +368,12 @@
         @yield('content')
     </main>
 </div>
+<script>
+    if ('serviceWorker' in navigator) {
+        window.addEventListener('load', () => {
+            navigator.serviceWorker.register('/sw.js?v=20260525-pwa1').catch(() => {});
+        });
+    }
+</script>
 </body>
 </html>
