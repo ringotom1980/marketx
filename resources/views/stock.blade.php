@@ -55,6 +55,28 @@
 
     <section class="grid two" style="margin-top:16px">
         <div class="panel">
+            <h2>個股題材熱度</h2>
+            @if (! empty($stockThemes) && $stockThemes->isNotEmpty())
+                <table class="table">
+                    <tbody>
+                    @foreach ($stockThemes as $theme)
+                        <tr>
+                            <th>{{ $theme['name'] }}</th>
+                            <td>
+                                <div class="meter"><span style="width: {{ min(100, max(0, $theme['score'])) }}%"></span></div>
+                                <p class="lead" style="font-size:13px">{{ $theme['reason'] }}</p>
+                            </td>
+                            <td>{{ $theme['score'] }}</td>
+                        </tr>
+                    @endforeach
+                    </tbody>
+                </table>
+            @else
+                <p class="lead">這檔股票目前尚未映射到動態題材。等題材關鍵字、新聞事件或產業規則命中後，會自動出現在這裡。</p>
+            @endif
+        </div>
+
+        <div class="panel">
             <h2>K 線與技術分析</h2>
             @if ($technical && ! empty($technical['signals']))
                 <div class="signal-list">

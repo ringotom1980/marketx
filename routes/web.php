@@ -174,6 +174,38 @@ Route::get('/s/{symbol}', function (string $symbol) {
     $latestFinancial = DB::table('stock_financials')->where('stock_id', $stockRecord->id)->orderByDesc('period')->first();
     $latestRevenue = DB::table('stock_revenues')->where('stock_id', $stockRecord->id)->orderByDesc('year_month')->first();
     $fundamentalSignals = app(FundamentalSignalAnalyzer::class)->analyze($stockRecord, $latestFinancial, $latestRevenue);
+    $stockThemes = DB::table('stock_theme_map')
+        ->join('themes', 'themes.id', '=', 'stock_theme_map.theme_id')
+        ->leftJoin('theme_scores', function ($join) {
+            $join->on('themes.id', '=', 'theme_scores.theme_id')
+                ->whereRaw('theme_scores.score_date = (select max(ts.score_date) from theme_scores ts where ts.theme_id = themes.id)');
+        })
+        ->select(
+            'themes.name',
+            'stock_theme_map.weight',
+            'stock_theme_map.reason',
+            'theme_scores.heat_score',
+            'theme_scores.news_score',
+            'theme_scores.price_score',
+            'theme_scores.chip_score',
+            'theme_scores.score_date',
+        )
+        ->where('stock_theme_map.stock_id', $stockRecord->id)
+        ->where('themes.is_active', true)
+        ->orderByDesc('theme_scores.heat_score')
+        ->orderByDesc('stock_theme_map.weight')
+        ->limit(8)
+        ->get()
+        ->map(fn ($theme) => [
+            'name' => $theme->name,
+            'score' => (int) ($theme->heat_score ?? 0),
+            'weight' => (int) ($theme->weight ?? 0),
+            'reason' => $theme->reason ?: '由產業、關鍵字或規則式映射連到此題材。',
+            'newsScore' => $theme->news_score,
+            'priceScore' => $theme->price_score,
+            'chipScore' => $theme->chip_score,
+            'date' => $theme->score_date,
+        ]);
 
     $latestReport = DB::table('stock_reports')
         ->where('stock_id', $stockRecord->id)
@@ -203,6 +235,7 @@ Route::get('/s/{symbol}', function (string $symbol) {
         'technical' => $technicalPayload,
         'chip' => $latestChip,
         'chipSignals' => $chipSignals,
+        'stockThemes' => $stockThemes,
         'fundamentalSignals' => $fundamentalSignals,
         'chain' => [
             '全球市場與事件',
