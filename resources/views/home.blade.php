@@ -91,12 +91,12 @@
         }
         .stock-signal-item {
             display: grid;
-            gap: 14px;
-            padding: 16px 0;
-            border-bottom: 1px solid #0f5b78;
+            gap: 10px;
+            padding: 12px 0;
+            border-bottom: 1px solid var(--line);
         }
         .stock-signal-item:first-child {
-            padding-top: 4px;
+            padding-top: 0;
         }
         .stock-signal-top {
             display: flex;
@@ -105,40 +105,40 @@
             gap: 14px;
         }
         .stock-signal-name {
-            color: var(--ink);
-            font-size: 18px;
-            font-weight: 950;
+            color: var(--muted);
+            font-size: inherit;
+            font-weight: 800;
             text-decoration: none;
             min-width: 0;
         }
         .stock-signal-confidence {
             color: var(--ink);
-            font-size: 16px;
-            font-weight: 950;
+            font-size: inherit;
+            font-weight: 400;
             white-space: nowrap;
         }
         .reason-pills {
             display: flex;
             flex-wrap: wrap;
-            gap: 8px;
+            gap: 6px;
         }
         .reason-pill {
             display: inline-flex;
             align-items: center;
             border-radius: 999px;
-            background: #fff1f1;
-            color: var(--button);
-            border: 1px solid rgba(193, 18, 31, .18);
-            padding: 7px 11px;
+            background: #eef2f6;
+            color: var(--muted);
+            border: 1px solid var(--line);
+            padding: 5px 9px;
             font-size: 12px;
-            font-weight: 900;
+            font-weight: 800;
             line-height: 1;
             white-space: nowrap;
         }
         .reason-pill.warning {
-            background: #fff7df;
-            color: #9f5b00;
-            border-color: rgba(245, 158, 11, .22);
+            background: #eef2f6;
+            color: var(--muted);
+            border-color: var(--line);
         }
         @media (min-width: 821px) {
             .market-chart-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
