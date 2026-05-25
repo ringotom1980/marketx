@@ -126,9 +126,9 @@
             display: inline-flex;
             align-items: center;
             border-radius: 999px;
-            background: #eef2f6;
-            color: var(--muted);
-            border: 1px solid var(--line);
+            background: #fff1f1;
+            color: var(--button);
+            border: 1px solid rgba(193, 18, 31, .18);
             padding: 5px 9px;
             font-size: 12px;
             font-weight: 800;
@@ -136,9 +136,14 @@
             white-space: nowrap;
         }
         .reason-pill.warning {
-            background: #eef2f6;
-            color: var(--muted);
-            border-color: var(--line);
+            background: #fff7df;
+            color: #9f5b00;
+            border-color: rgba(245, 158, 11, .22);
+        }
+        .reason-pill.down {
+            background: #e8f5ee;
+            color: var(--green);
+            border-color: rgba(20, 125, 85, .18);
         }
         @media (min-width: 821px) {
             .market-chart-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
@@ -249,7 +254,17 @@
                         </div>
                         <div class="reason-pills">
                             @foreach ($stock['risks'] as $risk)
-                                <span class="reason-pill warning">{{ $risk }}</span>
+                                @php
+                                    $riskTone = str_contains($risk, '跌')
+                                        || str_contains($risk, '轉弱')
+                                        || str_contains($risk, '偏弱')
+                                        || str_contains($risk, '偏空')
+                                        || str_contains($risk, '爆量')
+                                        || str_contains($risk, '賣')
+                                            ? 'down'
+                                            : 'warning';
+                                @endphp
+                                <span class="reason-pill {{ $riskTone }}">{{ $risk }}</span>
                             @endforeach
                         </div>
                     </div>
