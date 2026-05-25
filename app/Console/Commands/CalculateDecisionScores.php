@@ -4,6 +4,7 @@ namespace App\Console\Commands;
 
 use App\Models\Stock;
 use App\Models\StockScore;
+use App\Support\ConfidenceEngine;
 use Carbon\CarbonImmutable;
 use Illuminate\Console\Command;
 
@@ -13,7 +14,7 @@ class CalculateDecisionScores extends Command
 
     protected $description = 'Calculate chip score, total score, decision, and confidence from available modules.';
 
-    public function handle(): int
+    public function handle(ConfidenceEngine $confidenceEngine): int
     {
         $stocks = Stock::query()
             ->where('is_active', true)
@@ -41,14 +42,15 @@ class CalculateDecisionScores extends Command
                 $score->risk_flags ?? [],
                 $this->chipRiskFlags($chipScore, $stock->latestChip),
             )));
-            $confidence = $this->confidenceScore($score, $totalScore, $riskFlags, $stock);
+            $confidence = $confidenceEngine->evaluate($stock, $score, $riskFlags);
 
             $score->fill([
                 'chip_score' => $chipScore,
                 'total_score' => $totalScore,
-                'confidence_score' => $confidence,
+                'confidence_score' => $confidence['score'],
                 'decision' => $decision,
-                'risk_flags' => $riskFlags,
+                'risk_flags' => $confidence['risk_flags'],
+                'confidence_payload' => $confidence['payload'],
             ])->save();
 
             $calculated++;

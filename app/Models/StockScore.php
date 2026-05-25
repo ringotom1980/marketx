@@ -25,6 +25,7 @@ class StockScore extends Model
         'decision',
         'technical_payload',
         'risk_flags',
+        'confidence_payload',
     ];
 
     protected function casts(): array
@@ -33,6 +34,7 @@ class StockScore extends Model
             'score_date' => 'date',
             'technical_payload' => 'array',
             'risk_flags' => 'array',
+            'confidence_payload' => 'array',
         ];
     }
 
@@ -41,4 +43,3 @@ class StockScore extends Model
         return $this->belongsTo(Stock::class);
     }
 }
-

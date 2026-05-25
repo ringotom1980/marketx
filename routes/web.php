@@ -557,6 +557,7 @@ Route::get('/', function () {
             'stocks.name',
             'stock_scores.total_score',
             'stock_scores.confidence_score',
+            'stock_scores.confidence_payload',
             'stock_scores.theme_score',
             'stock_scores.technical_score',
             'stock_scores.chip_score',
@@ -606,11 +607,57 @@ Route::get('/', function () {
             return $stock;
         });
 
-    $stockCardItem = fn (object $stock, array $reasons): array => [
+    $confidencePayloadFor = function (object $stock): array {
+        $payload = $stock->confidence_payload ?? null;
+
+        if (is_string($payload)) {
+            $payload = json_decode($payload, true);
+        }
+
+        return is_array($payload) ? $payload : [];
+    };
+
+    $payloadReasons = function (object $stock, string $type) use ($confidencePayloadFor, $reason): array {
+        $payload = $confidencePayloadFor($stock);
+        $groups = $payload['reasons'] ?? [];
+        $items = collect();
+        $push = function (array $labels, string $tone) use ($items, $reason): void {
+            foreach ($labels as $label) {
+                $label = trim((string) $label);
+
+                if ($label !== '') {
+                    $items->push($reason($label, $tone));
+                }
+            }
+        };
+
+        if (in_array($type, ['priority', 'potential'], true)) {
+            $push($groups['bull'] ?? [], 'up');
+            $push($groups['risk'] ?? [], 'warning');
+        } elseif ($type === 'risk') {
+            $push($groups['risk'] ?? [], 'warning');
+            $push($groups['bear'] ?? [], 'down');
+        } elseif ($type === 'weak') {
+            $push($groups['bear'] ?? [], 'down');
+            $push($groups['risk'] ?? [], 'warning');
+        } else {
+            $push($groups['bull'] ?? [], 'warning');
+            $push($groups['risk'] ?? [], 'warning');
+            $push($groups['bear'] ?? [], 'down');
+        }
+
+        return $items
+            ->unique('label')
+            ->take(4)
+            ->values()
+            ->all();
+    };
+
+    $stockCardItem = fn (object $stock, array $fallbackReasons, string $type): array => [
         'symbol' => $stock->symbol,
         'name' => $stock->name,
         'confidence' => (int) ($stock->confidence_score ?? 0),
-        'reasons' => $reasons,
+        'reasons' => $payloadReasons($stock, $type) ?: $fallbackReasons,
     ];
 
     $topStocks = $stockCandidates
@@ -633,7 +680,7 @@ Route::get('/', function () {
             (int) ($stock->theme_score ?? 0),
             (int) ($stock->technical_score ?? 0),
         ))
-        ->map(fn ($stock) => $stockCardItem($stock, $stock->radar_reasons))
+        ->map(fn ($stock) => $stockCardItem($stock, $stock->radar_reasons, 'priority'))
         ->take(6)
         ->values();
     $usedSymbols = $topStocks->pluck('symbol')->all();
@@ -700,7 +747,7 @@ Route::get('/', function () {
             abs((float) ($stock->bais20 ?? 0)),
             max(0, (float) ($stock->return20 ?? 0)),
         ))
-        ->map(fn ($stock) => $stockCardItem($stock, $stock->radar_reasons))
+        ->map(fn ($stock) => $stockCardItem($stock, $stock->radar_reasons, 'risk'))
         ->take(6)
         ->values();
     $usedSymbols = array_merge($usedSymbols, $riskStocks->pluck('symbol')->all());
@@ -725,7 +772,7 @@ Route::get('/', function () {
             (int) ($stock->theme_score ?? 0),
             (int) ($stock->technical_score ?? 0),
         ))
-        ->map(fn ($stock) => $stockCardItem($stock, $stock->radar_reasons))
+        ->map(fn ($stock) => $stockCardItem($stock, $stock->radar_reasons, 'potential'))
         ->take(6)
         ->values();
     $usedSymbols = array_merge($usedSymbols, $potentialStocks->pluck('symbol')->all());
@@ -744,7 +791,7 @@ Route::get('/', function () {
             (int) ($stock->confidence_score ?? 0),
             (float) ($stock->volume_ratio20 ?? 0),
         ))
-        ->map(fn ($stock) => $stockCardItem($stock, $stock->radar_reasons))
+        ->map(fn ($stock) => $stockCardItem($stock, $stock->radar_reasons, 'low_volume'))
         ->take(6)
         ->values();
     $usedSymbols = array_merge($usedSymbols, $lowVolumeStocks->pluck('symbol')->all());
@@ -762,7 +809,7 @@ Route::get('/', function () {
             (int) ($stock->confidence_score ?? 0),
             100 - (int) ($stock->technical_score ?? 0),
         ))
-        ->map(fn ($stock) => $stockCardItem($stock, $stock->radar_reasons))
+        ->map(fn ($stock) => $stockCardItem($stock, $stock->radar_reasons, 'weak'))
         ->take(6)
         ->values();
 
