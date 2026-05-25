@@ -653,10 +653,22 @@ Route::get('/', function () {
             ->all();
     };
 
+    $cardConfidence = function (object $stock, string $type) use ($confidencePayloadFor): int {
+        $payload = $confidencePayloadFor($stock);
+        $field = match ($type) {
+            'risk' => 'risk_confidence',
+            'weak' => 'weak_confidence',
+            'low_volume' => 'risk_confidence',
+            default => 'opportunity_confidence',
+        };
+
+        return (int) ($payload[$field] ?? $stock->confidence_score ?? 0);
+    };
+
     $stockCardItem = fn (object $stock, array $fallbackReasons, string $type): array => [
         'symbol' => $stock->symbol,
         'name' => $stock->name,
-        'confidence' => (int) ($stock->confidence_score ?? 0),
+        'confidence' => $cardConfidence($stock, $type),
         'reasons' => $payloadReasons($stock, $type) ?: $fallbackReasons,
     ];
 
@@ -734,16 +746,16 @@ Route::get('/', function () {
             $stock->radar_reasons = $riskReasons($stock);
             return $stock;
         })
-        ->filter(function ($stock) use ($reasonLabels, $candidateHas) {
+        ->filter(function ($stock) use ($reasonLabels, $candidateHas, $cardConfidence) {
             $labels = $reasonLabels($stock->radar_reasons);
 
-            return (int) ($stock->confidence_score ?? 0) >= 55
+            return $cardConfidence($stock, 'risk') >= 45
                 && $candidateHas($labels, ['乖離過大', 'RSI 過熱', 'KD 過熱', '爆量轉弱', '高檔放量轉弱', '評價偏高', '融資偏重', '跌破月線', '跌破布林下緣'])
                 && count($labels) >= 2;
         })
         ->sortByDesc(fn ($stock) => sprintf(
             '%03d-%06.2f-%06.2f',
-            (int) ($stock->confidence_score ?? 0),
+            $cardConfidence($stock, 'risk'),
             abs((float) ($stock->bais20 ?? 0)),
             max(0, (float) ($stock->return20 ?? 0)),
         ))
@@ -788,7 +800,7 @@ Route::get('/', function () {
             && count($stock->radar_reasons) >= 2)
         ->sortByDesc(fn ($stock) => sprintf(
             '%03d-%06.2f',
-            (int) ($stock->confidence_score ?? 0),
+            $cardConfidence($stock, 'low_volume'),
             (float) ($stock->volume_ratio20 ?? 0),
         ))
         ->map(fn ($stock) => $stockCardItem($stock, $stock->radar_reasons, 'low_volume'))
@@ -806,7 +818,7 @@ Route::get('/', function () {
             && count($stock->radar_reasons) >= 2)
         ->sortByDesc(fn ($stock) => sprintf(
             '%03d-%03d',
-            (int) ($stock->confidence_score ?? 0),
+            $cardConfidence($stock, 'weak'),
             100 - (int) ($stock->technical_score ?? 0),
         ))
         ->map(fn ($stock) => $stockCardItem($stock, $stock->radar_reasons, 'weak'))

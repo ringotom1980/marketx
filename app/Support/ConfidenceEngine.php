@@ -35,12 +35,49 @@ class ConfidenceEngine
         $fundamentalResult = $this->fundamental($financial, $revenue);
         $themeResult = $this->theme((int) ($score->theme_score ?? 0));
 
+        $weights = [
+            'technical' => 0.35,
+            'chip' => 0.25,
+            'fundamental' => 0.25,
+            'theme' => 0.15,
+        ];
+
+        $technicalOpportunity = $this->moduleConfidence(
+            $technicalResult['bull_score'],
+            $technicalResult['bear_score'],
+            $technicalResult['risk_penalty'],
+            35,
+            18,
+        );
+        $chipOpportunity = $this->moduleConfidence(
+            $chipResult['bull_score'],
+            $chipResult['bear_score'],
+            $chipResult['risk_penalty'],
+            25,
+            12,
+        );
+        $fundamentalOpportunity = $this->moduleConfidence(
+            $fundamentalResult['bull_score'],
+            $fundamentalResult['bear_score'],
+            $fundamentalResult['risk_penalty'],
+            25,
+            12,
+        );
+        $themeOpportunity = max(35, min(82, 45 + ($themeResult['bonus_score'] * 2) - ($themeResult['risk_penalty'] * 3)));
+
+        $confidence = (int) round(
+            ($technicalOpportunity * $weights['technical'])
+            + ($chipOpportunity * $weights['chip'])
+            + ($fundamentalOpportunity * $weights['fundamental'])
+            + ($themeOpportunity * $weights['theme'])
+        );
+        $confidence = max(5, min(95, $confidence));
+
         $bull = $technicalResult['bull_score'] + $chipResult['bull_score'] + $fundamentalResult['bull_score'] + $themeResult['bonus_score'];
         $bear = $technicalResult['bear_score'] + $chipResult['bear_score'] + $fundamentalResult['bear_score'];
-        $riskPenalty = min(30, $technicalResult['risk_penalty'] + $chipResult['risk_penalty'] + $fundamentalResult['risk_penalty'] + $themeResult['risk_penalty']);
-
-        $raw = 50 + $bull - $bear - $riskPenalty;
-        $confidence = max(5, min(99, (int) round($raw)));
+        $riskPenalty = min(42, $technicalResult['risk_penalty'] + $chipResult['risk_penalty'] + $fundamentalResult['risk_penalty'] + $themeResult['risk_penalty']);
+        $riskConfidence = $this->riskConfidence($technicalResult, $chipResult, $fundamentalResult, $themeResult);
+        $weakConfidence = $this->weakConfidence($technicalResult, $chipResult, $fundamentalResult);
 
         $reasons = [
             'bull' => array_slice(array_merge($technicalResult['bull_reasons'], $chipResult['bull_reasons'], $fundamentalResult['bull_reasons'], $themeResult['bull_reasons']), 0, 8),
@@ -70,6 +107,13 @@ class ConfidenceEngine
                 'fundamental_bull_score' => round($fundamentalResult['bull_score'], 2),
                 'fundamental_bear_score' => round($fundamentalResult['bear_score'], 2),
                 'theme_bonus_score' => round($themeResult['bonus_score'], 2),
+                'technical_opportunity_confidence' => $technicalOpportunity,
+                'chip_opportunity_confidence' => $chipOpportunity,
+                'fundamental_opportunity_confidence' => $fundamentalOpportunity,
+                'theme_opportunity_confidence' => $themeOpportunity,
+                'opportunity_confidence' => $confidence,
+                'risk_confidence' => $riskConfidence,
+                'weak_confidence' => $weakConfidence,
                 'reasons' => $reasons,
             ],
             'risk_flags' => $mergedRiskFlags,
@@ -343,5 +387,57 @@ class ConfidenceEngine
     private function num(mixed $value): ?float
     {
         return $value === null ? null : (float) $value;
+    }
+
+    private function moduleConfidence(float $bull, float $bear, float $risk, float $maxDirection, float $maxRisk): int
+    {
+        $bullRatio = $maxDirection > 0 ? min(1.0, $bull / $maxDirection) : 0.0;
+        $bearRatio = $maxDirection > 0 ? min(1.0, $bear / $maxDirection) : 0.0;
+        $riskRatio = $maxRisk > 0 ? min(1.0, $risk / $maxRisk) : 0.0;
+
+        $score = 50 + ($bullRatio * 40) - ($bearRatio * 30) - ($riskRatio * 22);
+
+        return max(5, min(95, (int) round($score)));
+    }
+
+    /**
+     * @param array<string,mixed> $technical
+     * @param array<string,mixed> $chip
+     * @param array<string,mixed> $fundamental
+     * @param array<string,mixed> $theme
+     */
+    private function riskConfidence(array $technical, array $chip, array $fundamental, array $theme): int
+    {
+        $technicalRisk = min(1.0, ((float) $technical['risk_penalty'] + ((float) $technical['bear_score'] * 0.55)) / 32);
+        $chipRisk = min(1.0, ((float) $chip['risk_penalty'] + ((float) $chip['bear_score'] * 0.55)) / 24);
+        $fundamentalRisk = min(1.0, ((float) $fundamental['risk_penalty'] + ((float) $fundamental['bear_score'] * 0.45)) / 22);
+        $themeRisk = min(1.0, ((float) $theme['risk_penalty']) / 8);
+
+        $score = 20
+            + ($technicalRisk * 35)
+            + ($chipRisk * 25)
+            + ($fundamentalRisk * 25)
+            + ($themeRisk * 15);
+
+        return max(5, min(95, (int) round($score)));
+    }
+
+    /**
+     * @param array<string,mixed> $technical
+     * @param array<string,mixed> $chip
+     * @param array<string,mixed> $fundamental
+     */
+    private function weakConfidence(array $technical, array $chip, array $fundamental): int
+    {
+        $technicalWeak = min(1.0, ((float) $technical['bear_score'] + ((float) $technical['risk_penalty'] * 0.45)) / 38);
+        $chipWeak = min(1.0, ((float) $chip['bear_score'] + ((float) $chip['risk_penalty'] * 0.35)) / 28);
+        $fundamentalWeak = min(1.0, ((float) $fundamental['bear_score'] + ((float) $fundamental['risk_penalty'] * 0.35)) / 28);
+
+        $score = 20
+            + ($technicalWeak * 45)
+            + ($chipWeak * 25)
+            + ($fundamentalWeak * 30);
+
+        return max(5, min(95, (int) round($score)));
     }
 }
