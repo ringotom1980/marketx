@@ -107,7 +107,7 @@
         .stock-signal-name {
             color: var(--muted);
             font-size: inherit;
-            font-weight: 800;
+            font-weight: 700;
             text-decoration: none;
             min-width: 0;
         }
@@ -244,7 +244,7 @@
         </div>
 
         <div class="panel">
-            <h2>今日風險升高股票</h2>
+            <h2>今日風險升高</h2>
             <div class="stock-signal-list">
                 @forelse ($riskStocks as $stock)
                     <div class="stock-signal-item">

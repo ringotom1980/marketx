@@ -440,25 +440,44 @@ Route::get('/', function () {
             'kd_overheated' => 50,
         ];
 
-        $weakestModule = collect([
-            ['name' => '技術', 'score' => (int) ($stock->technical_score ?? 100)],
-            ['name' => '籌碼', 'score' => (int) ($stock->chip_score ?? 100)],
-            ['name' => '財務', 'score' => (int) ($stock->fundamental_score ?? 100)],
-        ])->sortBy('score')->first();
-        $scoreRisks = collect([
-            $weakestModule ? $weakestModule['name'].'相對弱 '.$weakestModule['score'] : null,
-            ((int) ($stock->technical_score ?? 100) < 50) ? '技術分數偏弱 '.(int) $stock->technical_score : null,
-            ((int) ($stock->chip_score ?? 100) < 50) ? '籌碼分數偏弱 '.(int) $stock->chip_score : null,
-            ((int) ($stock->fundamental_score ?? 100) < 50) ? '財務分數偏弱 '.(int) $stock->fundamental_score : null,
-            ((int) ($stock->confidence_score ?? 100) < 60) ? '信心度偏低 '.(int) $stock->confidence_score.'%' : null,
-        ])->filter();
+        $payload = is_array($stock->technical_payload)
+            ? $stock->technical_payload
+            : (json_decode((string) $stock->technical_payload, true) ?: []);
+
+        $technicalSignals = collect($payload['signals'] ?? [])
+            ->filter(fn ($signal) => in_array($signal['tone'] ?? null, ['red', 'amber'], true))
+            ->pluck('title')
+            ->map(fn ($title) => (string) $title)
+            ->filter()
+            ->values();
+
+        $preferred = collect([
+            'MACD 死亡交叉',
+            'KD 死亡交叉',
+            '跌破月線',
+            '跌破布林下緣',
+            '高檔放量轉弱',
+            '20 日動能弱',
+            'RSI 弱勢',
+            'MACD 正數縮小',
+            'MACD 負數縮減',
+            'EMA 動能偏弱',
+            '月線低於季線',
+            'KD 偏弱',
+            'KD 過熱',
+            'RSI 過熱',
+            '量能不足',
+            '波動擴大',
+            '20 日波動偏高',
+        ])->filter(fn ($title) => $technicalSignals->contains($title));
 
         $flagRisks = collect($flags)
             ->unique()
             ->sortByDesc(fn ($flag) => $weights[$flag] ?? 0)
             ->map(fn ($flag) => $labels[$flag] ?? $flag);
 
-        return $scoreRisks
+        return $preferred
+            ->merge($technicalSignals)
             ->merge($flagRisks)
             ->unique()
             ->take(3)
@@ -480,6 +499,7 @@ Route::get('/', function () {
             'stock_scores.technical_score',
             'stock_scores.chip_score',
             'stock_scores.fundamental_score',
+            'stock_scores.technical_payload',
             DB::raw('json_array_length(stock_scores.risk_flags) as risk_count')
         )
         ->whereNotNull('stock_scores.risk_flags')
