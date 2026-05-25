@@ -4,6 +4,7 @@ namespace App\Console\Commands;
 
 use App\Models\Stock;
 use App\Models\StockScore;
+use Carbon\CarbonImmutable;
 use Illuminate\Console\Command;
 
 class CalculateDecisionScores extends Command
@@ -35,19 +36,12 @@ class CalculateDecisionScores extends Command
             $chipScore = $stock->latestChip ? $this->chipScore($stock) : null;
             $score->chip_score = $chipScore;
             $totalScore = $this->totalScore($score);
-            $confidence = $this->confidenceScore([
-                $score->technical_score,
-                $chipScore,
-                $score->fundamental_score,
-                $score->macro_score,
-                $score->event_score,
-                $score->theme_score,
-            ]);
             $decision = $this->decision($totalScore);
             $riskFlags = array_values(array_unique(array_merge(
                 $score->risk_flags ?? [],
                 $this->chipRiskFlags($chipScore, $stock->latestChip),
             )));
+            $confidence = $this->confidenceScore($score, $totalScore, $riskFlags, $stock);
 
             $score->fill([
                 'chip_score' => $chipScore,
@@ -128,16 +122,105 @@ class CalculateDecisionScores extends Command
         return (int) round($weighted / $weightSum);
     }
 
-    private function confidenceScore(array $inputScores): int
+    private function confidenceScore(StockScore $score, int $totalScore, array $riskFlags, Stock $stock): int
     {
-        $modules = collect($inputScores)->filter(fn ($score) => $score !== null)->values();
-        $confidence = 35 + ($modules->count() * 8);
+        $modules = collect([
+            'technical' => $score->technical_score,
+            'chip' => $score->chip_score,
+            'fundamental' => $score->fundamental_score,
+            'macro' => $score->macro_score,
+            'event' => $score->event_score,
+            'theme' => $score->theme_score,
+        ])->filter(fn ($value) => $value !== null)->map(fn ($value) => (int) $value);
 
-        if ($modules->count() >= 2 && $modules->max() - $modules->min() <= 18) {
-            $confidence += 12;
+        if ($modules->isEmpty()) {
+            return 20;
         }
 
-        return max(0, min(100, $confidence));
+        $moduleCount = $modules->count();
+        $coverage = ($moduleCount / 6) * 28;
+        $average = (float) $modules->avg();
+        $dispersion = $moduleCount >= 2 ? $this->standardDeviation($modules->values()->all()) : 30.0;
+        $consistency = max(0, 22 - min(22, $dispersion * 0.9));
+        $directionSupport = $this->directionSupport($modules->values()->all(), $totalScore);
+        $boundary = $this->decisionBoundaryConfidence($totalScore);
+        $freshness = $this->freshnessConfidence($stock, $score);
+        $riskPenalty = min(18, count($riskFlags) * 4);
+
+        $confidence = 24 + $coverage + $consistency + $directionSupport + $boundary + $freshness - $riskPenalty;
+
+        $confidence += match (true) {
+            $average >= 72 && $totalScore >= 70 => 3,
+            $average <= 42 && $totalScore <= 45 => 3,
+            default => 0,
+        };
+
+        return max(5, min(99, (int) round($confidence)));
+    }
+
+    private function standardDeviation(array $values): float
+    {
+        $count = count($values);
+
+        if ($count === 0) {
+            return 0.0;
+        }
+
+        $average = array_sum($values) / $count;
+        $variance = array_sum(array_map(fn ($value) => ($value - $average) ** 2, $values)) / $count;
+
+        return sqrt($variance);
+    }
+
+    private function directionSupport(array $values, int $totalScore): float
+    {
+        if ($values === []) {
+            return 0.0;
+        }
+
+        if ($totalScore >= 70) {
+            return (count(array_filter($values, fn ($value) => $value >= 60)) / count($values)) * 15;
+        }
+
+        if ($totalScore <= 45) {
+            return (count(array_filter($values, fn ($value) => $value <= 50)) / count($values)) * 15;
+        }
+
+        return (count(array_filter($values, fn ($value) => $value >= 45 && $value <= 65)) / count($values)) * 10;
+    }
+
+    private function decisionBoundaryConfidence(int $totalScore): float
+    {
+        $boundaries = [40, 55, 70, 85];
+        $distance = min(array_map(fn ($boundary) => abs($totalScore - $boundary), $boundaries));
+
+        return min(12, $distance * 1.6);
+    }
+
+    private function freshnessConfidence(Stock $stock, StockScore $score): float
+    {
+        $latestPrice = $stock->dailyPrices()->latest('trade_date')->first();
+        $dates = collect([
+            $latestPrice?->trade_date,
+            $stock->latestChip?->trade_date,
+            $score->score_date,
+        ])->filter();
+
+        if ($dates->isEmpty()) {
+            return 0.0;
+        }
+
+        $latest = $dates
+            ->map(fn ($date) => CarbonImmutable::parse($date, 'Asia/Taipei'))
+            ->max();
+        $days = $latest->diffInDays(CarbonImmutable::now('Asia/Taipei'));
+
+        return match (true) {
+            $days <= 1 => 8,
+            $days <= 3 => 5,
+            $days <= 7 => 2,
+            default => 0,
+        };
     }
 
     private function decision(int $score): string
