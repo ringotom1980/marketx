@@ -343,6 +343,43 @@ Route::get('/', function () {
             && $upperShadowRatio >= 0.35;
     };
 
+    $isLowBaseVolumeBreakout = function (object $stock) use ($bais20): bool {
+        $close = (float) ($stock->close ?? 0);
+        $open = (float) ($stock->open ?? 0);
+        $previousClose = (float) ($stock->previous_close ?? 0);
+        $volume = (float) ($stock->volume ?? 0);
+        $previousVolume = (float) ($stock->previous_volume ?? 0);
+
+        if ($close <= 0 || $volume <= 0 || $previousVolume <= 0) {
+            return false;
+        }
+
+        $sma20 = $stock->sma20 === null ? null : (float) $stock->sma20;
+        $sma60 = $stock->sma60 === null ? null : (float) $stock->sma60;
+        $sma120 = $stock->sma120 === null ? null : (float) $stock->sma120;
+        $return20 = (float) ($stock->return20 ?? 0);
+        $return60 = (float) ($stock->return60 ?? 0);
+        $bais = $bais20($stock);
+        $volumeMultiple = $volume / max(1, $previousVolume);
+
+        $belowAverage = ($sma20 !== null && $close <= $sma20)
+            || ($sma60 !== null && $close <= $sma60)
+            || ($sma120 !== null && $close <= $sma120)
+            || $return20 <= -5
+            || $return60 <= -5;
+        $longConsolidation = abs($return60) <= 8
+            && abs($return20) <= 6
+            && ($bais === null || abs($bais) <= 8);
+        $priceRises = $close > max($open, $previousClose) && (float) ($stock->change_pct ?? 0) > 0;
+        $volumeExplodes = $volumeMultiple >= 3;
+        $notOverheated = $return20 <= 8 && ($bais === null || $bais <= 8);
+
+        return ($belowAverage || $longConsolidation)
+            && $priceRises
+            && $volumeExplodes
+            && $notOverheated;
+    };
+
     $priorityReasons = function (object $stock) use ($signalsFor, $reason, $hasSignal, $bais20): array {
         $technicalSignals = $signalsFor($stock, ['green']);
 
@@ -473,20 +510,41 @@ Route::get('/', function () {
         return $reasons->unique('label')->take(3)->values()->all();
     };
 
-    $lowVolumeReasons = function (object $stock) use ($signalsFor, $reason, $hasSignal): array {
+    $lowVolumeReasons = function (object $stock) use ($signalsFor, $reason, $hasSignal, $bais20): array {
         $technicalSignals = $signalsFor($stock);
         $reasons = collect();
+        $volume = (float) ($stock->volume ?? 0);
+        $previousVolume = (float) ($stock->previous_volume ?? 0);
+        $volumeMultiple = $previousVolume > 0 ? $volume / $previousVolume : 0;
+        $close = (float) ($stock->close ?? 0);
+        $sma20 = $stock->sma20 === null ? null : (float) $stock->sma20;
+        $sma60 = $stock->sma60 === null ? null : (float) $stock->sma60;
+        $sma120 = $stock->sma120 === null ? null : (float) $stock->sma120;
 
-        if ((float) ($stock->return20 ?? 0) <= -5) {
+        if (
+            ($sma20 !== null && $close <= $sma20)
+            || ($sma60 !== null && $close <= $sma60)
+            || ($sma120 !== null && $close <= $sma120)
+            || (float) ($stock->return20 ?? 0) <= -5
+            || (float) ($stock->return60 ?? 0) <= -5
+        ) {
             $reasons->push($reason('低檔區', 'warning'));
         }
 
-        if ((float) ($stock->volume_ratio20 ?? 0) >= 1.5) {
-            $reasons->push($reason('低檔爆量', 'warning'));
+        if (abs((float) ($stock->return60 ?? 0)) <= 8 && abs((float) ($stock->return20 ?? 0)) <= 6) {
+            $reasons->push($reason('長期盤整', 'warning'));
         }
 
-        if ((float) ($stock->change_pct ?? 0) >= 0) {
-            $reasons->push($reason('跌深止穩', 'warning'));
+        if ($volumeMultiple >= 3) {
+            $reasons->push($reason('量增逾3倍', 'warning'));
+        }
+
+        if ((float) ($stock->change_pct ?? 0) > 0 && $close > (float) ($stock->previous_close ?? 0)) {
+            $reasons->push($reason('放量上漲', 'up'));
+        }
+
+        if (($bais20($stock) ?? 0) <= 8) {
+            $reasons->push($reason('未明顯過熱', 'warning'));
         }
 
         if ((int) ($stock->chip_score ?? 0) >= 60) {
@@ -570,8 +628,11 @@ Route::get('/', function () {
             'stock_prices_1d.change_pct',
             'stock_prices_1d.volume',
             'stock_technical_indicators_1d.sma20',
+            'stock_technical_indicators_1d.sma60',
+            'stock_technical_indicators_1d.sma120',
             'stock_technical_indicators_1d.bais20',
             'stock_technical_indicators_1d.return20',
+            'stock_technical_indicators_1d.return60',
             'stock_technical_indicators_1d.volume_ratio20',
             'stock_technical_indicators_1d.rsi14',
             'stock_technical_indicators_1d.macd',
@@ -662,7 +723,7 @@ Route::get('/', function () {
         'symbol' => $stock->symbol,
         'name' => $stock->name,
         'confidence' => $cardConfidence($stock, $type),
-        'reasons' => $payloadReasons($stock, $type) ?: $fallbackReasons,
+        'reasons' => $type === 'low_volume' ? $fallbackReasons : ($payloadReasons($stock, $type) ?: $fallbackReasons),
     ];
 
     $topStocks = $stockCandidates
@@ -789,12 +850,12 @@ Route::get('/', function () {
             $stock->radar_reasons = $lowVolumeReasons($stock);
             return $stock;
         })
-        ->filter(fn ($stock) => (float) ($stock->return20 ?? 0) <= -5
-            && (float) ($stock->volume_ratio20 ?? 0) >= 1.35
+        ->filter(fn ($stock) => $isLowBaseVolumeBreakout($stock)
             && count($stock->radar_reasons) >= 2)
         ->sortByDesc(fn ($stock) => sprintf(
-            '%03d-%06.2f',
+            '%03d-%06.2f-%06.2f',
             $cardConfidence($stock, 'low_volume'),
+            (float) ($stock->volume ?? 0) / max(1, (float) ($stock->previous_volume ?? 0)),
             (float) ($stock->volume_ratio20 ?? 0),
         ))
         ->map(fn ($stock) => $stockCardItem($stock, $stock->radar_reasons, 'low_volume'))
