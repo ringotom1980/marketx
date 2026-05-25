@@ -49,6 +49,6 @@ Schedule::command('market:taifex-night-pipeline')
     ->withoutOverlapping();
 
 Schedule::command('market:taifex-night-pipeline')
-    ->dailyAt('00:30')
+    ->dailyAt('05:20')
     ->timezone('Asia/Taipei')
     ->withoutOverlapping();
