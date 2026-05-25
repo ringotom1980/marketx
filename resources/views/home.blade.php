@@ -1,6 +1,10 @@
 @extends('welcome')
 
 @section('content')
+    @php
+        $marketCharts = $marketCharts ?? [];
+    @endphp
+
     <style>
         .market-chart-grid {
             display: grid;
@@ -102,7 +106,7 @@
     </section>
 
     <section class="market-chart-grid">
-        @foreach ($marketCharts as $chart)
+        @forelse ($marketCharts as $chart)
             <div class="panel market-chart-panel" data-market-chart='@json($chart['ranges'])'>
                 <div class="market-chart-head">
                     <div>
@@ -121,7 +125,12 @@
                 <p class="market-chart-empty" hidden>目前官方資料還不足以產生 K 線。</p>
                 <p class="market-chart-tip">可雙指縮放、左右拖曳；長按或滑鼠停留可顯示十字線與開高低收。</p>
             </div>
-        @endforeach
+        @empty
+            <div class="panel">
+                <h2>台股大盤 K 線</h2>
+                <p class="lead">大盤 K 線資料準備中。</p>
+            </div>
+        @endforelse
     </section>
 
     <section class="grid three" style="margin-top:16px">

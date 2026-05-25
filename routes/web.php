@@ -150,6 +150,107 @@ Route::match(['get', 'post'], '/logout', function (Request $request) {
 });
 
 Route::get('/', function () {
+    $payloadNumber = function (array $payload, array $keys): ?float {
+        foreach ($keys as $key) {
+            if (! array_key_exists($key, $payload)) {
+                continue;
+            }
+
+            $value = str_replace([',', '%'], '', trim((string) $payload[$key]));
+
+            if ($value !== '' && is_numeric($value)) {
+                return (float) $value;
+            }
+        }
+
+        return null;
+    };
+
+    $aggregateK = function ($rows, callable $keyResolver): array {
+        return $rows
+            ->groupBy($keyResolver)
+            ->map(function ($group, $key) {
+                $first = $group->first();
+                $last = $group->last();
+
+                return [
+                    'time' => (string) $key,
+                    'open' => (float) $first['open'],
+                    'high' => (float) $group->max('high'),
+                    'low' => (float) $group->min('low'),
+                    'close' => (float) $last['close'],
+                    'volume' => (int) $group->sum('volume'),
+                ];
+            })
+            ->values()
+            ->all();
+    };
+
+    $buildIndicatorK = function (string $indicator) use ($payloadNumber, $aggregateK): array {
+        $previousClose = null;
+        $rows = DB::table('global_market_data')
+            ->where('indicator', $indicator)
+            ->whereNotNull('value')
+            ->orderBy('trade_date')
+            ->limit(720)
+            ->get(['trade_date', 'value', 'raw_payload'])
+            ->map(function ($row) use (&$previousClose, $payloadNumber) {
+                $payload = json_decode((string) $row->raw_payload, true) ?: [];
+                $close = $payloadNumber($payload, ['close', 'Close', 'ClosingPrice', 'Last']) ?? (float) $row->value;
+                $open = $payloadNumber($payload, ['open', 'Open', 'OpeningPrice']) ?? $previousClose ?? $close;
+                $high = $payloadNumber($payload, ['high', 'High', 'HighestPrice', 'Highest']) ?? max($open, $close);
+                $low = $payloadNumber($payload, ['low', 'Low', 'LowestPrice', 'Lowest']) ?? min($open, $close);
+                $volume = $payloadNumber($payload, ['volume', 'Volume', 'TradingVolume', 'TotalVolume']) ?? 0;
+                $date = \Carbon\CarbonImmutable::parse($row->trade_date, 'Asia/Taipei');
+                $previousClose = $close;
+
+                return [
+                    'date' => $date,
+                    'time' => $date->toDateString(),
+                    'open' => (float) $open,
+                    'high' => (float) max($high, $open, $close),
+                    'low' => (float) min($low, $open, $close),
+                    'close' => (float) $close,
+                    'volume' => (int) $volume,
+                ];
+            })
+            ->filter(fn ($row) => $row['close'] > 0)
+            ->values();
+
+        $daily = $rows->slice(-260)
+            ->map(fn ($row) => [
+                'time' => $row['time'],
+                'open' => $row['open'],
+                'high' => $row['high'],
+                'low' => $row['low'],
+                'close' => $row['close'],
+                'volume' => $row['volume'],
+            ])
+            ->values()
+            ->all();
+
+        return [
+            'daily' => $daily,
+            'weekly' => array_slice($aggregateK($rows, fn ($row) => $row['date']->format('o-\WW')), -160),
+            'monthly' => array_slice($aggregateK($rows, fn ($row) => $row['date']->format('Y-m')), -120),
+        ];
+    };
+
+    $marketCharts = [
+        [
+            'id' => 'taiex',
+            'title' => '台股大盤 K 線',
+            'subtitle' => '加權指數，日 K / 周 K / 月 K',
+            'ranges' => $buildIndicatorK('TAIEX'),
+        ],
+        [
+            'id' => 'tx-night',
+            'title' => '台股夜盤 K 線',
+            'subtitle' => 'TAIFEX TX 夜盤，日 K / 周 K / 月 K',
+            'ranges' => $buildIndicatorK('TAIFEX TX Night'),
+        ],
+    ];
+
     $markets = DB::table('global_market_data')
         ->orderByDesc('trade_date')
         ->limit(5)
@@ -334,6 +435,7 @@ Route::get('/', function () {
         'themes' => $themes,
         'topStocks' => $topStocks,
         'riskStocks' => $riskStocks,
+        'marketCharts' => $marketCharts,
     ]);
 });
 
