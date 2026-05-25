@@ -127,7 +127,7 @@
                     @foreach ($onlineMembers as $online)
                         <tr>
                             <th>
-                                {{ $online->name ?? '未登入訪客 / 管理者' }}
+                                {{ $online->name ?? '未登入訪客' }}
                                 @if ($online->is_admin)
                                     <br><span class="badge red">管理者</span>
                                 @endif

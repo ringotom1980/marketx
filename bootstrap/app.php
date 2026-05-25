@@ -31,6 +31,7 @@ use App\Console\Commands\SeedThemeMappings;
 use App\Console\Commands\SeedThemeKeywords;
 use App\Console\Commands\SeedThemes;
 use App\Http\Middleware\EnsureMarketxAdmin;
+use App\Http\Middleware\SyncMarketxSessionUser;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
 
@@ -74,6 +75,7 @@ return Application::configure(basePath: dirname(__DIR__))
     ->withMiddleware(function (Middleware $middleware): void {
         $middleware->web(append: [
             EnsureMarketxAdmin::class,
+            SyncMarketxSessionUser::class,
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {

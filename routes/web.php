@@ -171,18 +171,17 @@ Route::get('/', function () {
     }
 
     $topStocks = Stock::query()
-        ->join('stock_scores', 'stocks.id', '=', 'stock_scores.stock_id')
+        ->join('stock_scores', function ($join) {
+            $join->on('stocks.id', '=', 'stock_scores.stock_id')
+                ->whereRaw('stock_scores.score_date = (select max(ss.score_date) from stock_scores ss where ss.stock_id = stocks.id)');
+        })
         ->select('stocks.symbol', 'stocks.name', 'stock_scores.decision', 'stock_scores.total_score', 'stock_scores.confidence_score')
         ->whereNotNull('stock_scores.total_score')
-        ->where('stock_scores.macro_score', '>', 0)
-        ->where('stock_scores.event_score', '>', 0)
-        ->where('stock_scores.theme_score', '>', 0)
-        ->where('stock_scores.technical_score', '>', 0)
-        ->where('stock_scores.chip_score', '>', 0)
-        ->where('stock_scores.fundamental_score', '>', 0)
-        ->orderByDesc('stock_scores.score_date')
+        ->whereIn('stock_scores.decision', ['強力買進', '買進', '續抱'])
+        ->orderByDesc('stock_scores.confidence_score')
         ->orderByDesc('stock_scores.total_score')
-        ->limit(5)
+        ->orderBy('stocks.symbol')
+        ->limit(10)
         ->get()
         ->map(fn ($stock) => [
             'symbol' => $stock->symbol,
@@ -235,7 +234,7 @@ Route::get('/', function () {
             'score' => (int) ($theme->heat_score ?? 0),
         ]);
 
-    $riskLabel = function (array $flags): string {
+    $riskLabel = function (array $flags, object $stock): string {
         $labels = [
             'below_sma20' => '跌破月線',
             'sma20_below_sma60' => '月線低於季線',
@@ -251,29 +250,68 @@ Route::get('/', function () {
             'below_bollinger_lower' => '跌破布林下緣',
             'atr_expanded' => 'ATR 風險擴大',
         ];
+        $weights = [
+            'high_volume_down' => 100,
+            'below_bollinger_lower' => 95,
+            'macd_bearish' => 90,
+            'rsi_weak' => 86,
+            'kd_weak' => 82,
+            'negative_20d_momentum' => 78,
+            'ema_momentum_weak' => 74,
+            'below_sma20' => 70,
+            'sma20_below_sma60' => 66,
+            'atr_expanded' => 62,
+            'high_volatility' => 58,
+            'rsi_overheated' => 54,
+            'kd_overheated' => 50,
+        ];
 
-        return collect($flags)
-            ->map(fn ($flag) => $labels[$flag] ?? $flag)
+        $weakestModule = collect([
+            ['name' => '技術', 'score' => (int) ($stock->technical_score ?? 100)],
+            ['name' => '籌碼', 'score' => (int) ($stock->chip_score ?? 100)],
+            ['name' => '財務', 'score' => (int) ($stock->fundamental_score ?? 100)],
+        ])->sortBy('score')->first();
+        $scoreRisks = collect([
+            $weakestModule ? $weakestModule['name'].'相對弱 '.$weakestModule['score'] : null,
+            ((int) ($stock->technical_score ?? 100) < 50) ? '技術分數偏弱 '.(int) $stock->technical_score : null,
+            ((int) ($stock->chip_score ?? 100) < 50) ? '籌碼分數偏弱 '.(int) $stock->chip_score : null,
+            ((int) ($stock->fundamental_score ?? 100) < 50) ? '財務分數偏弱 '.(int) $stock->fundamental_score : null,
+            ((int) ($stock->confidence_score ?? 100) < 60) ? '信心度偏低 '.(int) $stock->confidence_score.'%' : null,
+        ])->filter();
+
+        $flagRisks = collect($flags)
+            ->unique()
+            ->sortByDesc(fn ($flag) => $weights[$flag] ?? 0)
+            ->map(fn ($flag) => $labels[$flag] ?? $flag);
+
+        return $scoreRisks
+            ->merge($flagRisks)
+            ->unique()
             ->take(3)
             ->implode('、');
     };
 
     $riskStocks = Stock::query()
-        ->join('stock_scores', 'stocks.id', '=', 'stock_scores.stock_id')
+        ->join('stock_scores', function ($join) {
+            $join->on('stocks.id', '=', 'stock_scores.stock_id')
+                ->whereRaw('stock_scores.score_date = (select max(ss.score_date) from stock_scores ss where ss.stock_id = stocks.id)');
+        })
         ->select(
             'stocks.symbol',
             'stocks.name',
             'stock_scores.risk_flags',
             'stock_scores.total_score',
             'stock_scores.confidence_score',
+            'stock_scores.technical_score',
+            'stock_scores.chip_score',
+            'stock_scores.fundamental_score',
             DB::raw('json_array_length(stock_scores.risk_flags) as risk_count')
         )
-        ->whereRaw('stock_scores.score_date = (select max(score_date) from stock_scores)')
         ->whereNotNull('stock_scores.risk_flags')
         ->whereRaw("stock_scores.risk_flags::text <> '[]'")
         ->orderByDesc('risk_count')
         ->orderBy('stock_scores.total_score')
-        ->limit(5)
+        ->limit(10)
         ->get()
         ->map(function ($stock) use ($riskLabel) {
             $flags = is_array($stock->risk_flags)
@@ -283,7 +321,7 @@ Route::get('/', function () {
             return [
                 'symbol' => $stock->symbol,
                 'name' => $stock->name,
-                'risk' => $riskLabel($flags),
+                'risk' => $riskLabel($flags, $stock),
                 'confidence' => (int) ($stock->confidence_score ?? 0),
             ];
         })
@@ -800,11 +838,29 @@ Route::get('/admin', function (AiPipelineService $aiPipeline) {
         ->orderByDesc('created_at')
         ->limit(12)
         ->get(['level', 'message', 'context', 'created_at']);
-    $lastSeenByUser = DB::table('sessions')
-        ->whereNotNull('user_id')
-        ->select('user_id', DB::raw('max(last_activity) as last_activity'))
+    $sessionUserId = function (?string $payload): ?int {
+        $decoded = base64_decode((string) $payload, true);
+        if ($decoded === false) {
+            return null;
+        }
+
+        $data = @unserialize($decoded, ['allowed_classes' => false]);
+        if (! is_array($data) || ! isset($data['marketx_user_id'])) {
+            return null;
+        }
+
+        return (int) $data['marketx_user_id'];
+    };
+    $sessionRows = DB::table('sessions')
+        ->get(['id', 'payload', 'last_activity']);
+    $lastSeenByUser = $sessionRows
+        ->map(fn ($session) => [
+            'user_id' => $sessionUserId($session->payload),
+            'last_activity' => (int) $session->last_activity,
+        ])
+        ->filter(fn ($session) => $session['user_id'] !== null)
         ->groupBy('user_id')
-        ->pluck('last_activity', 'user_id');
+        ->map(fn ($sessions) => $sessions->max('last_activity'));
     $members = User::query()
         ->orderByDesc('created_at')
         ->limit(100)
@@ -817,21 +873,23 @@ Route::get('/admin', function (AiPipelineService $aiPipeline) {
 
             return $user;
         });
-    $onlineMembers = DB::table('sessions')
-        ->leftJoin('users', 'users.id', '=', 'sessions.user_id')
-        ->where('sessions.last_activity', '>=', now()->subMinutes(5)->timestamp)
-        ->orderByDesc('sessions.last_activity')
+    $onlineSessions = DB::table('sessions')
+        ->where('last_activity', '>=', now()->subMinutes(5)->timestamp)
+        ->orderByDesc('last_activity')
         ->limit(50)
-        ->get([
-            'sessions.user_id',
-            'sessions.ip_address',
-            'sessions.user_agent',
-            'sessions.last_activity',
-            'users.name',
-            'users.email',
-            'users.is_admin',
-        ])
-        ->map(function ($session) {
+        ->get(['id', 'payload', 'ip_address', 'user_agent', 'last_activity']);
+    $onlineUsers = User::query()
+        ->whereIn('id', $onlineSessions->map(fn ($session) => $sessionUserId($session->payload))->filter()->unique()->values())
+        ->get(['id', 'name', 'email', 'is_admin'])
+        ->keyBy('id');
+    $onlineMembers = $onlineSessions
+        ->map(function ($session) use ($sessionUserId, $onlineUsers) {
+            $userId = $sessionUserId($session->payload);
+            $user = $userId ? $onlineUsers->get($userId) : null;
+            $session->user_id = $userId;
+            $session->name = $user?->name;
+            $session->email = $user?->email;
+            $session->is_admin = (bool) ($user?->is_admin ?? false);
             $session->last_seen_at = \Carbon\CarbonImmutable::createFromTimestamp((int) $session->last_activity, 'Asia/Taipei');
             $session->device = match (true) {
                 str_contains((string) $session->user_agent, 'iPhone') => 'iPhone',
