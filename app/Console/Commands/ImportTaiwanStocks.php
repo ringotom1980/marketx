@@ -4,8 +4,11 @@ namespace App\Console\Commands;
 
 use App\Models\Stock;
 use App\Models\StockPrice1d;
+use App\Models\SystemLog;
 use Carbon\CarbonImmutable;
+use Illuminate\Support\Collection;
 use Illuminate\Console\Command;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
 
 class ImportTaiwanStocks extends Command
@@ -118,43 +121,38 @@ class ImportTaiwanStocks extends Command
     {
         $payload = $this->fetchJson(self::TWSE_DAILY_QUOTES_URL);
         $rows = $this->twseDailyRows($payload);
+        $source = 'twse_main';
 
         if ($rows === []) {
             $this->warn('TWSE main site daily quotes were empty; falling back to TWSE OpenAPI.');
             $rows = $this->fetchJson(self::TWSE_DAILY_QUOTES_OPENAPI_URL);
+            $source = 'twse_openapi';
         }
 
-        $count = 0;
+        $result = $this->upsertDailyQuoteRows(
+            rows: collect($rows),
+            market: 'TWSE',
+            source: $source,
+            symbolResolver: fn (array $row): string => trim((string) ($row['Code'] ?? '')),
+            dateResolver: fn (array $row): CarbonImmutable => $this->parseRocDate((string) ($row['Date'] ?? '')),
+            valuesResolver: fn (array $row): array => [
+                'open' => $this->decimal($row['OpeningPrice'] ?? null),
+                'high' => $this->decimal($row['HighestPrice'] ?? null),
+                'low' => $this->decimal($row['LowestPrice'] ?? null),
+                'close' => $this->decimal($row['ClosingPrice'] ?? null),
+                'change' => $this->decimal($row['Change'] ?? null),
+                'change_pct' => null,
+                'volume' => $this->integer($row['TradeVolume'] ?? null),
+                'turnover' => $this->integer($row['TradeValue'] ?? null),
+            ],
+        );
 
-        foreach ($rows as $row) {
-            $symbol = trim((string) ($row['Code'] ?? ''));
-            $stock = Stock::query()->where('symbol', $symbol)->first();
-
-            if (! $stock) {
-                continue;
-            }
-
-            StockPrice1d::query()->updateOrCreate(
-                [
-                    'stock_id' => $stock->id,
-                    'trade_date' => $this->parseRocDate((string) ($row['Date'] ?? '')),
-                ],
-                [
-                    'open' => $this->decimal($row['OpeningPrice'] ?? null),
-                    'high' => $this->decimal($row['HighestPrice'] ?? null),
-                    'low' => $this->decimal($row['LowestPrice'] ?? null),
-                    'close' => $this->decimal($row['ClosingPrice'] ?? null),
-                    'change' => $this->decimal($row['Change'] ?? null),
-                    'change_pct' => null,
-                    'volume' => $this->integer($row['TradeVolume'] ?? null),
-                    'turnover' => $this->integer($row['TradeValue'] ?? null),
-                ],
-            );
-
-            $count++;
-        }
-
-        $this->line('TWSE daily quotes imported: '.$count);
+        $this->line(sprintf(
+            'TWSE daily quotes imported: %d; skipped invalid: %d; missing active: %d',
+            $result['imported'],
+            $result['skipped_invalid'],
+            $result['missing_active'],
+        ));
     }
 
     private function twseDailyRows(array $payload): array
@@ -182,40 +180,135 @@ class ImportTaiwanStocks extends Command
             ->all();
     }
 
-    private function importTpexDailyQuotes(): void
+    /**
+     * @param Collection<int, array<string, mixed>> $rows
+     * @return array{imported:int, skipped_invalid:int, missing_active:int}
+     */
+    private function upsertDailyQuoteRows(Collection $rows, string $market, string $source, callable $symbolResolver, callable $dateResolver, callable $valuesResolver): array
     {
-        $rows = $this->fetchJson(self::TPEX_DAILY_QUOTES_URL);
-        $count = 0;
+        $activeSymbols = Stock::query()
+            ->where('market', $market)
+            ->where('is_active', true)
+            ->pluck('id', 'symbol');
+        $seenSymbols = collect();
+        $quoteDates = collect();
+        $invalidOhlcSymbols = collect();
+        $imported = 0;
+        $skippedInvalid = 0;
 
         foreach ($rows as $row) {
-            $symbol = trim((string) ($row['SecuritiesCompanyCode'] ?? ''));
-            $stock = Stock::query()->where('symbol', $symbol)->first();
+            $symbol = $symbolResolver($row);
 
-            if (! $stock) {
+            if (! $this->isCommonStockSymbol($symbol) || ! $activeSymbols->has($symbol)) {
                 continue;
             }
 
+            $values = $valuesResolver($row);
+
+            if ($values['open'] === null || $values['high'] === null || $values['low'] === null || $values['close'] === null) {
+                $invalidOhlcSymbols->push($symbol);
+                $skippedInvalid++;
+                continue;
+            }
+
+            $tradeDate = $dateResolver($row);
+            $seenSymbols->push($symbol);
+            $quoteDates->push($tradeDate->toDateString());
+
             StockPrice1d::query()->updateOrCreate(
                 [
-                    'stock_id' => $stock->id,
-                    'trade_date' => $this->parseRocDate((string) ($row['Date'] ?? '')),
+                    'stock_id' => $activeSymbols[$symbol],
+                    'trade_date' => $tradeDate,
                 ],
-                [
-                    'open' => $this->decimal($row['Open'] ?? null),
-                    'high' => $this->decimal($row['High'] ?? null),
-                    'low' => $this->decimal($row['Low'] ?? null),
-                    'close' => $this->decimal($row['Close'] ?? null),
-                    'change' => $this->decimal($row['Change'] ?? null),
-                    'change_pct' => null,
-                    'volume' => $this->integer($row['TradingShares'] ?? null),
-                    'turnover' => $this->integer($row['TransactionAmount'] ?? null),
-                ],
+                $values,
             );
 
-            $count++;
+            $imported++;
         }
 
-        $this->line('TPEx daily quotes imported: '.$count);
+        $missingActive = $activeSymbols->keys()->diff($seenSymbols->unique())->values();
+        $latestDate = $quoteDates->count() > 0 ? $quoteDates->max() : null;
+
+        $this->logFeedCoverage($source, $market, $latestDate, $imported, $skippedInvalid, $missingActive, $invalidOhlcSymbols);
+
+        return [
+            'imported' => $imported,
+            'skipped_invalid' => $skippedInvalid,
+            'missing_active' => $missingActive->count(),
+        ];
+    }
+
+    private function logFeedCoverage(string $source, string $market, ?string $latestDate, int $imported, int $skippedInvalid, Collection $missingActive, Collection $invalidOhlcSymbols): void
+    {
+        SystemLog::query()->create([
+            'level' => $missingActive->isEmpty() && $skippedInvalid === 0 ? 'info' : 'warning',
+            'source' => 'market_data_feed',
+            'message' => sprintf('%s %s daily quote coverage: %d imported', $market, $latestDate ?? '-', $imported),
+            'context' => [
+                'source' => $source,
+                'market' => $market,
+                'date' => $latestDate,
+                'imported' => $imported,
+                'skipped_invalid_ohlc' => $skippedInvalid,
+                'invalid_ohlc_symbols' => $invalidOhlcSymbols->unique()->take(30)->values()->all(),
+                'missing_active_count' => $missingActive->count(),
+                'missing_active_symbols' => $missingActive->take(30)->values()->all(),
+                'first_seen_key' => $source.':'.$market.':'.$latestDate,
+            ],
+        ]);
+
+        if ($latestDate !== null) {
+            $firstSeenKey = $source.':'.$market.':'.$latestDate;
+            $exists = DB::table('system_logs')
+                ->where('source', 'market_data_first_seen')
+                ->where('message', $firstSeenKey)
+                ->exists();
+
+            if (! $exists) {
+                DB::table('system_logs')->insert([
+                    'level' => 'info',
+                    'source' => 'market_data_first_seen',
+                    'message' => $firstSeenKey,
+                    'context' => json_encode([
+                        'source' => $source,
+                        'market' => $market,
+                        'date' => $latestDate,
+                        'imported' => $imported,
+                    ], JSON_UNESCAPED_UNICODE),
+                    'created_at' => now(),
+                    'updated_at' => now(),
+                ]);
+            }
+        }
+    }
+
+    private function importTpexDailyQuotes(): void
+    {
+        $rows = $this->fetchJson(self::TPEX_DAILY_QUOTES_URL);
+        $result = $this->upsertDailyQuoteRows(
+            rows: collect($rows),
+            market: 'TPEx',
+            source: 'tpex_openapi',
+            symbolResolver: fn (array $row): string => trim((string) ($row['SecuritiesCompanyCode'] ?? '')),
+            dateResolver: fn (array $row): CarbonImmutable => $this->parseRocDate((string) ($row['Date'] ?? '')),
+            valuesResolver: fn (array $row): array => [
+                'open' => $this->decimal($row['Open'] ?? null),
+                'high' => $this->decimal($row['High'] ?? null),
+                'low' => $this->decimal($row['Low'] ?? null),
+                'close' => $this->decimal($row['Close'] ?? null),
+                'change' => $this->decimal($row['Change'] ?? null),
+                'change_pct' => null,
+                'volume' => $this->integer($row['TradingShares'] ?? null),
+                'turnover' => $this->integer($row['TransactionAmount'] ?? null),
+            ],
+        );
+
+        $this->line(sprintf(
+            'TPEx daily quotes imported: %d; skipped invalid: %d; missing active: %d',
+            $result['imported'],
+            $result['skipped_invalid'],
+            $result['missing_active'],
+        ));
     }
 
     private function fetchJson(string $url): array

@@ -28,6 +28,11 @@ class MarketDataStatus extends Command
             ->orderByDesc('started_at')
             ->limit(20)
             ->get(['job_name', 'status', 'started_at', 'finished_at']);
+        $recentFeedLogs = DB::table('system_logs')
+            ->where('source', 'market_data_feed')
+            ->orderByDesc('id')
+            ->limit(4)
+            ->get(['message', 'context', 'created_at']);
         $latestRowsByMarket = $latestDate
             ? DB::table('stock_prices_1d')
                 ->join('stocks', 'stocks.id', '=', 'stock_prices_1d.stock_id')
@@ -45,6 +50,22 @@ class MarketDataStatus extends Command
         $this->line('Price date range: '.($dateRange->min_date ?? '-').' -> '.($dateRange->max_date ?? '-'));
         $this->line('Latest price date rows: '.$latestDate.' / '.$latestPriceRows);
         $this->line('Latest rows by market: '.$latestRowsByMarket->map(fn ($count, $market) => $market.'='.$count)->implode(', '));
+
+        if ($recentFeedLogs->isNotEmpty()) {
+            $this->newLine();
+            $this->line('Recent feed coverage:');
+            foreach ($recentFeedLogs as $log) {
+                $context = json_decode((string) $log->context, true) ?: [];
+                $this->line(sprintf(
+                    '- %s at %s | missing=%d invalid_ohlc=%d sample=%s',
+                    $log->message,
+                    $log->created_at,
+                    (int) ($context['missing_active_count'] ?? 0),
+                    (int) ($context['skipped_invalid_ohlc'] ?? 0),
+                    implode(',', array_slice(array_merge($context['missing_active_symbols'] ?? [], $context['invalid_ohlc_symbols'] ?? []), 0, 12)),
+                ));
+            }
+        }
 
         if ($recentJobs->isNotEmpty()) {
             $this->newLine();
