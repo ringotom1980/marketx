@@ -1,0 +1,1 @@
+* * * * * cd /home/ringo/apps/marketx && php artisan schedule:run >> /dev/null 2>&1
