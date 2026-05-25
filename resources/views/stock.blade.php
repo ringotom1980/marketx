@@ -10,8 +10,10 @@
         };
     };
 
-    $decisionTone = str_contains($stock['decision'], '買') ? 'red'
-        : (str_contains($stock['decision'], '賣') || str_contains($stock['decision'], '減') ? 'green' : 'amber');
+    $decisionTone = $stock['decisionTone'] ?? (
+        str_contains($stock['decision'], '買') ? 'red'
+        : (str_contains($stock['decision'], '賣') || str_contains($stock['decision'], '減') ? 'green' : 'amber')
+    );
 @endphp
 
 @section('content')

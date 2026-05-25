@@ -988,6 +988,46 @@ Route::get('/s/{symbol}', function (string $symbol, StockEventChainBuilder $even
         ->orderByDesc('report_date')
         ->first();
 
+    $confidencePayload = $latestScore?->confidence_payload ?? [];
+    if (is_string($confidencePayload)) {
+        $confidencePayload = json_decode($confidencePayload, true) ?: [];
+    }
+    $confidencePayload = is_array($confidencePayload) ? $confidencePayload : [];
+    $confidence = (int) ($confidencePayload['opportunity_confidence'] ?? $latestScore?->confidence_score ?? 0);
+    $bullReasons = array_values(array_filter((array) data_get($confidencePayload, 'reasons.bull', [])));
+    $bearReasons = array_values(array_filter((array) data_get($confidencePayload, 'reasons.bear', [])));
+    $riskReasons = array_values(array_filter((array) data_get($confidencePayload, 'reasons.risk', [])));
+    $hasRisk = count($riskReasons) > 0;
+
+    $evaluation = match (true) {
+        $confidence >= 78 && ! $hasRisk => ['label' => '高度觀察', 'tone' => 'red'],
+        $confidence >= 68 && $hasRisk => ['label' => '偏多但風險升高', 'tone' => 'amber'],
+        $confidence >= 68 => ['label' => '偏多觀察', 'tone' => 'red'],
+        $confidence >= 55 => ['label' => '中性觀察', 'tone' => 'amber'],
+        $confidence >= 40 => ['label' => '保守觀察', 'tone' => 'amber'],
+        default => ['label' => '弱勢觀察', 'tone' => 'green'],
+    };
+
+    $supportText = $bullReasons === []
+        ? '目前多方支撐條件不足'
+        : implode('、', array_slice($bullReasons, 0, 4));
+    $riskText = array_merge($riskReasons, $bearReasons) === []
+        ? '目前沒有明顯風險旗標，但仍需留意盤勢變化'
+        : implode('、', array_slice(array_values(array_unique(array_merge($riskReasons, $bearReasons))), 0, 4));
+    $interpretation = match ($evaluation['label']) {
+        '高度觀察' => '多數核心條件偏正向，但仍不代表保證上漲，適合列入優先觀察。',
+        '偏多觀察' => '整體條件偏正向，但仍要確認量價與籌碼是否延續。',
+        '偏多但風險升高' => '雖然仍有多方條件，但風險旗標已出現，追價要更保守。',
+        '中性觀察' => '多空條件尚未明顯傾斜，適合等待更清楚的量價或籌碼訊號。',
+        '保守觀察' => '看多信心偏低，除非後續出現明確轉強訊號，否則不宜積極追價。',
+        default => '目前弱勢或扣分條件較多，應優先控管風險。',
+    };
+    $stockEvaluationSummary = "目前看多信心為 {$confidence}%，狀態為「{$evaluation['label']}」。\n"
+        .'系統以技術 35%、籌碼 25%、財務 25%、題材 15% 加權計算。'
+        ."\n主要支撐：{$supportText}。"
+        ."\n主要風險：{$riskText}。"
+        ."\n解讀：{$interpretation}";
+
     return view('stock', [
         'stock' => [
             'symbol' => $stockRecord->symbol,
@@ -996,9 +1036,10 @@ Route::get('/s/{symbol}', function (string $symbol, StockEventChainBuilder $even
             'close' => $latestPrice?->close ?? '無資料',
             'change' => $latestPrice?->change ?? '無資料',
             'volume' => $latestPrice?->volume ? number_format($latestPrice->volume) : '無資料',
-            'decision' => $latestScore?->decision ?? '等待計算',
+            'decision' => $evaluation['label'],
+            'decisionTone' => $evaluation['tone'],
             'score' => $latestScore?->total_score ?? $latestScore?->technical_score ?? 0,
-            'confidence' => $latestScore?->confidence_score ?? 0,
+            'confidence' => $confidence,
             'isWatched' => $isWatched,
         ],
         'modules' => collect([
@@ -1023,8 +1064,7 @@ Route::get('/s/{symbol}', function (string $symbol, StockEventChainBuilder $even
         'stockThemes' => $stockThemes,
         'fundamentalSignals' => $fundamentalSignals,
         'eventChains' => $eventChains,
-        'summary' => $latestReport?->summary
-            ?: '目前先使用免費規則式中文解釋引擎，依技術、籌碼、財務與題材分數整理風險摘要。AI 介面已預留，之後可接 OpenAI 或其他模型。',
+        'summary' => $stockEvaluationSummary,
     ]);
 });
 
