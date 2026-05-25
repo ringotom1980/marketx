@@ -222,57 +222,30 @@
             </table>
         </div>
 
-        <div class="panel">
-            <h2>今日優先觀察</h2>
-            <div class="stock-signal-list">
-                @forelse ($topStocks as $stock)
-                    <div class="stock-signal-item">
-                        <div class="stock-signal-top">
-                            <a class="stock-signal-name" href="/s/{{ $stock['symbol'] }}">{{ $stock['name'] }}</a>
-                            <div class="stock-signal-confidence">信心指數{{ $stock['confidence'] }}%</div>
+        @foreach ($stockRadarCards as $card)
+            <div class="panel">
+                <h2>今日{{ $card['title'] }}</h2>
+                <div class="stock-signal-list">
+                    @forelse ($card['items'] as $stock)
+                        <div class="stock-signal-item">
+                            <div class="stock-signal-top">
+                                <a class="stock-signal-name" href="/s/{{ $stock['symbol'] }}">{{ $stock['name'] }}</a>
+                                <div class="stock-signal-confidence">信心指數{{ $stock['confidence'] }}%</div>
+                            </div>
+                            <div class="reason-pills">
+                                @foreach ($stock['reasons'] as $reason)
+                                    <span class="reason-pill {{ $reason['tone'] === 'warning' ? 'warning' : ($reason['tone'] === 'down' ? 'down' : '') }}">
+                                        {{ $reason['label'] }}
+                                    </span>
+                                @endforeach
+                            </div>
                         </div>
-                        <div class="reason-pills">
-                            @foreach ($stock['reasons'] as $reason)
-                                <span class="reason-pill">{{ $reason }}</span>
-                            @endforeach
-                        </div>
-                    </div>
-                @empty
-                    <p class="lead">尚未產生觀察名單</p>
-                @endforelse
+                    @empty
+                        <p class="lead">{{ $card['empty'] }}</p>
+                    @endforelse
+                </div>
             </div>
-        </div>
-
-        <div class="panel">
-            <h2>今日風險升高</h2>
-            <div class="stock-signal-list">
-                @forelse ($riskStocks as $stock)
-                    <div class="stock-signal-item">
-                        <div class="stock-signal-top">
-                            <a class="stock-signal-name" href="/s/{{ $stock['symbol'] }}">{{ $stock['name'] }}</a>
-                            <div class="stock-signal-confidence">信心指數{{ $stock['confidence'] }}%</div>
-                        </div>
-                        <div class="reason-pills">
-                            @foreach ($stock['risks'] as $risk)
-                                @php
-                                    $riskTone = str_contains($risk, '跌')
-                                        || str_contains($risk, '轉弱')
-                                        || str_contains($risk, '偏弱')
-                                        || str_contains($risk, '偏空')
-                                        || str_contains($risk, '爆量')
-                                        || str_contains($risk, '賣')
-                                            ? 'down'
-                                            : 'warning';
-                                @endphp
-                                <span class="reason-pill {{ $riskTone }}">{{ $risk }}</span>
-                            @endforeach
-                        </div>
-                    </div>
-                @empty
-                    <p class="lead">目前沒有明顯風險升高名單</p>
-                @endforelse
-            </div>
-        </div>
+        @endforeach
     </section>
 
     <script>

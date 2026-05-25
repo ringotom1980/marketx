@@ -273,95 +273,271 @@ Route::get('/', function () {
         ]);
     }
 
-    $priorityReasons = function (object $stock): array {
+    $payloadFor = function (object $stock): array {
         $payload = is_array($stock->technical_payload)
             ? $stock->technical_payload
             : (json_decode((string) $stock->technical_payload, true) ?: []);
 
-        $technicalSignals = collect($payload['signals'] ?? [])
-            ->filter(fn ($signal) => ($signal['tone'] ?? null) === 'green')
+        return is_array($payload) ? $payload : [];
+    };
+
+    $signalsFor = function (object $stock, array $tones = [] ) use ($payloadFor): \Illuminate\Support\Collection {
+        return collect($payloadFor($stock)['signals'] ?? [])
+            ->filter(fn ($signal) => empty($tones) || in_array($signal['tone'] ?? null, $tones, true))
             ->pluck('title')
             ->map(fn ($title) => (string) $title)
             ->filter()
             ->values();
+    };
+
+    $reason = fn (string $label, string $tone = 'up') => ['label' => $label, 'tone' => $tone];
+
+    $hasSignal = fn (\Illuminate\Support\Collection $signals, string $title): bool => $signals->contains($title);
+
+    $bais20 = function (object $stock) use ($payloadFor): ?float {
+        $payload = $payloadFor($stock);
+        $close = (float) ($stock->close ?? 0);
+        $sma20 = isset($payload['sma20']) ? (float) $payload['sma20'] : 0.0;
+
+        return $close > 0 && $sma20 > 0 ? (($close / $sma20) - 1) * 100 : null;
+    };
+
+    $priorityReasons = function (object $stock) use ($signalsFor, $reason, $hasSignal, $bais20): array {
+        $technicalSignals = $signalsFor($stock, ['green']);
+
+        $bais = $bais20($stock);
 
         $reasons = collect();
 
         foreach (['MACD 黃金交叉', 'KD 黃金交叉', '20 日突破', '價漲量增', '均線多頭排列', 'MACD 翻正', '突破布林上緣', 'RSI 強勢區'] as $preferred) {
-            if ($technicalSignals->contains($preferred)) {
-                $reasons->push($preferred);
+            if ($hasSignal($technicalSignals, $preferred)) {
+                $reasons->push($reason($preferred));
             }
         }
 
+        if ($bais !== null && abs($bais) <= 10) {
+            $reasons->push($reason('乖離正常'));
+        }
+
         if ((int) ($stock->chip_score ?? 0) >= 78) {
-            $reasons->push('籌碼集中');
+            $reasons->push($reason('籌碼集中'));
         }
 
         if ((int) ($stock->theme_score ?? 0) >= 76) {
-            $reasons->push('題材升溫');
+            $reasons->push($reason('題材升溫'));
         }
 
-        if ((int) ($stock->fundamental_score ?? 0) >= 76) {
-            $reasons->push('財務穩健');
+        if ((float) ($stock->yoy_pct ?? 0) > 10 || (float) ($stock->mom_pct ?? 0) > 5) {
+            $reasons->push($reason('營收轉強'));
         }
 
-        if ((int) ($stock->event_score ?? 0) >= 76) {
-            $reasons->push('事件支撐');
-        }
-
-        if ((int) ($stock->macro_score ?? 0) >= 76) {
-            $reasons->push('大環境偏多');
+        if ((float) ($stock->per ?? 0) > 0 && (float) $stock->per <= 25) {
+            $reasons->push($reason('評價合理'));
         }
 
         return $reasons
-            ->unique()
+            ->unique('label')
             ->take(3)
             ->values()
             ->all();
     };
 
-    $topStocks = Stock::query()
+    $riskReasons = function (object $stock) use ($signalsFor, $reason, $hasSignal, $bais20): array {
+        $technicalSignals = $signalsFor($stock, ['red', 'amber'])
+            ->reject(fn ($title) => in_array($title, ['MACD 負數縮減'], true))
+            ->values();
+        $bais = $bais20($stock);
+        $reasons = collect();
+
+        foreach (['MACD 死亡交叉', 'KD 死亡交叉', 'MACD 正數縮小', '跌破月線', '跌破布林下緣', '高檔放量轉弱', '20 日動能弱', 'RSI 弱勢'] as $preferred) {
+            if ($hasSignal($technicalSignals, $preferred)) {
+                $reasons->push($reason($preferred, str_contains($preferred, '過熱') || str_contains($preferred, '量能') ? 'warning' : 'down'));
+            }
+        }
+
+        if ($bais !== null && $bais >= 14) {
+            $reasons->push($reason('乖離過大', 'warning'));
+        }
+
+        if ((float) ($stock->per ?? 0) > 40 && (float) ($stock->yoy_pct ?? 0) < 10) {
+            $reasons->push($reason('評價偏高', 'warning'));
+        }
+
+        if ((float) ($stock->volume_ratio20 ?? 0) >= 1.5 && (float) ($stock->change_pct ?? 0) <= 0) {
+            $reasons->push($reason('爆量轉弱', 'down'));
+        }
+
+        if ((float) ($stock->margin_balance ?? 0) > 0 && (float) ($stock->volume ?? 0) > 0 && ((float) $stock->margin_balance / max(1, (float) $stock->volume)) >= 5) {
+            $reasons->push($reason('融資偏重', 'warning'));
+        }
+
+        return $reasons
+            ->merge($technicalSignals->map(fn ($signal) => $reason($signal, str_contains($signal, '過熱') || str_contains($signal, '量能') ? 'warning' : 'down')))
+            ->unique('label')
+            ->take(3)
+            ->values()
+            ->all();
+    };
+
+    $potentialReasons = function (object $stock) use ($signalsFor, $reason, $hasSignal, $bais20): array {
+        $technicalSignals = $signalsFor($stock, ['green', 'amber']);
+        $bais = $bais20($stock);
+        $reasons = collect();
+
+        if ((int) ($stock->theme_score ?? 0) >= 50 && (int) ($stock->theme_score ?? 0) < 76) {
+            $reasons->push($reason('題材初升溫', 'warning'));
+        }
+
+        if ($bais !== null && $bais >= -6 && $bais <= 8) {
+            $reasons->push($reason('低乖離', 'warning'));
+        }
+
+        if ((float) ($stock->volume_ratio20 ?? 0) >= 1.15 && (float) ($stock->volume_ratio20 ?? 0) < 1.8) {
+            $reasons->push($reason('量能轉強', 'warning'));
+        }
+
+        if ((float) ($stock->per ?? 0) > 0 && (float) $stock->per <= 25) {
+            $reasons->push($reason('評價合理', 'warning'));
+        }
+
+        if ((float) ($stock->yoy_pct ?? 0) > 0 || (float) ($stock->mom_pct ?? 0) > 0) {
+            $reasons->push($reason('營收改善', 'warning'));
+        }
+
+        foreach (['MACD 負數縮減', '量能不足'] as $watch) {
+            if ($hasSignal($technicalSignals, $watch)) {
+                $reasons->push($reason($watch, 'warning'));
+            }
+        }
+
+        return $reasons->unique('label')->take(3)->values()->all();
+    };
+
+    $lowVolumeReasons = function (object $stock) use ($signalsFor, $reason, $hasSignal): array {
+        $technicalSignals = $signalsFor($stock);
+        $reasons = collect();
+
+        if ((float) ($stock->return20 ?? 0) <= -5) {
+            $reasons->push($reason('低檔區', 'warning'));
+        }
+
+        if ((float) ($stock->volume_ratio20 ?? 0) >= 1.5) {
+            $reasons->push($reason('低檔爆量', 'warning'));
+        }
+
+        if ((float) ($stock->change_pct ?? 0) >= 0) {
+            $reasons->push($reason('跌深止穩', 'warning'));
+        }
+
+        if ((int) ($stock->chip_score ?? 0) >= 60) {
+            $reasons->push($reason('籌碼承接', 'warning'));
+        }
+
+        foreach (['MACD 負數縮減', 'KD 黃金交叉'] as $watch) {
+            if ($hasSignal($technicalSignals, $watch)) {
+                $reasons->push($reason($watch, $watch === 'KD 黃金交叉' ? 'up' : 'warning'));
+            }
+        }
+
+        return $reasons->unique('label')->take(3)->values()->all();
+    };
+
+    $weakReasons = function (object $stock) use ($signalsFor, $reason, $hasSignal): array {
+        $technicalSignals = $signalsFor($stock, ['red', 'amber']);
+        $reasons = collect();
+
+        foreach (['跌破月線', 'MACD 死亡交叉', 'KD 死亡交叉', '20 日動能弱', 'RSI 弱勢', 'EMA 動能偏弱', '月線低於季線'] as $preferred) {
+            if ($hasSignal($technicalSignals, $preferred)) {
+                $reasons->push($reason($preferred, 'down'));
+            }
+        }
+
+        if ((int) ($stock->theme_score ?? 0) < 45) {
+            $reasons->push($reason('題材退燒', 'down'));
+        }
+
+        if ((float) ($stock->yoy_pct ?? 0) < -10 || (float) ($stock->mom_pct ?? 0) < -10) {
+            $reasons->push($reason('營收衰退', 'down'));
+        }
+
+        if ((int) ($stock->chip_score ?? 100) < 45) {
+            $reasons->push($reason('籌碼偏弱', 'down'));
+        }
+
+        return $reasons->unique('label')->take(3)->values()->all();
+    };
+
+    $stockCandidates = Stock::query()
         ->join('stock_scores', function ($join) {
             $join->on('stocks.id', '=', 'stock_scores.stock_id')
                 ->whereRaw('stock_scores.score_date = (select max(ss.score_date) from stock_scores ss where ss.stock_id = stocks.id)');
+        })
+        ->leftJoin('stock_prices_1d', function ($join) {
+            $join->on('stocks.id', '=', 'stock_prices_1d.stock_id')
+                ->whereRaw('stock_prices_1d.trade_date = (select max(sp.trade_date) from stock_prices_1d sp where sp.stock_id = stocks.id)');
+        })
+        ->leftJoin('stock_chips_1d', function ($join) {
+            $join->on('stocks.id', '=', 'stock_chips_1d.stock_id')
+                ->whereRaw('stock_chips_1d.trade_date = (select max(sc.trade_date) from stock_chips_1d sc where sc.stock_id = stocks.id)');
+        })
+        ->leftJoin('stock_financials', function ($join) {
+            $join->on('stocks.id', '=', 'stock_financials.stock_id')
+                ->whereRaw('stock_financials.period = (select max(sf.period) from stock_financials sf where sf.stock_id = stocks.id)');
+        })
+        ->leftJoin('stock_revenues', function ($join) {
+            $join->on('stocks.id', '=', 'stock_revenues.stock_id')
+                ->whereRaw('stock_revenues.year_month = (select max(sr.year_month) from stock_revenues sr where sr.stock_id = stocks.id)');
         })
         ->select(
             'stocks.symbol',
             'stocks.name',
             'stock_scores.total_score',
             'stock_scores.confidence_score',
-            'stock_scores.macro_score',
-            'stock_scores.event_score',
             'stock_scores.theme_score',
             'stock_scores.technical_score',
             'stock_scores.chip_score',
             'stock_scores.fundamental_score',
-            'stock_scores.technical_payload'
+            'stock_scores.technical_payload',
+            'stock_prices_1d.close',
+            'stock_prices_1d.change_pct',
+            'stock_prices_1d.volume',
+            'stock_chips_1d.margin_balance',
+            'stock_chips_1d.short_balance',
+            'stock_financials.per',
+            'stock_revenues.mom_pct',
+            'stock_revenues.yoy_pct'
         )
         ->whereNotNull('stock_scores.total_score')
-        ->where('stock_scores.total_score', '>=', 55)
-        ->where('stock_scores.confidence_score', '>=', 65)
         ->where('stock_scores.technical_score', '>', 0)
-        ->where('stock_scores.chip_score', '>', 0)
-        ->where('stock_scores.fundamental_score', '>', 0)
-        ->where('stock_scores.theme_score', '>', 0)
         ->orderByDesc('stock_scores.confidence_score')
         ->orderByDesc('stock_scores.total_score')
         ->orderBy('stocks.symbol')
-        ->limit(20)
+        ->limit(180)
         ->get()
-        ->map(function ($stock) use ($priorityReasons) {
-            return [
-                'symbol' => $stock->symbol,
-                'name' => $stock->name,
-                'score' => (int) ($stock->total_score ?? 0),
-                'confidence' => (int) ($stock->confidence_score ?? 0),
-                'reasons' => $priorityReasons($stock),
-            ];
-        })
-        ->filter(fn ($stock) => count($stock['reasons']) > 0)
+        ->map(function ($stock) use ($payloadFor) {
+            $payload = $payloadFor($stock);
+            $stock->return20 = (float) ($payload['return20'] ?? 0);
+            $stock->volume_ratio20 = (float) ($payload['volume_ratio20'] ?? 0);
+
+            return $stock;
+        });
+
+    $stockCardItem = fn (object $stock, array $reasons): array => [
+        'symbol' => $stock->symbol,
+        'name' => $stock->name,
+        'confidence' => (int) ($stock->confidence_score ?? 0),
+        'reasons' => $reasons,
+    ];
+
+    $topStocks = $stockCandidates
+        ->filter(fn ($stock) => (int) ($stock->confidence_score ?? 0) >= 65
+            && (int) ($stock->total_score ?? 0) >= 58
+            && ($bais20($stock) === null || abs($bais20($stock)) <= 12)
+            && $priorityReasons($stock) !== [])
+        ->map(fn ($stock) => $stockCardItem($stock, $priorityReasons($stock)))
         ->take(6)
         ->values();
+    $usedSymbols = $topStocks->pluck('symbol')->all();
 
     $events = DB::table('global_event_clusters')
         ->orderByDesc('cluster_date')
@@ -406,122 +582,53 @@ Route::get('/', function () {
             'score' => (int) ($theme->heat_score ?? 0),
         ]);
 
-    $riskReasons = function (array $flags, object $stock): array {
-        $labels = [
-            'below_sma20' => '跌破月線',
-            'sma20_below_sma60' => '月線低於季線',
-            'ema_momentum_weak' => '短線動能轉弱',
-            'negative_20d_momentum' => '近 20 日轉弱',
-            'high_volume_down' => '爆量下跌',
-            'high_volatility' => '波動放大',
-            'rsi_overheated' => 'RSI 過熱',
-            'rsi_weak' => 'RSI 偏弱',
-            'macd_bearish' => 'MACD 偏空',
-            'kd_weak' => 'KD 偏弱',
-            'kd_overheated' => 'KD 高檔過熱',
-            'below_bollinger_lower' => '跌破布林下緣',
-            'atr_expanded' => 'ATR 風險擴大',
-        ];
-        $weights = [
-            'high_volume_down' => 100,
-            'below_bollinger_lower' => 95,
-            'macd_bearish' => 90,
-            'rsi_weak' => 86,
-            'kd_weak' => 82,
-            'negative_20d_momentum' => 78,
-            'ema_momentum_weak' => 74,
-            'below_sma20' => 70,
-            'sma20_below_sma60' => 66,
-            'atr_expanded' => 62,
-            'high_volatility' => 58,
-            'rsi_overheated' => 54,
-            'kd_overheated' => 50,
-        ];
-
-        $payload = is_array($stock->technical_payload)
-            ? $stock->technical_payload
-            : (json_decode((string) $stock->technical_payload, true) ?: []);
-
-        $technicalSignals = collect($payload['signals'] ?? [])
-            ->filter(fn ($signal) => in_array($signal['tone'] ?? null, ['red', 'amber'], true))
-            ->pluck('title')
-            ->map(fn ($title) => (string) $title)
-            ->reject(fn ($title) => in_array($title, ['MACD 負數縮減'], true))
-            ->filter()
-            ->values();
-
-        $preferred = collect([
-            'MACD 死亡交叉',
-            'KD 死亡交叉',
-            'MACD 正數縮小',
-            '跌破月線',
-            '跌破布林下緣',
-            '高檔放量轉弱',
-            '20 日動能弱',
-            'RSI 弱勢',
-            'EMA 動能偏弱',
-            '月線低於季線',
-            'KD 偏弱',
-            'KD 過熱',
-            'RSI 過熱',
-            '量能不足',
-            '波動擴大',
-            '20 日波動偏高',
-        ])->filter(fn ($title) => $technicalSignals->contains($title));
-
-        $flagRisks = collect($flags)
-            ->unique()
-            ->sortByDesc(fn ($flag) => $weights[$flag] ?? 0)
-            ->map(fn ($flag) => $labels[$flag] ?? $flag);
-
-        return $preferred
-            ->merge($technicalSignals)
-            ->merge($flagRisks)
-            ->unique()
-            ->take(3)
-            ->values()
-            ->all();
-    };
-
-    $riskStocks = Stock::query()
-        ->join('stock_scores', function ($join) {
-            $join->on('stocks.id', '=', 'stock_scores.stock_id')
-                ->whereRaw('stock_scores.score_date = (select max(ss.score_date) from stock_scores ss where ss.stock_id = stocks.id)');
-        })
-        ->select(
-            'stocks.symbol',
-            'stocks.name',
-            'stock_scores.risk_flags',
-            'stock_scores.total_score',
-            'stock_scores.confidence_score',
-            'stock_scores.technical_score',
-            'stock_scores.chip_score',
-            'stock_scores.fundamental_score',
-            'stock_scores.technical_payload',
-            DB::raw('json_array_length(stock_scores.risk_flags) as risk_count')
-        )
-        ->whereNotNull('stock_scores.risk_flags')
-        ->whereRaw("stock_scores.risk_flags::text <> '[]'")
-        ->orderByDesc('stock_scores.confidence_score')
-        ->orderByDesc('risk_count')
-        ->orderBy('stock_scores.total_score')
-        ->limit(12)
-        ->get()
-        ->map(function ($stock) use ($riskReasons) {
-            $flags = is_array($stock->risk_flags)
-                ? $stock->risk_flags
-                : (json_decode((string) $stock->risk_flags, true) ?: []);
-
-            return [
-                'symbol' => $stock->symbol,
-                'name' => $stock->name,
-                'risks' => $riskReasons($flags, $stock),
-                'confidence' => (int) ($stock->confidence_score ?? 0),
-            ];
-        })
-        ->filter(fn ($stock) => count($stock['risks']) > 0)
+    $riskStocks = $stockCandidates
+        ->reject(fn ($stock) => in_array($stock->symbol, $usedSymbols, true))
+        ->filter(fn ($stock) => (int) ($stock->confidence_score ?? 0) >= 55
+            && ((int) ($stock->theme_score ?? 0) >= 55 || (int) ($stock->technical_score ?? 0) >= 45)
+            && $riskReasons($stock) !== [])
+        ->map(fn ($stock) => $stockCardItem($stock, $riskReasons($stock)))
         ->take(6)
         ->values();
+    $usedSymbols = array_merge($usedSymbols, $riskStocks->pluck('symbol')->all());
+
+    $potentialStocks = $stockCandidates
+        ->reject(fn ($stock) => in_array($stock->symbol, $usedSymbols, true))
+        ->filter(fn ($stock) => (int) ($stock->confidence_score ?? 0) >= 50
+            && (int) ($stock->total_score ?? 0) >= 48
+            && $potentialReasons($stock) !== [])
+        ->map(fn ($stock) => $stockCardItem($stock, $potentialReasons($stock)))
+        ->take(6)
+        ->values();
+    $usedSymbols = array_merge($usedSymbols, $potentialStocks->pluck('symbol')->all());
+
+    $lowVolumeStocks = $stockCandidates
+        ->reject(fn ($stock) => in_array($stock->symbol, $usedSymbols, true))
+        ->filter(fn ($stock) => (float) ($stock->return20 ?? 0) <= -5
+            && (float) ($stock->volume_ratio20 ?? 0) >= 1.35
+            && $lowVolumeReasons($stock) !== [])
+        ->sortByDesc(fn ($stock) => (float) ($stock->volume_ratio20 ?? 0))
+        ->map(fn ($stock) => $stockCardItem($stock, $lowVolumeReasons($stock)))
+        ->take(6)
+        ->values();
+    $usedSymbols = array_merge($usedSymbols, $lowVolumeStocks->pluck('symbol')->all());
+
+    $weakStocks = $stockCandidates
+        ->reject(fn ($stock) => in_array($stock->symbol, $usedSymbols, true))
+        ->filter(fn ($stock) => ((int) ($stock->technical_score ?? 0) < 48 || (float) ($stock->return20 ?? 0) <= -8)
+            && $weakReasons($stock) !== [])
+        ->sortBy(fn ($stock) => (int) ($stock->confidence_score ?? 0))
+        ->map(fn ($stock) => $stockCardItem($stock, $weakReasons($stock)))
+        ->take(6)
+        ->values();
+
+    $stockRadarCards = collect([
+        ['title' => '優先觀察', 'empty' => '尚未產生觀察名單', 'items' => $topStocks],
+        ['title' => '風險升高', 'empty' => '目前沒有明顯風險升高名單', 'items' => $riskStocks],
+        ['title' => '潛力觀察', 'empty' => '尚未找到潛力觀察名單', 'items' => $potentialStocks],
+        ['title' => '低檔爆量', 'empty' => '目前沒有明顯低檔爆量名單', 'items' => $lowVolumeStocks],
+        ['title' => '持續弱勢', 'empty' => '目前沒有明顯持續弱勢名單', 'items' => $weakStocks],
+    ]);
 
     return view('home', [
         'markets' => $markets,
@@ -529,6 +636,7 @@ Route::get('/', function () {
         'themes' => $themes,
         'topStocks' => $topStocks,
         'riskStocks' => $riskStocks,
+        'stockRadarCards' => $stockRadarCards,
         'marketCharts' => $marketCharts,
     ]);
 });
