@@ -28,34 +28,49 @@ Route::get('/login', function () {
 
 Route::post('/login', function (Request $request) {
     $request->validate([
-        'email' => ['nullable', 'email'],
+        'email' => ['required', 'email'],
         'password' => ['required', 'string'],
-        'admin_login' => ['nullable', 'boolean'],
     ]);
 
-    if ($request->boolean('admin_login') || ! $request->filled('email')) {
-        $hash = config('services.marketx.admin_password_hash');
+    $email = $request->string('email')->lower()->toString();
+    $password = $request->string('password')->toString();
+    $adminEmail = strtolower((string) config('services.marketx.admin_email', 'admin@marketx.local'));
+    $hash = config('services.marketx.admin_password_hash');
 
-        if (! $hash || ! Hash::check($request->string('password')->toString(), $hash)) {
-            return back()
-                ->withErrors(['password' => '管理員密碼錯誤'])
-                ->onlyInput();
+    if ($email === $adminEmail && $hash && Hash::check($password, $hash)) {
+        $user = User::query()->firstOrCreate(
+            ['email' => $adminEmail],
+            [
+                'name' => '管理者',
+                'password' => $password,
+                'is_admin' => true,
+            ]
+        );
+
+        if (! $user->is_admin || ! Hash::check($password, $user->password)) {
+            $user->forceFill([
+                'password' => $password,
+                'is_admin' => true,
+            ])->save();
         }
-
-        $request->session()->regenerate();
-        $request->session()->put('marketx_admin', true);
-        $request->session()->put('marketx_user_name', '管理者');
-        $request->session()->put('marketx_is_admin', true);
-        DB::table('sessions')
-            ->where('id', $request->session()->getId())
-            ->update(['user_id' => null]);
-
-        return redirect()->intended('/');
+    } else {
+        $user = User::query()->where('email', $email)->first();
     }
 
-    $user = User::query()->where('email', $request->string('email')->lower()->toString())->first();
+    if (! $user || ! Hash::check($password, $user->password)) {
+        DB::table('system_logs')->insert([
+            'level' => 'warning',
+            'source' => 'auth',
+            'message' => '登入失敗',
+            'context' => [
+                'email' => $email,
+                'ip' => $request->ip(),
+                'user_agent' => $request->userAgent(),
+            ],
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
 
-    if (! $user || ! Hash::check($request->string('password')->toString(), $user->password)) {
         return back()
             ->withErrors(['email' => '帳號或密碼錯誤'])
             ->onlyInput('email');
@@ -68,6 +83,20 @@ Route::post('/login', function (Request $request) {
     DB::table('sessions')
         ->where('id', $request->session()->getId())
         ->update(['user_id' => $user->id]);
+    DB::table('system_logs')->insert([
+        'level' => 'info',
+        'source' => 'auth',
+        'message' => $user->is_admin ? '管理者登入成功' : '會員登入成功',
+        'context' => [
+            'user_id' => $user->id,
+            'email' => $user->email,
+            'is_admin' => (bool) $user->is_admin,
+            'ip' => $request->ip(),
+            'user_agent' => $request->userAgent(),
+        ],
+        'created_at' => now(),
+        'updated_at' => now(),
+    ]);
 
     return redirect()->intended('/');
 });
@@ -81,9 +110,10 @@ Route::get('/register', function () {
 });
 
 Route::post('/register', function (Request $request) {
+    $adminEmail = strtolower((string) config('services.marketx.admin_email', 'admin@marketx.local'));
     $validated = $request->validate([
         'name' => ['required', 'string', 'max:50'],
-        'email' => ['required', 'email', 'max:255', 'unique:users,email'],
+        'email' => ['required', 'email', 'max:255', 'unique:users,email', 'not_in:'.$adminEmail],
         'password' => ['required', 'string', 'min:8', 'confirmed'],
     ]);
 
@@ -712,6 +742,11 @@ Route::get('/admin', function (AiPipelineService $aiPipeline) {
         ->orderByDesc('created_at')
         ->limit(8)
         ->get(['task', 'model', 'status', 'error_message', 'created_at']);
+    $authLogs = DB::table('system_logs')
+        ->where('source', 'auth')
+        ->orderByDesc('created_at')
+        ->limit(12)
+        ->get(['level', 'message', 'context', 'created_at']);
     $lastSeenByUser = DB::table('sessions')
         ->whereNotNull('user_id')
         ->select('user_id', DB::raw('max(last_activity) as last_activity'))
@@ -763,6 +798,7 @@ Route::get('/admin', function (AiPipelineService $aiPipeline) {
         'watchlistCount' => $watchlistCount,
         'todayAiReports' => $todayAiReports,
         'latestAiLogs' => $latestAiLogs,
+        'authLogs' => $authLogs,
         'members' => $members,
         'onlineMembers' => $onlineMembers,
     ]);

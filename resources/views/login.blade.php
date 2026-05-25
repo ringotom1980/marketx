@@ -127,47 +127,30 @@
             color: #b42318;
             font-weight: 700;
         }
-        .auth-switch {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 8px;
-            margin-bottom: 18px;
-        }
-        .auth-switch a {
-            border: 1px solid #dbe1e8;
-            border-radius: 8px;
-            padding: 10px;
-            color: #657385;
-            text-align: center;
-            text-decoration: none;
-            font-weight: 800;
-        }
-        .auth-switch a.active {
-            border-color: #c1121f;
-            background: #fff7f7;
-            color: #c1121f;
-        }
-        .divider {
-            display: flex;
-            align-items: center;
-            gap: 12px;
-            margin: 20px 0 4px;
-            color: #6b7280;
-            font-size: 13px;
-            font-weight: 700;
-        }
-        .divider::before,
-        .divider::after {
-            content: "";
-            height: 1px;
-            background: #dbe1e8;
-            flex: 1;
-        }
         .hint {
             margin: 10px 0 0;
             color: #6b7280;
             font-size: 13px;
             line-height: 1.6;
+        }
+        .auth-link {
+            margin: 14px 0 0;
+            color: #657385;
+            font-size: 14px;
+            line-height: 1.6;
+            text-align: center;
+        }
+        .auth-link a {
+            color: #c1121f;
+            font-weight: 900;
+            text-decoration: none;
+        }
+        .auth-title {
+            margin: 0 0 16px;
+            color: #16202a;
+            font-size: 22px;
+            font-weight: 900;
+            text-align: center;
         }
     </style>
 </head>
@@ -181,16 +164,12 @@
             </div>
         </div>
 
-        <div class="auth-switch">
-            <a class="{{ ($mode ?? 'login') === 'login' ? 'active' : '' }}" href="/login">登入</a>
-            <a class="{{ ($mode ?? 'login') === 'register' ? 'active' : '' }}" href="/register">註冊</a>
-        </div>
-
         @if ($errors->any())
             <p class="error">{{ $errors->first() }}</p>
         @endif
 
         @if (($mode ?? 'login') === 'register')
+            <h2 class="auth-title">建立帳號</h2>
             <form method="post" action="/register" autocomplete="on">
                 @csrf
                 <label for="name">名稱</label>
@@ -207,8 +186,10 @@
 
                 <button type="submit">建立帳號</button>
                 <p class="hint">一般帳號可以使用網站與追蹤清單，但不能產生 AI 分析報告。</p>
+                <p class="auth-link">已經有帳號，<a href="/login">回登入頁</a></p>
             </form>
         @else
+            <h2 class="auth-title">登入</h2>
             <form id="member-login-form" method="post" action="/login" autocomplete="on">
                 @csrf
                 <label for="email">Email</label>
@@ -223,16 +204,7 @@
                 </label>
 
                 <button type="submit">登入</button>
-            </form>
-
-            <div class="divider">管理者</div>
-            <form method="post" action="/login" autocomplete="on">
-                @csrf
-                <input type="hidden" name="admin_login" value="1">
-                <input class="sr-only" name="username" value="marketx-admin" autocomplete="username" tabindex="-1" aria-hidden="true">
-                <label for="admin_password">管理員密碼</label>
-                <input id="admin_password" name="password" type="password" autocomplete="current-password">
-                <button type="submit">管理者登入</button>
+                <p class="auth-link">還沒有帳號，<a href="/register">點我註冊</a></p>
             </form>
         @endif
     </main>

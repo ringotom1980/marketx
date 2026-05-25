@@ -147,6 +147,32 @@
         </div>
     </section>
 
+    <section class="panel" style="margin-top:16px">
+        <h2>登入稽核紀錄</h2>
+        @if ($authLogs->isEmpty())
+            <p class="lead">尚無登入紀錄。</p>
+        @else
+            <table class="table">
+                <tbody>
+                @foreach ($authLogs as $log)
+                    @php
+                        $context = is_string($log->context) ? json_decode($log->context, true) : (array) $log->context;
+                    @endphp
+                    <tr>
+                        <th>
+                            <span class="badge {{ $log->level === 'warning' ? 'amber' : 'red' }}">{{ $log->message }}</span>
+                        </th>
+                        <td>
+                            {{ $context['email'] ?? '未知帳號' }}<br>
+                            <span class="lead" style="font-size:12px">{{ $context['ip'] ?? '無 IP' }}｜{{ \Carbon\CarbonImmutable::parse($log->created_at)->timezone('Asia/Taipei')->format('m/d H:i:s') }}</span>
+                        </td>
+                    </tr>
+                @endforeach
+                </tbody>
+            </table>
+        @endif
+    </section>
+
     <section class="grid three" style="margin-top:16px">
         @foreach ($stats as $item)
             <div class="panel">
