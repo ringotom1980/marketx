@@ -14,13 +14,15 @@ class ImportTaiwanStocks extends Command
         {--skip-prices : Only import stock master data}
         {--deactivate-missing : Mark previously imported TWSE/TPEx stocks inactive when absent from official feeds}';
 
-    protected $description = 'Import TWSE and TPEx stock master data and latest daily prices from official OpenAPI feeds.';
+    protected $description = 'Import TWSE and TPEx stock master data and latest daily prices from official exchange feeds.';
 
     private const TWSE_STOCKS_URL = 'https://openapi.twse.com.tw/v1/opendata/t187ap03_L';
 
     private const TPEX_STOCKS_URL = 'https://www.tpex.org.tw/openapi/v1/mopsfin_t187ap03_O';
 
-    private const TWSE_DAILY_QUOTES_URL = 'https://openapi.twse.com.tw/v1/exchangeReport/STOCK_DAY_ALL';
+    private const TWSE_DAILY_QUOTES_URL = 'https://www.twse.com.tw/exchangeReport/STOCK_DAY_ALL?response=json';
+
+    private const TWSE_DAILY_QUOTES_OPENAPI_URL = 'https://openapi.twse.com.tw/v1/exchangeReport/STOCK_DAY_ALL';
 
     private const TPEX_DAILY_QUOTES_URL = 'https://www.tpex.org.tw/openapi/v1/tpex_mainboard_daily_close_quotes';
 
@@ -114,7 +116,14 @@ class ImportTaiwanStocks extends Command
 
     private function importTwseDailyQuotes(): void
     {
-        $rows = $this->fetchJson(self::TWSE_DAILY_QUOTES_URL);
+        $payload = $this->fetchJson(self::TWSE_DAILY_QUOTES_URL);
+        $rows = $this->twseDailyRows($payload);
+
+        if ($rows === []) {
+            $this->warn('TWSE main site daily quotes were empty; falling back to TWSE OpenAPI.');
+            $rows = $this->fetchJson(self::TWSE_DAILY_QUOTES_OPENAPI_URL);
+        }
+
         $count = 0;
 
         foreach ($rows as $row) {
@@ -146,6 +155,31 @@ class ImportTaiwanStocks extends Command
         }
 
         $this->line('TWSE daily quotes imported: '.$count);
+    }
+
+    private function twseDailyRows(array $payload): array
+    {
+        if (! isset($payload['data']) || ! is_array($payload['data'])) {
+            return $payload;
+        }
+
+        $tradeDate = $this->parseTwseDate((string) ($payload['date'] ?? ''));
+
+        return collect($payload['data'])
+            ->map(function (array $row) use ($tradeDate): array {
+                return [
+                    'Code' => $row[0] ?? null,
+                    'Date' => $tradeDate->format('Ymd'),
+                    'TradeVolume' => $row[2] ?? null,
+                    'TradeValue' => $row[3] ?? null,
+                    'OpeningPrice' => $row[4] ?? null,
+                    'HighestPrice' => $row[5] ?? null,
+                    'LowestPrice' => $row[6] ?? null,
+                    'ClosingPrice' => $row[7] ?? null,
+                    'Change' => $row[8] ?? null,
+                ];
+            })
+            ->all();
     }
 
     private function importTpexDailyQuotes(): void
@@ -207,12 +241,35 @@ class ImportTaiwanStocks extends Command
     {
         $value = trim($value);
 
+        if (preg_match('/^(\d{4})(\d{2})(\d{2})$/', $value, $matches)) {
+            return CarbonImmutable::create(
+                (int) $matches[1],
+                (int) $matches[2],
+                (int) $matches[3],
+            )->startOfDay();
+        }
+
         if (! preg_match('/^(\d{3})(\d{2})(\d{2})$/', $value, $matches)) {
             throw new \InvalidArgumentException('Invalid ROC date: '.$value);
         }
 
         return CarbonImmutable::create(
             ((int) $matches[1]) + 1911,
+            (int) $matches[2],
+            (int) $matches[3],
+        )->startOfDay();
+    }
+
+    private function parseTwseDate(string $value): CarbonImmutable
+    {
+        $value = trim($value);
+
+        if (! preg_match('/^(\d{4})(\d{2})(\d{2})$/', $value, $matches)) {
+            throw new \InvalidArgumentException('Invalid TWSE date: '.$value);
+        }
+
+        return CarbonImmutable::create(
+            (int) $matches[1],
             (int) $matches[2],
             (int) $matches[3],
         )->startOfDay();
@@ -247,4 +304,3 @@ class ImportTaiwanStocks extends Command
         return is_numeric($value) ? (float) $value : null;
     }
 }
-
