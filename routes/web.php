@@ -655,14 +655,7 @@ Route::get('/', function () {
 
     $cardConfidence = function (object $stock, string $type) use ($confidencePayloadFor): int {
         $payload = $confidencePayloadFor($stock);
-        $field = match ($type) {
-            'risk' => 'risk_confidence',
-            'weak' => 'weak_confidence',
-            'low_volume' => 'risk_confidence',
-            default => 'opportunity_confidence',
-        };
-
-        return (int) ($payload[$field] ?? $stock->confidence_score ?? 0);
+        return (int) ($payload['opportunity_confidence'] ?? $stock->confidence_score ?? 0);
     };
 
     $stockCardItem = fn (object $stock, array $fallbackReasons, string $type): array => [
@@ -749,7 +742,8 @@ Route::get('/', function () {
         ->filter(function ($stock) use ($reasonLabels, $candidateHas, $cardConfidence) {
             $labels = $reasonLabels($stock->radar_reasons);
 
-            return $cardConfidence($stock, 'risk') >= 45
+            return $cardConfidence($stock, 'risk') >= 35
+                && $cardConfidence($stock, 'risk') <= 78
                 && $candidateHas($labels, ['乖離過大', 'RSI 過熱', 'KD 過熱', '爆量轉弱', '高檔放量轉弱', '評價偏高', '融資偏重', '跌破月線', '跌破布林下緣'])
                 && count($labels) >= 2;
         })
