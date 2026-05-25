@@ -87,6 +87,10 @@ class CalculateTechnicalScores extends Command
 
         $close = (float) $latest->close;
         $previousClose = $previous ? (float) $previous->close : $close;
+        $open = (float) ($latest->open ?: $close);
+        $high = (float) ($latest->high ?: max($open, $close));
+        $low = (float) ($latest->low ?: min($open, $close));
+        $previousVolume = $previous ? (float) $previous->volume : null;
         $sma5 = $this->sma($closes, 5);
         $sma10 = $this->sma($closes, 10);
         $sma20 = $this->sma($closes, 20);
@@ -119,6 +123,19 @@ class CalculateTechnicalScores extends Command
         $return60 = $base60 && $base60 > 0 ? ($close / $base60 - 1) : 0.0;
         $support20 = min(array_map(fn ($price) => (float) ($price->low ?: $price->close), array_slice($prices, -20)) ?: [$close]);
         $resistance20 = max(array_slice($highs, -20) ?: [$close]);
+        $bais20 = $this->bais($close, $sma20);
+        $highVolumeWeakReversal = $this->isHighVolumeWeakReversal(
+            open: $open,
+            high: $high,
+            low: $low,
+            close: $close,
+            previousClose: $previousClose,
+            volume: (float) $latest->volume,
+            previousVolume: $previousVolume,
+            return20: $return20,
+            bais20: $bais20,
+            high20BeforeToday: $high20BeforeToday,
+        );
 
         $score = 50;
         $riskFlags = [];
@@ -159,10 +176,10 @@ class CalculateTechnicalScores extends Command
             $score += 4;
         }
 
-        if ($volumeRatio !== null && $volumeRatio >= 1.5 && $close > $previousClose) {
+        if ($volumeRatio !== null && $volumeRatio >= 1.5 && $close > $previousClose && ! $highVolumeWeakReversal) {
             $score += 6;
-        } elseif ($volumeRatio !== null && $volumeRatio >= 1.5 && $close < $previousClose) {
-            $score -= 8;
+        } elseif ($highVolumeWeakReversal) {
+            $score -= 10;
             $riskFlags[] = 'high_volume_down';
         }
 
@@ -257,7 +274,7 @@ class CalculateTechnicalScores extends Command
             'atr14' => $atr14,
             'bais5' => $this->bais($close, $sma5),
             'bais10' => $this->bais($close, $sma10),
-            'bais20' => $this->bais($close, $sma20),
+            'bais20' => $bais20,
             'bais60' => $this->bais($close, $sma60),
             'return5' => round($return5 * 100, 2),
             'return10' => round($return10 * 100, 2),
@@ -286,6 +303,7 @@ class CalculateTechnicalScores extends Command
                 return20: $return20,
                 volatility20: $volatility20,
                 breakout20: $close >= $high20BeforeToday && $close > $previousClose,
+                highVolumeWeakReversal: $highVolumeWeakReversal,
             ),
             'risk_flags' => array_values(array_unique($riskFlags)),
         ];
@@ -341,6 +359,7 @@ class CalculateTechnicalScores extends Command
         float $return20,
         ?float $volatility20,
         bool $breakout20,
+        bool $highVolumeWeakReversal,
     ): array {
         $signals = [];
 
@@ -425,11 +444,13 @@ class CalculateTechnicalScores extends Command
         if ($volumeRatio !== null) {
             if ($volumeRatio >= 1.5 && $close > $previousClose) {
                 $signals[] = ['tone' => 'green', 'title' => '價漲量增', 'body' => '成交量高於 20 日均量，且價格上漲，買盤確認度較高。'];
-            } elseif ($volumeRatio >= 1.5 && $close < $previousClose) {
-                $signals[] = ['tone' => 'red', 'title' => '高檔放量轉弱', 'body' => '成交量明顯放大但價格下跌，需留意賣壓。'];
             } elseif ($volumeRatio < 0.7) {
                 $signals[] = ['tone' => 'amber', 'title' => '量能不足', 'body' => '成交量低於近期均量，突破或反彈的確認度較低。'];
             }
+        }
+
+        if ($highVolumeWeakReversal) {
+            $signals[] = ['tone' => 'red', 'title' => '爆量轉弱', 'body' => '高檔震盪中盤中拉高後回落，留下明顯上影線，且量能達前一日 2 倍以上。'];
         }
 
         if ($atr14 !== null && $close > 0 && ($atr14 / $close) > 0.055) {
@@ -650,6 +671,36 @@ class CalculateTechnicalScores extends Command
         }
 
         return round((($close / $movingAverage) - 1) * 100, 4);
+    }
+
+    private function isHighVolumeWeakReversal(
+        float $open,
+        float $high,
+        float $low,
+        float $close,
+        float $previousClose,
+        float $volume,
+        ?float $previousVolume,
+        float $return20,
+        ?float $bais20,
+        float $high20BeforeToday,
+    ): bool {
+        if ($previousVolume === null || $previousVolume <= 0 || $volume < ($previousVolume * 2)) {
+            return false;
+        }
+
+        $range = max(0.0001, $high - $low);
+        $upperShadowRatio = ($high - max($open, $close)) / $range;
+        $pulledBackFromHigh = $close <= $open || $close <= ($high * 0.97);
+        $intradayLift = $high >= (max($open, $previousClose) * 1.015);
+        $highPosition = $return20 >= 0.08
+            || ($bais20 !== null && $bais20 >= 8)
+            || $high >= ($high20BeforeToday * 0.97);
+
+        return $highPosition
+            && $intradayLift
+            && $pulledBackFromHigh
+            && $upperShadowRatio >= 0.35;
     }
 
     private function average(array $values): float

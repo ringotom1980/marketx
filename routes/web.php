@@ -310,6 +310,39 @@ Route::get('/', function () {
         return $close > 0 && $sma20 > 0 ? (($close / $sma20) - 1) * 100 : null;
     };
 
+    $isHighVolumeWeakReversal = function (object $stock) use ($bais20): bool {
+        $previousVolume = (float) ($stock->previous_volume ?? 0);
+        $volume = (float) ($stock->volume ?? 0);
+
+        if ($previousVolume <= 0 || $volume < ($previousVolume * 2)) {
+            return false;
+        }
+
+        $open = (float) ($stock->open ?? 0);
+        $high = (float) ($stock->high ?? 0);
+        $low = (float) ($stock->low ?? 0);
+        $close = (float) ($stock->close ?? 0);
+
+        if ($open <= 0 || $high <= 0 || $low <= 0 || $close <= 0) {
+            return false;
+        }
+
+        $range = max(0.0001, $high - $low);
+        $upperShadowRatio = ($high - max($open, $close)) / $range;
+        $previousClose = $stock->previous_close === null ? $open : (float) $stock->previous_close;
+        $pulledBackFromHigh = $close <= $open || $close <= ($high * 0.97);
+        $intradayLift = $high >= (max($open, $previousClose) * 1.015);
+        $bais = $bais20($stock);
+        $highPosition = (float) ($stock->return20 ?? 0) >= 8
+            || ($bais !== null && $bais >= 8)
+            || ((float) ($stock->resistance20 ?? 0) > 0 && $high >= ((float) $stock->resistance20 * 0.97));
+
+        return $highPosition
+            && $intradayLift
+            && $pulledBackFromHigh
+            && $upperShadowRatio >= 0.35;
+    };
+
     $priorityReasons = function (object $stock) use ($signalsFor, $reason, $hasSignal, $bais20): array {
         $technicalSignals = $signalsFor($stock, ['green']);
 
@@ -355,9 +388,11 @@ Route::get('/', function () {
     $candidateHas = fn (array $labels, array $needles): bool => collect($needles)
         ->contains(fn ($needle) => in_array($needle, $labels, true));
 
-    $riskReasons = function (object $stock) use ($signalsFor, $reason, $hasSignal, $bais20): array {
+    $riskReasons = function (object $stock) use ($signalsFor, $reason, $hasSignal, $bais20, $isHighVolumeWeakReversal): array {
         $technicalSignals = $signalsFor($stock, ['red', 'amber'])
-            ->reject(fn ($title) => in_array($title, ['MACD 負數縮減'], true))
+            ->reject(fn ($title) => in_array($title, ['MACD 負數縮減'], true)
+                || str_contains($title, '放量轉弱')
+                || str_contains($title, '爆量轉弱'))
             ->values();
         $bais = $bais20($stock);
         $reasons = collect();
@@ -384,7 +419,7 @@ Route::get('/', function () {
             $reasons->push($reason('評價偏高', 'warning'));
         }
 
-        if ((float) ($stock->volume_ratio20 ?? 0) >= 1.5 && (float) ($stock->change_pct ?? 0) <= 0) {
+        if ($isHighVolumeWeakReversal($stock)) {
             $reasons->push($reason('爆量轉弱', 'down'));
         }
 
@@ -527,6 +562,9 @@ Route::get('/', function () {
             'stock_scores.chip_score',
             'stock_scores.fundamental_score',
             'stock_scores.technical_payload',
+            'stock_prices_1d.open',
+            'stock_prices_1d.high',
+            'stock_prices_1d.low',
             'stock_prices_1d.close',
             'stock_prices_1d.change_pct',
             'stock_prices_1d.volume',
@@ -543,12 +581,15 @@ Route::get('/', function () {
             'stock_technical_indicators_1d.bollinger_upper20',
             'stock_technical_indicators_1d.bollinger_middle20',
             'stock_technical_indicators_1d.bollinger_lower20',
+            'stock_technical_indicators_1d.resistance20',
             'stock_technical_indicators_1d.signals as technical_signals',
             'stock_chips_1d.margin_balance',
             'stock_chips_1d.short_balance',
             'stock_financials.per',
             'stock_revenues.mom_pct',
-            'stock_revenues.yoy_pct'
+            'stock_revenues.yoy_pct',
+            DB::raw('(select sp_prev.close from stock_prices_1d sp_prev where sp_prev.stock_id = stocks.id and sp_prev.trade_date < stock_prices_1d.trade_date order by sp_prev.trade_date desc limit 1) as previous_close'),
+            DB::raw('(select sp_prev.volume from stock_prices_1d sp_prev where sp_prev.stock_id = stocks.id and sp_prev.trade_date < stock_prices_1d.trade_date order by sp_prev.trade_date desc limit 1) as previous_volume')
         )
         ->whereNotNull('stock_scores.total_score')
         ->where('stock_scores.technical_score', '>', 0)
