@@ -89,6 +89,64 @@
         </div>
     </section>
 
+    <section class="grid two" style="margin-top:16px">
+        <div class="panel">
+            <h2>會員名單</h2>
+            @if ($members->isEmpty())
+                <p class="lead">目前尚無一般會員。</p>
+            @else
+                <table class="table">
+                    <tbody>
+                    @foreach ($members as $member)
+                        <tr>
+                            <th>
+                                {{ $member->name }}
+                                @if ($member->is_admin)
+                                    <br><span class="badge red">管理者</span>
+                                @endif
+                            </th>
+                            <td>
+                                {{ $member->email }}<br>
+                                <span class="lead" style="font-size:12px">註冊 {{ \Carbon\CarbonImmutable::parse($member->created_at)->timezone('Asia/Taipei')->format('Y/m/d H:i') }}</span><br>
+                                <span class="lead" style="font-size:12px">最後在線 {{ $member->last_seen_at ? $member->last_seen_at->format('m/d H:i') : '尚無紀錄' }}</span>
+                            </td>
+                        </tr>
+                    @endforeach
+                    </tbody>
+                </table>
+            @endif
+        </div>
+
+        <div class="panel">
+            <h2>線上名單</h2>
+            @if ($onlineMembers->isEmpty())
+                <p class="lead">目前沒有線上會員。</p>
+            @else
+                <table class="table">
+                    <tbody>
+                    @foreach ($onlineMembers as $online)
+                        <tr>
+                            <th>
+                                {{ $online->name ?? '未登入訪客 / 管理者' }}
+                                @if ($online->is_admin)
+                                    <br><span class="badge red">管理者</span>
+                                @endif
+                            </th>
+                            <td>
+                                @if ($online->email)
+                                    {{ $online->email }}<br>
+                                @endif
+                                <span class="lead" style="font-size:12px">{{ $online->device }}｜{{ $online->ip_address ?? '無 IP' }}</span><br>
+                                <span class="lead" style="font-size:12px">最後活動 {{ $online->last_seen_at->format('m/d H:i:s') }}</span>
+                            </td>
+                        </tr>
+                    @endforeach
+                    </tbody>
+                </table>
+            @endif
+        </div>
+    </section>
+
     <section class="grid three" style="margin-top:16px">
         @foreach ($stats as $item)
             <div class="panel">

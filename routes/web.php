@@ -46,6 +46,9 @@ Route::post('/login', function (Request $request) {
         $request->session()->put('marketx_admin', true);
         $request->session()->put('marketx_user_name', '管理者');
         $request->session()->put('marketx_is_admin', true);
+        DB::table('sessions')
+            ->where('id', $request->session()->getId())
+            ->update(['user_id' => null]);
 
         return redirect()->intended('/');
     }
@@ -62,6 +65,9 @@ Route::post('/login', function (Request $request) {
     $request->session()->put('marketx_user_id', $user->id);
     $request->session()->put('marketx_user_name', $user->name);
     $request->session()->put('marketx_is_admin', (bool) $user->is_admin);
+    DB::table('sessions')
+        ->where('id', $request->session()->getId())
+        ->update(['user_id' => $user->id]);
 
     return redirect()->intended('/');
 });
@@ -92,11 +98,18 @@ Route::post('/register', function (Request $request) {
     $request->session()->put('marketx_user_id', $user->id);
     $request->session()->put('marketx_user_name', $user->name);
     $request->session()->put('marketx_is_admin', false);
+    DB::table('sessions')
+        ->where('id', $request->session()->getId())
+        ->update(['user_id' => $user->id]);
 
     return redirect('/');
 });
 
 Route::match(['get', 'post'], '/logout', function (Request $request) {
+    DB::table('sessions')
+        ->where('id', $request->session()->getId())
+        ->update(['user_id' => null]);
+
     $request->session()->forget('marketx_admin');
     $request->session()->forget('marketx_user_id');
     $request->session()->forget('marketx_user_name');
@@ -699,6 +712,50 @@ Route::get('/admin', function (AiPipelineService $aiPipeline) {
         ->orderByDesc('created_at')
         ->limit(8)
         ->get(['task', 'model', 'status', 'error_message', 'created_at']);
+    $lastSeenByUser = DB::table('sessions')
+        ->whereNotNull('user_id')
+        ->select('user_id', DB::raw('max(last_activity) as last_activity'))
+        ->groupBy('user_id')
+        ->pluck('last_activity', 'user_id');
+    $members = User::query()
+        ->orderByDesc('created_at')
+        ->limit(100)
+        ->get(['id', 'name', 'email', 'is_admin', 'created_at'])
+        ->map(function (User $user) use ($lastSeenByUser) {
+            $lastActivity = $lastSeenByUser->get($user->id);
+            $user->last_seen_at = $lastActivity
+                ? \Carbon\CarbonImmutable::createFromTimestamp((int) $lastActivity, 'Asia/Taipei')
+                : null;
+
+            return $user;
+        });
+    $onlineMembers = DB::table('sessions')
+        ->leftJoin('users', 'users.id', '=', 'sessions.user_id')
+        ->where('sessions.last_activity', '>=', now()->subMinutes(5)->timestamp)
+        ->orderByDesc('sessions.last_activity')
+        ->limit(50)
+        ->get([
+            'sessions.user_id',
+            'sessions.ip_address',
+            'sessions.user_agent',
+            'sessions.last_activity',
+            'users.name',
+            'users.email',
+            'users.is_admin',
+        ])
+        ->map(function ($session) {
+            $session->last_seen_at = \Carbon\CarbonImmutable::createFromTimestamp((int) $session->last_activity, 'Asia/Taipei');
+            $session->device = match (true) {
+                str_contains((string) $session->user_agent, 'iPhone') => 'iPhone',
+                str_contains((string) $session->user_agent, 'Android') => 'Android',
+                str_contains((string) $session->user_agent, 'Mobile') => '手機',
+                str_contains((string) $session->user_agent, 'Windows') => 'Windows',
+                str_contains((string) $session->user_agent, 'Macintosh') => 'Mac',
+                default => '未知裝置',
+            };
+
+            return $session;
+        });
 
     return view('admin', [
         'stats' => $stats,
@@ -706,6 +763,8 @@ Route::get('/admin', function (AiPipelineService $aiPipeline) {
         'watchlistCount' => $watchlistCount,
         'todayAiReports' => $todayAiReports,
         'latestAiLogs' => $latestAiLogs,
+        'members' => $members,
+        'onlineMembers' => $onlineMembers,
     ]);
 });
 
