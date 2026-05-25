@@ -62,11 +62,11 @@ Route::post('/login', function (Request $request) {
             'level' => 'warning',
             'source' => 'auth',
             'message' => '登入失敗',
-            'context' => [
+            'context' => json_encode([
                 'email' => $email,
                 'ip' => $request->ip(),
                 'user_agent' => $request->userAgent(),
-            ],
+            ], JSON_UNESCAPED_UNICODE),
             'created_at' => now(),
             'updated_at' => now(),
         ]);
@@ -87,13 +87,13 @@ Route::post('/login', function (Request $request) {
         'level' => 'info',
         'source' => 'auth',
         'message' => $user->is_admin ? '管理者登入成功' : '會員登入成功',
-        'context' => [
+        'context' => json_encode([
             'user_id' => $user->id,
             'email' => $user->email,
             'is_admin' => (bool) $user->is_admin,
             'ip' => $request->ip(),
             'user_agent' => $request->userAgent(),
-        ],
+        ], JSON_UNESCAPED_UNICODE),
         'created_at' => now(),
         'updated_at' => now(),
     ]);
