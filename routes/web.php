@@ -480,7 +480,7 @@ Route::get('/', function () {
             ->merge($technicalSignals)
             ->merge($flagRisks)
             ->unique()
-            ->take(3)
+            ->take(4)
             ->values()
             ->all();
     };
@@ -504,6 +504,7 @@ Route::get('/', function () {
         )
         ->whereNotNull('stock_scores.risk_flags')
         ->whereRaw("stock_scores.risk_flags::text <> '[]'")
+        ->orderByDesc('stock_scores.confidence_score')
         ->orderByDesc('risk_count')
         ->orderBy('stock_scores.total_score')
         ->limit(12)
