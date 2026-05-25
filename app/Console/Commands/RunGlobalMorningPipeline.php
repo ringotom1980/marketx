@@ -17,7 +17,7 @@ class RunGlobalMorningPipeline extends Command
     {
         $steps = [
             ['global_market', 'market:import-global-market', []],
-            ['taifex_night', 'market:import-taifex-night', []],
+            ['taifex_night', 'market:backfill-taifex-night', ['--days' => 7]],
             ['global_events', 'market:import-global-events', []],
             ['event_clusters', 'market:cluster-global-events', []],
             ['global_influence', 'market:calculate-global-influence', []],

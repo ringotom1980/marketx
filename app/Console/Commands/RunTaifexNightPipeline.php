@@ -16,7 +16,7 @@ class RunTaifexNightPipeline extends Command
     public function handle(): int
     {
         foreach ([
-            ['taifex_night_refresh', 'market:import-taifex-night', []],
+            ['taifex_night_refresh', 'market:backfill-taifex-night', ['--days' => 7]],
             ['global_influence_night', 'market:calculate-global-influence', []],
             ['decision_scores_night', 'market:calculate-decision-scores', []],
         ] as [$name, $command, $parameters]) {
