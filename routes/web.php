@@ -273,26 +273,97 @@ Route::get('/', function () {
         ]);
     }
 
+    $priorityReasons = function (object $stock): array {
+        $payload = is_array($stock->technical_payload)
+            ? $stock->technical_payload
+            : (json_decode((string) $stock->technical_payload, true) ?: []);
+
+        $technicalSignals = collect($payload['signals'] ?? [])
+            ->filter(fn ($signal) => ($signal['tone'] ?? null) === 'green')
+            ->pluck('title')
+            ->map(fn ($title) => (string) $title)
+            ->filter()
+            ->values();
+
+        $reasons = collect();
+
+        foreach (['KD 黃金交叉', 'MACD 黃金交叉', 'MACD 翻正', '均線多頭排列', '20 日突破', '價漲量增', 'RSI 強勢區', '突破布林上緣'] as $preferred) {
+            if ($technicalSignals->contains($preferred)) {
+                $reasons->push($preferred);
+            }
+        }
+
+        $reasons = $reasons->merge($technicalSignals);
+
+        if ((int) ($stock->chip_score ?? 0) >= 75) {
+            $reasons->push('籌碼集中');
+        }
+
+        if ((int) ($stock->theme_score ?? 0) >= 70) {
+            $reasons->push('題材升溫');
+        }
+
+        if ((int) ($stock->fundamental_score ?? 0) >= 70) {
+            $reasons->push('財務穩健');
+        }
+
+        if ((int) ($stock->event_score ?? 0) >= 70) {
+            $reasons->push('事件支撐');
+        }
+
+        if ((int) ($stock->macro_score ?? 0) >= 70) {
+            $reasons->push('大環境偏多');
+        }
+
+        return $reasons
+            ->unique()
+            ->take(4)
+            ->values()
+            ->all();
+    };
+
     $topStocks = Stock::query()
         ->join('stock_scores', function ($join) {
             $join->on('stocks.id', '=', 'stock_scores.stock_id')
                 ->whereRaw('stock_scores.score_date = (select max(ss.score_date) from stock_scores ss where ss.stock_id = stocks.id)');
         })
-        ->select('stocks.symbol', 'stocks.name', 'stock_scores.decision', 'stock_scores.total_score', 'stock_scores.confidence_score')
+        ->select(
+            'stocks.symbol',
+            'stocks.name',
+            'stock_scores.total_score',
+            'stock_scores.confidence_score',
+            'stock_scores.macro_score',
+            'stock_scores.event_score',
+            'stock_scores.theme_score',
+            'stock_scores.technical_score',
+            'stock_scores.chip_score',
+            'stock_scores.fundamental_score',
+            'stock_scores.technical_payload'
+        )
         ->whereNotNull('stock_scores.total_score')
-        ->whereIn('stock_scores.decision', ['強力買進', '買進', '續抱'])
+        ->where('stock_scores.total_score', '>=', 55)
+        ->where('stock_scores.confidence_score', '>=', 65)
+        ->where('stock_scores.technical_score', '>', 0)
+        ->where('stock_scores.chip_score', '>', 0)
+        ->where('stock_scores.fundamental_score', '>', 0)
+        ->where('stock_scores.theme_score', '>', 0)
         ->orderByDesc('stock_scores.confidence_score')
         ->orderByDesc('stock_scores.total_score')
         ->orderBy('stocks.symbol')
-        ->limit(10)
+        ->limit(20)
         ->get()
-        ->map(fn ($stock) => [
-            'symbol' => $stock->symbol,
-            'name' => $stock->name,
-            'decision' => $stock->decision ?? '等待計算',
-            'score' => $stock->total_score ?? 0,
-            'confidence' => $stock->confidence_score ?? 0,
-        ]);
+        ->map(function ($stock) use ($priorityReasons) {
+            return [
+                'symbol' => $stock->symbol,
+                'name' => $stock->name,
+                'score' => (int) ($stock->total_score ?? 0),
+                'confidence' => (int) ($stock->confidence_score ?? 0),
+                'reasons' => $priorityReasons($stock),
+            ];
+        })
+        ->filter(fn ($stock) => count($stock['reasons']) > 0)
+        ->take(10)
+        ->values();
 
     $events = DB::table('global_event_clusters')
         ->orderByDesc('cluster_date')

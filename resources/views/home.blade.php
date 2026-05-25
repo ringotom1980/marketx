@@ -85,6 +85,25 @@
             color: #7b2d2d;
             font-weight: 800;
         }
+        .reason-pills {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+            min-width: 150px;
+        }
+        .reason-pill {
+            display: inline-flex;
+            align-items: center;
+            border-radius: 999px;
+            background: #fff1f1;
+            color: var(--button);
+            border: 1px solid rgba(193, 18, 31, .18);
+            padding: 5px 9px;
+            font-size: 12px;
+            font-weight: 900;
+            line-height: 1;
+            white-space: nowrap;
+        }
         @media (min-width: 821px) {
             .market-chart-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
             .market-chart-wrap { height: 340px; }
@@ -169,7 +188,13 @@
                 @forelse ($topStocks as $stock)
                     <tr>
                         <th><a href="/s/{{ $stock['symbol'] }}">{{ $stock['name'] }}</a></th>
-                        <td><span class="badge red">{{ $stock['decision'] }}</span></td>
+                        <td>
+                            <div class="reason-pills">
+                                @foreach ($stock['reasons'] as $reason)
+                                    <span class="reason-pill">{{ $reason }}</span>
+                                @endforeach
+                            </div>
+                        </td>
                         <td>信心 {{ $stock['confidence'] }}%</td>
                     </tr>
                 @empty
