@@ -362,7 +362,7 @@ Route::get('/', function () {
             ];
         })
         ->filter(fn ($stock) => count($stock['reasons']) > 0)
-        ->take(10)
+        ->take(6)
         ->values();
 
     $events = DB::table('global_event_clusters')
@@ -408,7 +408,7 @@ Route::get('/', function () {
             'score' => (int) ($theme->heat_score ?? 0),
         ]);
 
-    $riskLabel = function (array $flags, object $stock): string {
+    $riskReasons = function (array $flags, object $stock): array {
         $labels = [
             'below_sma20' => '跌破月線',
             'sma20_below_sma60' => '月線低於季線',
@@ -462,7 +462,8 @@ Route::get('/', function () {
             ->merge($flagRisks)
             ->unique()
             ->take(3)
-            ->implode('、');
+            ->values()
+            ->all();
     };
 
     $riskStocks = Stock::query()
@@ -485,9 +486,9 @@ Route::get('/', function () {
         ->whereRaw("stock_scores.risk_flags::text <> '[]'")
         ->orderByDesc('risk_count')
         ->orderBy('stock_scores.total_score')
-        ->limit(10)
+        ->limit(12)
         ->get()
-        ->map(function ($stock) use ($riskLabel) {
+        ->map(function ($stock) use ($riskReasons) {
             $flags = is_array($stock->risk_flags)
                 ? $stock->risk_flags
                 : (json_decode((string) $stock->risk_flags, true) ?: []);
@@ -495,11 +496,12 @@ Route::get('/', function () {
             return [
                 'symbol' => $stock->symbol,
                 'name' => $stock->name,
-                'risk' => $riskLabel($flags, $stock),
+                'risks' => $riskReasons($flags, $stock),
                 'confidence' => (int) ($stock->confidence_score ?? 0),
             ];
         })
-        ->filter(fn ($stock) => $stock['risk'] !== '')
+        ->filter(fn ($stock) => count($stock['risks']) > 0)
+        ->take(6)
         ->values();
 
     return view('home', [

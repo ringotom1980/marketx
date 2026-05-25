@@ -85,11 +85,42 @@
             color: #7b2d2d;
             font-weight: 800;
         }
+        .stock-signal-list {
+            display: grid;
+            gap: 0;
+        }
+        .stock-signal-item {
+            display: grid;
+            gap: 14px;
+            padding: 16px 0;
+            border-bottom: 1px solid #0f5b78;
+        }
+        .stock-signal-item:first-child {
+            padding-top: 4px;
+        }
+        .stock-signal-top {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 14px;
+        }
+        .stock-signal-name {
+            color: var(--ink);
+            font-size: 18px;
+            font-weight: 950;
+            text-decoration: none;
+            min-width: 0;
+        }
+        .stock-signal-confidence {
+            color: var(--ink);
+            font-size: 16px;
+            font-weight: 950;
+            white-space: nowrap;
+        }
         .reason-pills {
             display: flex;
             flex-wrap: wrap;
-            gap: 6px;
-            min-width: 150px;
+            gap: 8px;
         }
         .reason-pill {
             display: inline-flex;
@@ -98,11 +129,16 @@
             background: #fff1f1;
             color: var(--button);
             border: 1px solid rgba(193, 18, 31, .18);
-            padding: 5px 9px;
+            padding: 7px 11px;
             font-size: 12px;
             font-weight: 900;
             line-height: 1;
             white-space: nowrap;
+        }
+        .reason-pill.warning {
+            background: #fff7df;
+            color: #9f5b00;
+            border-color: rgba(245, 158, 11, .22);
         }
         @media (min-width: 821px) {
             .market-chart-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
@@ -183,41 +219,44 @@
 
         <div class="panel">
             <h2>今日優先觀察</h2>
-            <table class="table">
-                <tbody>
+            <div class="stock-signal-list">
                 @forelse ($topStocks as $stock)
-                    <tr>
-                        <th><a href="/s/{{ $stock['symbol'] }}">{{ $stock['name'] }}</a></th>
-                        <td>
-                            <div class="reason-pills">
-                                @foreach ($stock['reasons'] as $reason)
-                                    <span class="reason-pill">{{ $reason }}</span>
-                                @endforeach
-                            </div>
-                        </td>
-                        <td>信心 {{ $stock['confidence'] }}%</td>
-                    </tr>
+                    <div class="stock-signal-item">
+                        <div class="stock-signal-top">
+                            <a class="stock-signal-name" href="/s/{{ $stock['symbol'] }}">{{ $stock['name'] }}</a>
+                            <div class="stock-signal-confidence">信心指數{{ $stock['confidence'] }}%</div>
+                        </div>
+                        <div class="reason-pills">
+                            @foreach ($stock['reasons'] as $reason)
+                                <span class="reason-pill">{{ $reason }}</span>
+                            @endforeach
+                        </div>
+                    </div>
                 @empty
-                    <tr><td colspan="3">尚未產生觀察名單</td></tr>
+                    <p class="lead">尚未產生觀察名單</p>
                 @endforelse
-                </tbody>
-            </table>
+            </div>
         </div>
 
         <div class="panel">
             <h2>今日風險升高股票</h2>
-            <table class="table">
-                <tbody>
+            <div class="stock-signal-list">
                 @forelse ($riskStocks as $stock)
-                    <tr>
-                        <th><a href="/s/{{ $stock['symbol'] }}">{{ $stock['name'] }}</a></th>
-                        <td><span class="badge amber">{{ $stock['risk'] }}</span></td>
-                    </tr>
+                    <div class="stock-signal-item">
+                        <div class="stock-signal-top">
+                            <a class="stock-signal-name" href="/s/{{ $stock['symbol'] }}">{{ $stock['name'] }}</a>
+                            <div class="stock-signal-confidence">信心指數{{ $stock['confidence'] }}%</div>
+                        </div>
+                        <div class="reason-pills">
+                            @foreach ($stock['risks'] as $risk)
+                                <span class="reason-pill warning">{{ $risk }}</span>
+                            @endforeach
+                        </div>
+                    </div>
                 @empty
-                    <tr><td colspan="2">目前沒有明顯風險升高名單</td></tr>
+                    <p class="lead">目前沒有明顯風險升高名單</p>
                 @endforelse
-                </tbody>
-            </table>
+            </div>
         </div>
     </section>
 
