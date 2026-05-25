@@ -4,7 +4,7 @@
     <section class="page-head">
         <div>
             <h1>題材雷達</h1>
-            <p class="lead">依今日事件、題材熱度、資金分數與相關股票狀態，判斷題材是否升溫、延續或退潮。</p>
+            <p class="lead">依今日事件、題材熱度、資金狀態與相關股票表現，判斷題材是否升溫、延續或退潮。</p>
         </div>
     </section>
 
@@ -16,11 +16,14 @@
                         <h2 style="margin-bottom:6px">{{ $theme['name'] }}</h2>
                         <span class="badge {{ $theme['tone'] }}">{{ $theme['phase'] }}</span>
                     </div>
-                    <div class="score" style="font-size:32px">{{ $theme['score'] }}</div>
+                    <div style="text-align:right">
+                        <p class="lead" style="font-size:12px">信心指數</p>
+                        <div class="score" style="font-size:32px">{{ $theme['confidence'] }}%</div>
+                    </div>
                 </div>
 
                 <div class="meter" style="margin:14px 0 12px">
-                    <span style="width: {{ min(100, max(0, $theme['score'])) }}%"></span>
+                    <span style="width: {{ min(100, max(0, $theme['confidence'])) }}%"></span>
                 </div>
 
                 <table class="table" style="margin-top:12px">
@@ -35,7 +38,10 @@
                     </tr>
                     <tr>
                         <th>技術 / 籌碼</th>
-                        <td>{{ $theme['price_score'] }} / {{ $theme['chip_score'] }}</td>
+                        <td>
+                            <span class="badge {{ $theme['price_tone'] }}">{{ $theme['price_state'] }}</span>
+                            <span class="badge {{ $theme['chip_tone'] }}">{{ $theme['chip_state'] }}</span>
+                        </td>
                     </tr>
                     @if ($theme['top_stocks'] !== [])
                         <tr>
@@ -59,7 +65,7 @@
                                 <tr>
                                     <th><a href="/s/{{ $stock['symbol'] }}">{{ $stock['name'] }}</a></th>
                                     <td>{{ $stock['decision'] ?? '等待計算' }}</td>
-                                    <td>{{ $stock['score'] }}</td>
+                                    <td>信心 {{ $stock['confidence'] ?? 0 }}%</td>
                                 </tr>
                             @endforeach
                             </tbody>

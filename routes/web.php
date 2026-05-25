@@ -443,8 +443,8 @@ Route::get('/themes', function () {
                 ->selectRaw("sum(case when lower(coalesce(global_events.region, '')) in ('tw', 'taiwan', '台灣') or lower(coalesce(global_events.source, '')) like '%taiwan%' then 0 else 1 end) as global_count")
                 ->first();
             $score = (int) ($theme->heat_score ?? 0);
-            $priceScore = $theme->price_score === null ? '無' : (string) $theme->price_score;
-            $chipScore = $theme->chip_score === null ? '無' : (string) $theme->chip_score;
+            $priceState = ModuleStateDisplay::fromScore($theme->price_score, '技術結構');
+            $chipState = ModuleStateDisplay::fromScore($theme->chip_score, '籌碼');
             $relatedStocks = DB::table('stock_theme_map')
                 ->join('stocks', 'stocks.id', '=', 'stock_theme_map.stock_id')
                 ->leftJoin('stock_scores', function ($join) {
@@ -455,11 +455,12 @@ Route::get('/themes', function () {
                 ->whereNotNull('stock_scores.total_score')
                 ->orderByDesc('stock_scores.total_score')
                 ->limit(20)
-                ->get(['stocks.symbol', 'stocks.name', 'stock_scores.total_score', 'stock_scores.decision'])
+                ->get(['stocks.symbol', 'stocks.name', 'stock_scores.total_score', 'stock_scores.confidence_score', 'stock_scores.decision'])
                 ->map(fn ($stock) => [
                     'symbol' => $stock->symbol,
                     'name' => $stock->name,
                     'score' => $stock->total_score,
+                    'confidence' => $stock->confidence_score,
                     'decision' => $stock->decision,
                 ])
                 ->all();
@@ -473,8 +474,11 @@ Route::get('/themes', function () {
                 'taiwan_event_count' => (int) ($eventRegions->taiwan_count ?? 0),
                 'global_event_count' => (int) ($eventRegions->global_count ?? 0),
                 'stock_count' => $mappedCount,
-                'price_score' => $priceScore,
-                'chip_score' => $chipScore,
+                'confidence' => $score,
+                'price_state' => $priceState['label'],
+                'price_tone' => $priceState['tone'],
+                'chip_state' => $chipState['label'],
+                'chip_tone' => $chipState['tone'],
                 'top_stocks' => array_slice($relatedStocks, 0, 4),
                 'related_stocks' => $relatedStocks,
             ];
