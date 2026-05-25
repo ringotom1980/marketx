@@ -72,8 +72,8 @@
         </div>
         <div class="panel">
             <div class="badge {{ $decisionTone }}">{{ $stock['decision'] }}</div>
-            <div class="score" style="margin-top:12px">{{ $stock['score'] }} / 100</div>
-            <p class="lead">信心度 {{ $stock['confidence'] }}%</p>
+            <p class="lead" style="margin-top:12px">信心指數</p>
+            <div class="score">{{ $stock['confidence'] }}%</div>
             @if ($stock['isWatched'])
                 <form method="post" action="/watchlist/{{ $stock['symbol'] }}" style="margin-top:12px">
                     @csrf
@@ -92,14 +92,13 @@
 
     <section class="grid two">
         <div class="panel">
-            <h2>六大模組分數</h2>
+            <h2>六大模組狀態</h2>
             <table class="table">
                 <tbody>
                 @foreach ($modules as $module)
                     <tr>
                         <th>{{ $module['name'] }}</th>
-                        <td><div class="meter"><span style="width: {{ min(100, max(0, $module['score'])) }}%"></span></div></td>
-                        <td>{{ $module['score'] }}</td>
+                        <td><span class="badge {{ $module['tone'] }}">{{ $module['label'] }}</span></td>
                     </tr>
                 @endforeach
                 </tbody>

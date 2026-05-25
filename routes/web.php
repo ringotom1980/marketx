@@ -8,6 +8,7 @@ use App\Support\FundamentalSignalAnalyzer;
 use App\Support\GlobalRadarBuilder;
 use App\Support\MarketxAuth;
 use App\Support\MarketDisplay;
+use App\Support\ModuleStateDisplay;
 use App\Support\Ai\AiPipelineService;
 use App\Support\Ai\AiUsageLimiter;
 use App\Support\StockEventChainBuilder;
@@ -128,7 +129,7 @@ Route::get('/', function () {
 
     $topStocks = Stock::query()
         ->join('stock_scores', 'stocks.id', '=', 'stock_scores.stock_id')
-        ->select('stocks.symbol', 'stocks.name', 'stock_scores.decision', 'stock_scores.total_score')
+        ->select('stocks.symbol', 'stocks.name', 'stock_scores.decision', 'stock_scores.total_score', 'stock_scores.confidence_score')
         ->whereNotNull('stock_scores.total_score')
         ->where('stock_scores.macro_score', '>', 0)
         ->where('stock_scores.event_score', '>', 0)
@@ -145,6 +146,7 @@ Route::get('/', function () {
             'name' => $stock->name,
             'decision' => $stock->decision ?? '等待計算',
             'score' => $stock->total_score ?? 0,
+            'confidence' => $stock->confidence_score ?? 0,
         ]);
 
     $events = DB::table('global_event_clusters')
@@ -364,14 +366,16 @@ Route::get('/s/{symbol}', function (string $symbol, StockEventChainBuilder $even
             'confidence' => $latestScore?->confidence_score ?? 0,
             'isWatched' => $isWatched,
         ],
-        'modules' => [
+        'modules' => collect([
             ['name' => '全球宏觀', 'score' => $latestScore?->macro_score ?? 0],
             ['name' => '全球事件', 'score' => $latestScore?->event_score ?? 0],
             ['name' => '題材熱度', 'score' => $themeModuleScore],
             ['name' => '技術結構', 'score' => $latestScore?->technical_score ?? 0],
             ['name' => '籌碼', 'score' => $latestScore?->chip_score ?? 0],
             ['name' => '財務營收', 'score' => $latestScore?->fundamental_score ?? 0],
-        ],
+        ])->map(function ($module) {
+            return $module + ModuleStateDisplay::fromScore($module['score'], $module['name']);
+        })->all(),
         'technical' => $technicalPayload,
         'chartData' => [
             'intraday' => [],

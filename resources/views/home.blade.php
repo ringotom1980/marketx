@@ -4,7 +4,7 @@
     <section class="page-head">
         <div>
             <h1>今日全球 × 台股狀態中心</h1>
-            <p class="lead">整合全球市場、重大事件、題材熱度與台股個股分數，先用免費官方資料與規則式引擎建立決策雷達。</p>
+            <p class="lead">整合全球市場、重大事件、題材熱度與台股個股狀態，先用免費官方資料與規則式引擎建立決策雷達。</p>
         </div>
         <form class="search" action="/search" method="get">
             <input name="q" value="{{ request('q') }}" placeholder="搜尋股票代號、名稱、產業">
@@ -69,17 +69,17 @@
         </div>
 
         <div class="panel">
-            <h2>今日高分股票</h2>
+            <h2>今日優先觀察</h2>
             <table class="table">
                 <tbody>
                 @forelse ($topStocks as $stock)
                     <tr>
                         <th><a href="/s/{{ $stock['symbol'] }}">{{ $stock['name'] }}</a></th>
                         <td><span class="badge red">{{ $stock['decision'] }}</span></td>
-                        <td>{{ $stock['score'] }}</td>
+                        <td>信心 {{ $stock['confidence'] }}%</td>
                     </tr>
                 @empty
-                    <tr><td colspan="3">尚未產生個股分數</td></tr>
+                    <tr><td colspan="3">尚未產生觀察名單</td></tr>
                 @endforelse
                 </tbody>
             </table>

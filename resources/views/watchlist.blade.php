@@ -106,7 +106,7 @@
         <div>
             <h1>追蹤清單</h1>
             <p class="lead">
-                自選股集中看分數、決策、收盤價與資料完整度。
+                自選股集中看決策、信心指數、收盤價與資料完整度。
                 @if ($isAdmin)
                     今日個股 AI 報告已用 {{ $aiUsage['used'] }} / {{ $aiUsage['limit'] }}，剩餘 {{ $aiUsage['remaining'] }} 檔。
                 @else
@@ -152,14 +152,10 @@
                         <span class="badge {{ $decisionTone($item['decision']) }}">{{ $item['decision'] }}</span>
                     </div>
 
-                    <div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin:14px 0">
+                    <div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin:14px 0">
                         <div>
-                            <p class="lead" style="font-size:12px">總分</p>
-                            <strong style="font-size:24px">{{ $item['score'] ?? '無' }}</strong>
-                        </div>
-                        <div>
-                            <p class="lead" style="font-size:12px">信心度</p>
-                            <strong style="font-size:24px">{{ $item['confidence'] ?? '無' }}</strong>
+                            <p class="lead" style="font-size:12px">信心指數</p>
+                            <strong style="font-size:24px">{{ $item['confidence'] === null ? '無' : $item['confidence'].'%' }}</strong>
                         </div>
                         <div>
                             <p class="lead" style="font-size:12px">收盤</p>
