@@ -13,7 +13,32 @@ Schedule::command('market:global-morning-pipeline')
     ->timezone('Asia/Taipei')
     ->withoutOverlapping();
 
+Schedule::command('market:taiwan-price-pipeline')
+    ->dailyAt('14:05')
+    ->timezone('Asia/Taipei')
+    ->withoutOverlapping();
+
+Schedule::command('market:taiwan-price-pipeline')
+    ->dailyAt('15:10')
+    ->timezone('Asia/Taipei')
+    ->withoutOverlapping();
+
+Schedule::command('market:taiwan-aftermarket-pipeline')
+    ->dailyAt('16:40')
+    ->timezone('Asia/Taipei')
+    ->withoutOverlapping();
+
 Schedule::command('market:daily-pipeline')
     ->dailyAt('21:30')
+    ->timezone('Asia/Taipei')
+    ->withoutOverlapping();
+
+Schedule::command('market:taifex-night-pipeline')
+    ->dailyAt('22:20')
+    ->timezone('Asia/Taipei')
+    ->withoutOverlapping();
+
+Schedule::command('market:taifex-night-pipeline')
+    ->dailyAt('00:30')
     ->timezone('Asia/Taipei')
     ->withoutOverlapping();

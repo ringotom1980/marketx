@@ -31,6 +31,13 @@ class AppServiceProvider extends ServiceProvider
                         ->whereNotNull('finished_at')
                         ->whereIn('job_name', [
                             'taiwan_stocks',
+                            'taiwan_prices_fast',
+                            'technical_scores_fast',
+                            'taiwan_prices_aftermarket',
+                            'taiwan_chips_aftermarket',
+                            'official_chip_metrics_aftermarket',
+                            'technical_scores_aftermarket',
+                            'decision_scores_aftermarket',
                             'taiwan_chips',
                             'taiwan_margins',
                             'official_chip_metrics',
@@ -50,6 +57,9 @@ class AppServiceProvider extends ServiceProvider
                         ->whereIn('job_name', [
                             'global_market',
                             'taifex_night',
+                            'taifex_night_refresh',
+                            'global_influence_night',
+                            'decision_scores_night',
                             'global_events',
                             'event_clusters',
                             'global_influence',
