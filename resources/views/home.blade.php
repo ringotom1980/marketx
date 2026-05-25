@@ -280,7 +280,6 @@
                 let dragStartX = 0;
                 let dragStartStart = 0;
                 let pinchDistance = null;
-                let longPressTimer = null;
 
                 const data = () => ranges[activeRange] || [];
                 const visible = () => data().slice(start, start + count);
@@ -464,11 +463,6 @@
                     dragging = true;
                     dragStartX = event.clientX;
                     dragStartStart = start;
-                    longPressTimer = window.setTimeout(() => {
-                        const rect = canvas.getBoundingClientRect();
-                        crossIndex = xToIndex(event.clientX - rect.left, canvas._metrics);
-                        draw();
-                    }, 350);
                 });
 
                 canvas.addEventListener('pointermove', (event) => {
@@ -484,32 +478,27 @@
                         draw();
                         return;
                     }
-                    if (longPressTimer) {
-                        window.clearTimeout(longPressTimer);
-                        longPressTimer = null;
-                    }
                     const delta = event.clientX - dragStartX;
+                    if (Math.abs(delta) < 6) {
+                        return;
+                    }
                     const shift = Math.round(delta / canvas._metrics.step);
                     start = dragStartStart - shift;
                     crossIndex = null;
                     draw();
                 });
 
-                canvas.addEventListener('pointerup', () => {
-                    dragging = false;
-                    if (longPressTimer) {
-                        window.clearTimeout(longPressTimer);
-                        longPressTimer = null;
+                canvas.addEventListener('pointerup', (event) => {
+                    if (dragging && canvas._metrics && Math.abs(event.clientX - dragStartX) < 6) {
+                        const rect = canvas.getBoundingClientRect();
+                        crossIndex = xToIndex(event.clientX - rect.left, canvas._metrics);
+                        draw();
                     }
+                    dragging = false;
                 });
 
                 canvas.addEventListener('pointerleave', () => {
                     dragging = false;
-                    crossIndex = null;
-                    if (longPressTimer) {
-                        window.clearTimeout(longPressTimer);
-                        longPressTimer = null;
-                    }
                     draw();
                 });
 
