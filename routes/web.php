@@ -627,7 +627,12 @@ Route::get('/', function () {
                 && $candidateHas($labels, ['MACD 黃金交叉', 'KD 黃金交叉', '20 日突破', '價漲量增', '均線多頭排列', '題材升溫', '營收轉強'])
                 && count($labels) >= 2;
         })
-        ->sortByDesc(fn ($stock) => (int) ($stock->confidence_score ?? 0) + (int) ($stock->theme_score ?? 0) + (int) ($stock->technical_score ?? 0))
+        ->sortByDesc(fn ($stock) => sprintf(
+            '%03d-%03d-%03d',
+            (int) ($stock->confidence_score ?? 0),
+            (int) ($stock->theme_score ?? 0),
+            (int) ($stock->technical_score ?? 0),
+        ))
         ->map(fn ($stock) => $stockCardItem($stock, $stock->radar_reasons))
         ->take(6)
         ->values();
@@ -689,7 +694,12 @@ Route::get('/', function () {
                 && $candidateHas($labels, ['乖離過大', 'RSI 過熱', 'KD 過熱', '爆量轉弱', '高檔放量轉弱', '評價偏高', '融資偏重', '跌破月線', '跌破布林下緣'])
                 && count($labels) >= 2;
         })
-        ->sortByDesc(fn ($stock) => (int) ($stock->confidence_score ?? 0) + abs((float) ($stock->bais20 ?? 0)) + max(0, (float) ($stock->return20 ?? 0)))
+        ->sortByDesc(fn ($stock) => sprintf(
+            '%03d-%06.2f-%06.2f',
+            (int) ($stock->confidence_score ?? 0),
+            abs((float) ($stock->bais20 ?? 0)),
+            max(0, (float) ($stock->return20 ?? 0)),
+        ))
         ->map(fn ($stock) => $stockCardItem($stock, $stock->radar_reasons))
         ->take(6)
         ->values();
@@ -709,7 +719,12 @@ Route::get('/', function () {
                 && (float) ($stock->return20 ?? 0) < 8
                 && count($labels) >= 2;
         })
-        ->sortByDesc(fn ($stock) => (int) ($stock->theme_score ?? 0) + (int) ($stock->confidence_score ?? 0))
+        ->sortByDesc(fn ($stock) => sprintf(
+            '%03d-%03d-%03d',
+            (int) ($stock->confidence_score ?? 0),
+            (int) ($stock->theme_score ?? 0),
+            (int) ($stock->technical_score ?? 0),
+        ))
         ->map(fn ($stock) => $stockCardItem($stock, $stock->radar_reasons))
         ->take(6)
         ->values();
@@ -724,7 +739,11 @@ Route::get('/', function () {
         ->filter(fn ($stock) => (float) ($stock->return20 ?? 0) <= -5
             && (float) ($stock->volume_ratio20 ?? 0) >= 1.35
             && count($stock->radar_reasons) >= 2)
-        ->sortByDesc(fn ($stock) => (float) ($stock->volume_ratio20 ?? 0))
+        ->sortByDesc(fn ($stock) => sprintf(
+            '%03d-%06.2f',
+            (int) ($stock->confidence_score ?? 0),
+            (float) ($stock->volume_ratio20 ?? 0),
+        ))
         ->map(fn ($stock) => $stockCardItem($stock, $stock->radar_reasons))
         ->take(6)
         ->values();
@@ -738,7 +757,11 @@ Route::get('/', function () {
         })
         ->filter(fn ($stock) => ((int) ($stock->technical_score ?? 0) < 48 || (float) ($stock->return20 ?? 0) <= -8)
             && count($stock->radar_reasons) >= 2)
-        ->sortBy(fn ($stock) => (int) ($stock->confidence_score ?? 0))
+        ->sortByDesc(fn ($stock) => sprintf(
+            '%03d-%03d',
+            (int) ($stock->confidence_score ?? 0),
+            100 - (int) ($stock->technical_score ?? 0),
+        ))
         ->map(fn ($stock) => $stockCardItem($stock, $stock->radar_reasons))
         ->take(6)
         ->values();
