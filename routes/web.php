@@ -359,11 +359,11 @@ Route::get('/', function () {
             $reasons->push($reason('乖離過大', 'warning'));
         }
 
-        if ($bais !== null && $bais >= 8 && ($hasSignal($technicalSignals, 'RSI 過熱') || $hasSignal($technicalSignals, 'KD 過熱'))) {
+        if ($bais !== null && $bais >= 12 && ($hasSignal($technicalSignals, 'RSI 過熱') || $hasSignal($technicalSignals, 'KD 過熱'))) {
             $reasons->push($reason($hasSignal($technicalSignals, 'RSI 過熱') ? 'RSI 過熱' : 'KD 過熱', 'warning'));
         }
 
-        if ($bais !== null && $bais >= 8 && $hasSignal($technicalSignals, 'MACD 正數縮小')) {
+        if ($bais !== null && $bais >= 12 && (float) ($stock->return20 ?? 0) >= 10 && $hasSignal($technicalSignals, 'MACD 正數縮小')) {
             $reasons->push($reason('MACD 正數縮小', 'warning'));
         }
 
@@ -379,7 +379,7 @@ Route::get('/', function () {
             (float) ($stock->margin_balance ?? 0) > 0
             && (float) ($stock->volume ?? 0) > 0
             && ((float) $stock->margin_balance / max(1, (float) $stock->volume)) >= 5
-            && ((float) ($stock->return20 ?? 0) >= 8 || ($bais !== null && $bais >= 8))
+            && ((float) ($stock->return20 ?? 0) >= 15 || ($bais !== null && $bais >= 12))
         ) {
             $reasons->push($reason('融資偏重', 'warning'));
         }
