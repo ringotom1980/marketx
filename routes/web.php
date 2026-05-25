@@ -287,37 +287,35 @@ Route::get('/', function () {
 
         $reasons = collect();
 
-        foreach (['KD 黃金交叉', 'MACD 黃金交叉', 'MACD 翻正', '均線多頭排列', '20 日突破', '價漲量增', 'RSI 強勢區', '突破布林上緣'] as $preferred) {
+        foreach (['MACD 黃金交叉', 'KD 黃金交叉', '20 日突破', '價漲量增', '均線多頭排列', 'MACD 翻正', '突破布林上緣', 'RSI 強勢區'] as $preferred) {
             if ($technicalSignals->contains($preferred)) {
                 $reasons->push($preferred);
             }
         }
 
-        $reasons = $reasons->merge($technicalSignals);
-
-        if ((int) ($stock->chip_score ?? 0) >= 75) {
+        if ((int) ($stock->chip_score ?? 0) >= 78) {
             $reasons->push('籌碼集中');
         }
 
-        if ((int) ($stock->theme_score ?? 0) >= 70) {
+        if ((int) ($stock->theme_score ?? 0) >= 76) {
             $reasons->push('題材升溫');
         }
 
-        if ((int) ($stock->fundamental_score ?? 0) >= 70) {
+        if ((int) ($stock->fundamental_score ?? 0) >= 76) {
             $reasons->push('財務穩健');
         }
 
-        if ((int) ($stock->event_score ?? 0) >= 70) {
+        if ((int) ($stock->event_score ?? 0) >= 76) {
             $reasons->push('事件支撐');
         }
 
-        if ((int) ($stock->macro_score ?? 0) >= 70) {
+        if ((int) ($stock->macro_score ?? 0) >= 76) {
             $reasons->push('大環境偏多');
         }
 
         return $reasons
             ->unique()
-            ->take(4)
+            ->take(3)
             ->values()
             ->all();
     };
@@ -448,19 +446,19 @@ Route::get('/', function () {
             ->filter(fn ($signal) => in_array($signal['tone'] ?? null, ['red', 'amber'], true))
             ->pluck('title')
             ->map(fn ($title) => (string) $title)
+            ->reject(fn ($title) => in_array($title, ['MACD 負數縮減'], true))
             ->filter()
             ->values();
 
         $preferred = collect([
             'MACD 死亡交叉',
             'KD 死亡交叉',
+            'MACD 正數縮小',
             '跌破月線',
             '跌破布林下緣',
             '高檔放量轉弱',
             '20 日動能弱',
             'RSI 弱勢',
-            'MACD 正數縮小',
-            'MACD 負數縮減',
             'EMA 動能偏弱',
             '月線低於季線',
             'KD 偏弱',
@@ -480,7 +478,7 @@ Route::get('/', function () {
             ->merge($technicalSignals)
             ->merge($flagRisks)
             ->unique()
-            ->take(4)
+            ->take(3)
             ->values()
             ->all();
     };
