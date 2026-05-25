@@ -71,11 +71,19 @@
             text-align: center;
             padding: 16px;
         }
+        .market-chart-empty[hidden] {
+            display: none;
+        }
+        .market-chart-source,
         .market-chart-tip {
             margin: 8px 0 0;
             color: var(--muted);
             font-size: 12px;
             line-height: 1.5;
+        }
+        .market-chart-source {
+            color: #7b2d2d;
+            font-weight: 800;
         }
         @media (min-width: 821px) {
             .market-chart-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
@@ -123,6 +131,7 @@
                     <canvas></canvas>
                 </div>
                 <p class="market-chart-empty" hidden>目前官方資料還不足以產生 K 線。</p>
+                <p class="market-chart-source">資料來源：{{ $chart['source'] }}</p>
                 <p class="market-chart-tip">可雙指縮放、左右拖曳；長按或滑鼠停留可顯示十字線與開高低收。</p>
             </div>
         @empty

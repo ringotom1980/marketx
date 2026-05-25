@@ -241,12 +241,14 @@ Route::get('/', function () {
             'id' => 'taiex',
             'title' => '台股大盤 K 線',
             'subtitle' => '加權指數，日 K / 周 K / 月 K',
+            'source' => 'Yahoo Finance ^TWII',
             'ranges' => $buildIndicatorK('TAIEX'),
         ],
         [
             'id' => 'tx-night',
             'title' => '台股夜盤 K 線',
             'subtitle' => 'TAIFEX TX 夜盤，日 K / 周 K / 月 K',
+            'source' => '臺灣期貨交易所：期貨每日交易行情下載',
             'ranges' => $buildIndicatorK('TAIFEX TX Night'),
         ],
     ];
