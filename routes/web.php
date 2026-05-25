@@ -349,9 +349,9 @@ Route::get('/', function () {
         $bais = $bais20($stock);
         $reasons = collect();
 
-        foreach (['MACD 死亡交叉', 'KD 死亡交叉', 'MACD 正數縮小', '跌破月線', '跌破布林下緣', '高檔放量轉弱', '20 日動能弱', 'RSI 弱勢'] as $preferred) {
+        foreach (['MACD 死亡交叉', 'KD 死亡交叉', '跌破月線', '跌破布林下緣', '高檔放量轉弱', '20 日動能弱', 'RSI 弱勢'] as $preferred) {
             if ($hasSignal($technicalSignals, $preferred)) {
-                $reasons->push($reason($preferred, str_contains($preferred, '過熱') || str_contains($preferred, '量能') ? 'warning' : 'down'));
+                $reasons->push($reason($preferred, 'down'));
             }
         }
 
@@ -359,7 +359,15 @@ Route::get('/', function () {
             $reasons->push($reason('乖離過大', 'warning'));
         }
 
-        if ((float) ($stock->per ?? 0) > 40 && (float) ($stock->yoy_pct ?? 0) < 10) {
+        if ($bais !== null && $bais >= 8 && ($hasSignal($technicalSignals, 'RSI 過熱') || $hasSignal($technicalSignals, 'KD 過熱'))) {
+            $reasons->push($reason($hasSignal($technicalSignals, 'RSI 過熱') ? 'RSI 過熱' : 'KD 過熱', 'warning'));
+        }
+
+        if ($bais !== null && $bais >= 8 && $hasSignal($technicalSignals, 'MACD 正數縮小')) {
+            $reasons->push($reason('MACD 正數縮小', 'warning'));
+        }
+
+        if ((float) ($stock->per ?? 0) > 40 && (float) ($stock->yoy_pct ?? 0) < 10 && (int) ($stock->theme_score ?? 0) >= 65) {
             $reasons->push($reason('評價偏高', 'warning'));
         }
 
@@ -367,12 +375,16 @@ Route::get('/', function () {
             $reasons->push($reason('爆量轉弱', 'down'));
         }
 
-        if ((float) ($stock->margin_balance ?? 0) > 0 && (float) ($stock->volume ?? 0) > 0 && ((float) $stock->margin_balance / max(1, (float) $stock->volume)) >= 5) {
+        if (
+            (float) ($stock->margin_balance ?? 0) > 0
+            && (float) ($stock->volume ?? 0) > 0
+            && ((float) $stock->margin_balance / max(1, (float) $stock->volume)) >= 5
+            && ((float) ($stock->return20 ?? 0) >= 8 || ($bais !== null && $bais >= 8))
+        ) {
             $reasons->push($reason('融資偏重', 'warning'));
         }
 
         return $reasons
-            ->merge($technicalSignals->map(fn ($signal) => $reason($signal, str_contains($signal, '過熱') || str_contains($signal, '量能') ? 'warning' : 'down')))
             ->unique('label')
             ->take(3)
             ->values()
@@ -585,7 +597,6 @@ Route::get('/', function () {
     $riskStocks = $stockCandidates
         ->reject(fn ($stock) => in_array($stock->symbol, $usedSymbols, true))
         ->filter(fn ($stock) => (int) ($stock->confidence_score ?? 0) >= 55
-            && ((int) ($stock->theme_score ?? 0) >= 55 || (int) ($stock->technical_score ?? 0) >= 45)
             && $riskReasons($stock) !== [])
         ->map(fn ($stock) => $stockCardItem($stock, $riskReasons($stock)))
         ->take(6)
