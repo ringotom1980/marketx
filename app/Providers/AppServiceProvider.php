@@ -26,9 +26,35 @@ class AppServiceProvider extends ServiceProvider
         View::composer('welcome', function ($view) {
             $layoutState = Cache::remember('marketx.layout_state', 30, function () {
                 try {
-                    $latestJob = DB::table('system_jobs')
+                    $latestTaiwanJob = DB::table('system_jobs')
                         ->where('status', 'success')
                         ->whereNotNull('finished_at')
+                        ->whereIn('job_name', [
+                            'taiwan_stocks',
+                            'taiwan_chips',
+                            'taiwan_margins',
+                            'official_chip_metrics',
+                            'taiwan_revenues',
+                            'taiwan_valuations',
+                            'official_financials',
+                            'technical_scores',
+                            'fundamental_scores',
+                            'decision_scores',
+                        ])
+                        ->orderByDesc('finished_at')
+                        ->first(['job_name', 'finished_at']);
+
+                    $latestGlobalJob = DB::table('system_jobs')
+                        ->where('status', 'success')
+                        ->whereNotNull('finished_at')
+                        ->whereIn('job_name', [
+                            'global_market',
+                            'taifex_night',
+                            'global_events',
+                            'event_clusters',
+                            'global_influence',
+                            'ai_event_preprocess',
+                        ])
                         ->orderByDesc('finished_at')
                         ->first(['job_name', 'finished_at']);
 
@@ -42,8 +68,10 @@ class AppServiceProvider extends ServiceProvider
                         'dataFreshness' => [
                             'taiwan_date' => DB::table('stock_prices_1d')->max('trade_date'),
                             'global_date' => DB::table('global_market_data')->max('trade_date'),
-                            'last_success_at' => $latestJob?->finished_at,
-                            'last_success_job' => $latestJob?->job_name,
+                            'taiwan_updated_at' => $latestTaiwanJob?->finished_at,
+                            'taiwan_updated_job' => $latestTaiwanJob?->job_name,
+                            'global_updated_at' => $latestGlobalJob?->finished_at,
+                            'global_updated_job' => $latestGlobalJob?->job_name,
                         ],
                     ];
                 } catch (Throwable) {
@@ -55,8 +83,10 @@ class AppServiceProvider extends ServiceProvider
                         'dataFreshness' => [
                             'taiwan_date' => null,
                             'global_date' => null,
-                            'last_success_at' => null,
-                            'last_success_job' => null,
+                            'taiwan_updated_at' => null,
+                            'taiwan_updated_job' => null,
+                            'global_updated_at' => null,
+                            'global_updated_job' => null,
                         ],
                     ];
                 }

@@ -69,19 +69,27 @@
             margin: 0 auto;
             padding: 8px max(14px, env(safe-area-inset-left)) 8px max(14px, env(safe-area-inset-right));
             display: grid;
-            gap: 8px;
+            gap: 7px;
+        }
+
+        .topbar-main {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 10px;
+            min-width: 0;
         }
 
         .brand {
             display: inline-flex;
             align-items: center;
-            gap: 12px;
+            gap: 9px;
             min-width: 0;
         }
 
         .brand img {
-            width: 58px;
-            height: 58px;
+            width: 50px;
+            height: 50px;
             border-radius: 0;
             object-fit: cover;
             display: block;
@@ -95,7 +103,7 @@
 
         .brand-name {
             font-weight: 900;
-            font-size: 24px;
+            font-size: clamp(19px, 6vw, 24px);
             line-height: 1.05;
             white-space: nowrap;
             color: #222831;
@@ -103,10 +111,35 @@
 
         .brand-tagline {
             color: var(--muted);
-            font-size: 11px;
+            font-size: clamp(8px, 2.45vw, 11px);
             font-weight: 700;
-            letter-spacing: .34em;
+            letter-spacing: .2em;
             white-space: nowrap;
+        }
+
+        .account-actions {
+            display: flex;
+            align-items: center;
+            justify-content: flex-end;
+            gap: 6px;
+            flex: 0 0 auto;
+            font-size: clamp(12px, 3.2vw, 13px);
+        }
+
+        .account-actions a {
+            border: 1px solid var(--line);
+            border-radius: 999px;
+            padding: 6px 8px;
+            color: var(--muted);
+            line-height: 1;
+            white-space: nowrap;
+            background: #fff;
+        }
+
+        .account-actions a.active,
+        .account-actions a:hover {
+            color: var(--button);
+            border-color: rgba(193, 18, 31, .28);
         }
 
         .site-stats {
@@ -139,25 +172,23 @@
         }
 
         .freshness-bar {
-            display: flex;
-            gap: 8px;
-            overflow-x: auto;
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 6px;
             color: var(--muted);
-            font-size: 12px;
+            font-size: clamp(10px, 2.8vw, 12px);
             line-height: 1.3;
             white-space: nowrap;
-            scrollbar-width: none;
-            -webkit-overflow-scrolling: touch;
         }
 
-        .freshness-bar::-webkit-scrollbar { display: none; }
-
         .freshness-pill {
-            flex: 0 0 auto;
+            min-width: 0;
             border: 1px solid var(--line);
             border-radius: 999px;
             background: #fff;
-            padding: 5px 8px;
+            padding: 5px 7px;
+            overflow: hidden;
+            text-overflow: ellipsis;
         }
 
         .freshness-pill strong {
@@ -166,25 +197,25 @@
         }
 
         .nav {
-            display: flex;
+            display: grid;
+            grid-template-columns: repeat(4, minmax(0, 1fr));
             gap: 8px;
-            overflow-x: auto;
+            overflow: hidden;
             padding: 2px 0 4px;
             color: var(--muted);
-            font-size: 14px;
-            scrollbar-width: none;
-            -webkit-overflow-scrolling: touch;
+            font-size: clamp(12px, 3.35vw, 14px);
         }
 
-        .nav::-webkit-scrollbar { display: none; }
-
         .nav a {
-            flex: 0 0 auto;
+            min-width: 0;
             border: 1px solid transparent;
             border-radius: 999px;
-            padding: 7px 10px;
+            padding: 7px 4px;
             line-height: 1;
             white-space: nowrap;
+            text-align: center;
+            overflow: hidden;
+            text-overflow: ellipsis;
         }
 
         .nav a.active {
@@ -360,24 +391,26 @@
         @media (min-width: 821px) {
             .topbar-inner {
                 padding: 10px 20px;
-                display: flex;
+                grid-template-columns: minmax(0, 1fr) auto;
                 align-items: center;
-                justify-content: space-between;
-                gap: 24px;
+                gap: 8px 24px;
             }
 
             .brand { gap: 14px; }
             .brand img { width: 72px; height: 72px; }
             .brand-name { font-size: 34px; }
             .brand-tagline { font-size: 13px; }
-            .site-stats { margin-left: auto; font-size: 12px; }
+            .topbar-main { grid-column: 1 / -1; }
+            .account-actions { font-size: 13px; }
+            .account-actions a { padding: 7px 11px; }
+            .site-stats { grid-column: 1; font-size: 12px; }
             .freshness-bar {
-                order: 3;
-                flex-basis: 100%;
-                justify-content: flex-end;
-                overflow: visible;
+                grid-column: 1;
+                display: flex;
+                justify-content: flex-start;
             }
-            .nav { flex-wrap: wrap; justify-content: flex-end; overflow: visible; }
+            .freshness-pill { flex: 0 0 auto; padding: 6px 10px; }
+            .nav { grid-column: 2; grid-row: 2 / 4; align-self: end; display: flex; flex-wrap: wrap; justify-content: flex-end; overflow: visible; }
             .nav a { padding: 0; border: 0; background: transparent; }
             .nav a.active,
             .nav a:hover { color: var(--ink); }
@@ -407,32 +440,35 @@
 <div class="shell">
     <header class="topbar">
         <div class="topbar-inner">
-            <a class="brand" href="/">
-                <img src="/assets/marketx-logo.png?v=20260524-logo2" alt="股市在幹嘛">
-                <span class="brand-mark">
-                    <span class="brand-name">股市在幹嘛</span>
-                    <span class="brand-tagline">看懂市場・掌握機會</span>
-                </span>
-            </a>
+            <div class="topbar-main">
+                <a class="brand" href="/">
+                    <img src="/assets/marketx-logo.png?v=20260524-logo2" alt="股市在幹嘛">
+                    <span class="brand-mark">
+                        <span class="brand-name">股市在幹嘛</span>
+                        <span class="brand-tagline">看懂市場・掌握機會</span>
+                    </span>
+                </a>
+                <div class="account-actions" aria-label="帳號功能">
+                    @if (session('marketx_admin') === true || session('marketx_is_admin') === true)
+                        <a class="{{ request()->is('admin') ? 'active' : '' }}" href="/admin">後台</a>
+                    @endif
+                    <a href="/logout">登出</a>
+                </div>
+            </div>
             <div class="site-stats" aria-label="網站狀態">
                 <span>會員 <strong>{{ number_format($siteStats['members'] ?? 0) }}</strong></span>
                 <i class="dot" aria-hidden="true"></i>
                 <span>線上 <strong>{{ number_format($siteStats['online'] ?? 0) }}</strong></span>
             </div>
             <div class="freshness-bar" aria-label="資料更新時間">
-                <span class="freshness-pill">台股資料 <strong>{{ $dataFreshness['taiwan_date'] ?? '待更新' }}</strong></span>
-                <span class="freshness-pill">全球資料 <strong>{{ $dataFreshness['global_date'] ?? '待更新' }}</strong></span>
-                <span class="freshness-pill">最後更新 <strong>{{ $dataFreshness['last_success_at'] ? \Carbon\CarbonImmutable::parse($dataFreshness['last_success_at'])->timezone('Asia/Taipei')->format('m/d H:i') : '待更新' }}</strong></span>
+                <span class="freshness-pill">台股更新 <strong>{{ $dataFreshness['taiwan_updated_at'] ? \Carbon\CarbonImmutable::parse($dataFreshness['taiwan_updated_at'])->timezone('Asia/Taipei')->format('m/d H:i') : '待更新' }}</strong></span>
+                <span class="freshness-pill">全球更新 <strong>{{ $dataFreshness['global_updated_at'] ? \Carbon\CarbonImmutable::parse($dataFreshness['global_updated_at'])->timezone('Asia/Taipei')->format('m/d H:i') : '待更新' }}</strong></span>
             </div>
             <nav class="nav">
                 <a class="{{ request()->is('/') ? 'active' : '' }}" href="/">今日狀態</a>
                 <a class="{{ request()->is('global') ? 'active' : '' }}" href="/global">全球雷達</a>
                 <a class="{{ request()->is('themes') ? 'active' : '' }}" href="/themes">題材雷達</a>
                 <a class="{{ request()->is('watchlist') ? 'active' : '' }}" href="/watchlist">追蹤清單</a>
-                @if (session('marketx_admin') === true || session('marketx_is_admin') === true)
-                    <a class="{{ request()->is('admin') ? 'active' : '' }}" href="/admin">後台</a>
-                @endif
-                <a href="/logout">登出</a>
             </nav>
         </div>
     </header>
