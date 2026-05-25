@@ -89,12 +89,14 @@
             <h2>今日風險升高股票</h2>
             <table class="table">
                 <tbody>
-                @foreach ($riskStocks as $stock)
+                @forelse ($riskStocks as $stock)
                     <tr>
-                        <th>{{ $stock['name'] }}</th>
+                        <th><a href="/s/{{ $stock['symbol'] }}">{{ $stock['name'] }}</a></th>
                         <td><span class="badge amber">{{ $stock['risk'] }}</span></td>
                     </tr>
-                @endforeach
+                @empty
+                    <tr><td colspan="2">目前沒有明顯風險升高名單</td></tr>
+                @endforelse
                 </tbody>
             </table>
         </div>

@@ -235,14 +235,67 @@ Route::get('/', function () {
             'score' => (int) ($theme->heat_score ?? 0),
         ]);
 
+    $riskLabel = function (array $flags): string {
+        $labels = [
+            'below_sma20' => '跌破月線',
+            'sma20_below_sma60' => '月線低於季線',
+            'ema_momentum_weak' => '短線動能轉弱',
+            'negative_20d_momentum' => '近 20 日轉弱',
+            'high_volume_down' => '爆量下跌',
+            'high_volatility' => '波動放大',
+            'rsi_overheated' => 'RSI 過熱',
+            'rsi_weak' => 'RSI 偏弱',
+            'macd_bearish' => 'MACD 偏空',
+            'kd_weak' => 'KD 偏弱',
+            'kd_overheated' => 'KD 高檔過熱',
+            'below_bollinger_lower' => '跌破布林下緣',
+            'atr_expanded' => 'ATR 風險擴大',
+        ];
+
+        return collect($flags)
+            ->map(fn ($flag) => $labels[$flag] ?? $flag)
+            ->take(3)
+            ->implode('、');
+    };
+
+    $riskStocks = Stock::query()
+        ->join('stock_scores', 'stocks.id', '=', 'stock_scores.stock_id')
+        ->select(
+            'stocks.symbol',
+            'stocks.name',
+            'stock_scores.risk_flags',
+            'stock_scores.total_score',
+            'stock_scores.confidence_score',
+            DB::raw('json_array_length(stock_scores.risk_flags) as risk_count')
+        )
+        ->whereRaw('stock_scores.score_date = (select max(score_date) from stock_scores)')
+        ->whereNotNull('stock_scores.risk_flags')
+        ->whereRaw("stock_scores.risk_flags::text <> '[]'")
+        ->orderByDesc('risk_count')
+        ->orderBy('stock_scores.total_score')
+        ->limit(5)
+        ->get()
+        ->map(function ($stock) use ($riskLabel) {
+            $flags = is_array($stock->risk_flags)
+                ? $stock->risk_flags
+                : (json_decode((string) $stock->risk_flags, true) ?: []);
+
+            return [
+                'symbol' => $stock->symbol,
+                'name' => $stock->name,
+                'risk' => $riskLabel($flags),
+                'confidence' => (int) ($stock->confidence_score ?? 0),
+            ];
+        })
+        ->filter(fn ($stock) => $stock['risk'] !== '')
+        ->values();
+
     return view('home', [
         'markets' => $markets,
         'events' => $events,
         'themes' => $themes,
         'topStocks' => $topStocks,
-        'riskStocks' => [
-            ['name' => '高檔震盪觀察', 'risk' => '題材熱度轉弱、量能放大或法人轉賣時列入警示。'],
-        ],
+        'riskStocks' => $riskStocks,
     ]);
 });
 
