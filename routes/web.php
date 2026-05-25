@@ -350,6 +350,11 @@ Route::get('/', function () {
             ->all();
     };
 
+    $reasonLabels = fn (array $reasons): array => collect($reasons)->pluck('label')->all();
+
+    $candidateHas = fn (array $labels, array $needles): bool => collect($needles)
+        ->contains(fn ($needle) => in_array($needle, $labels, true));
+
     $riskReasons = function (object $stock) use ($signalsFor, $reason, $hasSignal, $bais20): array {
         $technicalSignals = $signalsFor($stock, ['red', 'amber'])
             ->reject(fn ($title) => in_array($title, ['MACD 負數縮減'], true))
@@ -568,11 +573,21 @@ Route::get('/', function () {
     ];
 
     $topStocks = $stockCandidates
-        ->filter(fn ($stock) => (int) ($stock->confidence_score ?? 0) >= 65
-            && (int) ($stock->total_score ?? 0) >= 58
-            && ($bais20($stock) === null || abs($bais20($stock)) <= 12)
-            && $priorityReasons($stock) !== [])
-        ->map(fn ($stock) => $stockCardItem($stock, $priorityReasons($stock)))
+        ->map(function ($stock) use ($priorityReasons) {
+            $stock->radar_reasons = $priorityReasons($stock);
+            return $stock;
+        })
+        ->filter(function ($stock) use ($bais20, $reasonLabels, $candidateHas) {
+            $labels = $reasonLabels($stock->radar_reasons);
+
+            return (int) ($stock->confidence_score ?? 0) >= 65
+                && (int) ($stock->total_score ?? 0) >= 58
+                && ($bais20($stock) === null || abs($bais20($stock)) <= 12)
+                && $candidateHas($labels, ['MACD 黃金交叉', 'KD 黃金交叉', '20 日突破', '價漲量增', '均線多頭排列', '題材升溫', '營收轉強'])
+                && count($labels) >= 2;
+        })
+        ->sortByDesc(fn ($stock) => (int) ($stock->confidence_score ?? 0) + (int) ($stock->theme_score ?? 0) + (int) ($stock->technical_score ?? 0))
+        ->map(fn ($stock) => $stockCardItem($stock, $stock->radar_reasons))
         ->take(6)
         ->values();
     $usedSymbols = $topStocks->pluck('symbol')->all();
@@ -622,40 +637,68 @@ Route::get('/', function () {
 
     $riskStocks = $stockCandidates
         ->reject(fn ($stock) => in_array($stock->symbol, $usedSymbols, true))
-        ->filter(fn ($stock) => (int) ($stock->confidence_score ?? 0) >= 55
-            && $riskReasons($stock) !== [])
-        ->map(fn ($stock) => $stockCardItem($stock, $riskReasons($stock)))
+        ->map(function ($stock) use ($riskReasons) {
+            $stock->radar_reasons = $riskReasons($stock);
+            return $stock;
+        })
+        ->filter(function ($stock) use ($reasonLabels, $candidateHas) {
+            $labels = $reasonLabels($stock->radar_reasons);
+
+            return (int) ($stock->confidence_score ?? 0) >= 55
+                && $candidateHas($labels, ['乖離過大', 'RSI 過熱', 'KD 過熱', '爆量轉弱', '高檔放量轉弱', '評價偏高', '融資偏重', '跌破月線', '跌破布林下緣'])
+                && count($labels) >= 2;
+        })
+        ->sortByDesc(fn ($stock) => (int) ($stock->confidence_score ?? 0) + abs((float) ($stock->bais20 ?? 0)) + max(0, (float) ($stock->return20 ?? 0)))
+        ->map(fn ($stock) => $stockCardItem($stock, $stock->radar_reasons))
         ->take(6)
         ->values();
     $usedSymbols = array_merge($usedSymbols, $riskStocks->pluck('symbol')->all());
 
     $potentialStocks = $stockCandidates
         ->reject(fn ($stock) => in_array($stock->symbol, $usedSymbols, true))
-        ->filter(fn ($stock) => (int) ($stock->confidence_score ?? 0) >= 50
-            && (int) ($stock->total_score ?? 0) >= 48
-            && $potentialReasons($stock) !== [])
-        ->map(fn ($stock) => $stockCardItem($stock, $potentialReasons($stock)))
+        ->map(function ($stock) use ($potentialReasons) {
+            $stock->radar_reasons = $potentialReasons($stock);
+            return $stock;
+        })
+        ->filter(function ($stock) use ($reasonLabels) {
+            $labels = $reasonLabels($stock->radar_reasons);
+
+            return (int) ($stock->confidence_score ?? 0) >= 50
+                && (int) ($stock->total_score ?? 0) >= 48
+                && (float) ($stock->return20 ?? 0) < 8
+                && count($labels) >= 2;
+        })
+        ->sortByDesc(fn ($stock) => (int) ($stock->theme_score ?? 0) + (int) ($stock->confidence_score ?? 0))
+        ->map(fn ($stock) => $stockCardItem($stock, $stock->radar_reasons))
         ->take(6)
         ->values();
     $usedSymbols = array_merge($usedSymbols, $potentialStocks->pluck('symbol')->all());
 
     $lowVolumeStocks = $stockCandidates
         ->reject(fn ($stock) => in_array($stock->symbol, $usedSymbols, true))
+        ->map(function ($stock) use ($lowVolumeReasons) {
+            $stock->radar_reasons = $lowVolumeReasons($stock);
+            return $stock;
+        })
         ->filter(fn ($stock) => (float) ($stock->return20 ?? 0) <= -5
             && (float) ($stock->volume_ratio20 ?? 0) >= 1.35
-            && $lowVolumeReasons($stock) !== [])
+            && count($stock->radar_reasons) >= 2)
         ->sortByDesc(fn ($stock) => (float) ($stock->volume_ratio20 ?? 0))
-        ->map(fn ($stock) => $stockCardItem($stock, $lowVolumeReasons($stock)))
+        ->map(fn ($stock) => $stockCardItem($stock, $stock->radar_reasons))
         ->take(6)
         ->values();
     $usedSymbols = array_merge($usedSymbols, $lowVolumeStocks->pluck('symbol')->all());
 
     $weakStocks = $stockCandidates
         ->reject(fn ($stock) => in_array($stock->symbol, $usedSymbols, true))
+        ->map(function ($stock) use ($weakReasons) {
+            $stock->radar_reasons = $weakReasons($stock);
+            return $stock;
+        })
         ->filter(fn ($stock) => ((int) ($stock->technical_score ?? 0) < 48 || (float) ($stock->return20 ?? 0) <= -8)
-            && $weakReasons($stock) !== [])
+            && count($stock->radar_reasons) >= 2)
         ->sortBy(fn ($stock) => (int) ($stock->confidence_score ?? 0))
-        ->map(fn ($stock) => $stockCardItem($stock, $weakReasons($stock)))
+        ->map(fn ($stock) => $stockCardItem($stock, $stock->radar_reasons))
         ->take(6)
         ->values();
 
