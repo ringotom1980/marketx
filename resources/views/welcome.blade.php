@@ -138,6 +138,33 @@
             background: var(--line);
         }
 
+        .freshness-bar {
+            display: flex;
+            gap: 8px;
+            overflow-x: auto;
+            color: var(--muted);
+            font-size: 12px;
+            line-height: 1.3;
+            white-space: nowrap;
+            scrollbar-width: none;
+            -webkit-overflow-scrolling: touch;
+        }
+
+        .freshness-bar::-webkit-scrollbar { display: none; }
+
+        .freshness-pill {
+            flex: 0 0 auto;
+            border: 1px solid var(--line);
+            border-radius: 999px;
+            background: #fff;
+            padding: 5px 8px;
+        }
+
+        .freshness-pill strong {
+            color: var(--ink);
+            font-weight: 900;
+        }
+
         .nav {
             display: flex;
             gap: 8px;
@@ -344,6 +371,12 @@
             .brand-name { font-size: 34px; }
             .brand-tagline { font-size: 13px; }
             .site-stats { margin-left: auto; font-size: 12px; }
+            .freshness-bar {
+                order: 3;
+                flex-basis: 100%;
+                justify-content: flex-end;
+                overflow: visible;
+            }
             .nav { flex-wrap: wrap; justify-content: flex-end; overflow: visible; }
             .nav a { padding: 0; border: 0; background: transparent; }
             .nav a.active,
@@ -385,6 +418,11 @@
                 <span>會員 <strong>{{ number_format($siteStats['members'] ?? 0) }}</strong></span>
                 <i class="dot" aria-hidden="true"></i>
                 <span>線上 <strong>{{ number_format($siteStats['online'] ?? 0) }}</strong></span>
+            </div>
+            <div class="freshness-bar" aria-label="資料更新時間">
+                <span class="freshness-pill">台股資料 <strong>{{ $dataFreshness['taiwan_date'] ?? '待更新' }}</strong></span>
+                <span class="freshness-pill">全球資料 <strong>{{ $dataFreshness['global_date'] ?? '待更新' }}</strong></span>
+                <span class="freshness-pill">最後更新 <strong>{{ $dataFreshness['last_success_at'] ? \Carbon\CarbonImmutable::parse($dataFreshness['last_success_at'])->timezone('Asia/Taipei')->format('m/d H:i') : '待更新' }}</strong></span>
             </div>
             <nav class="nav">
                 <a class="{{ request()->is('/') ? 'active' : '' }}" href="/">今日狀態</a>
