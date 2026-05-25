@@ -4,6 +4,7 @@ namespace App\Console\Commands;
 
 use App\Models\Stock;
 use App\Models\StockScore;
+use App\Models\StockTechnicalIndicator1d;
 use Illuminate\Console\Command;
 
 class CalculateTechnicalScores extends Command
@@ -29,7 +30,7 @@ class CalculateTechnicalScores extends Command
         foreach ($stocks as $stock) {
             $prices = $stock->dailyPrices()
                 ->orderByDesc('trade_date')
-                ->limit(120)
+                ->limit(280)
                 ->get()
                 ->sortBy('trade_date')
                 ->filter(fn ($price) => (float) ($price->close ?? 0) > 0)
@@ -53,6 +54,14 @@ class CalculateTechnicalScores extends Command
                     'technical_payload' => $payload,
                     'risk_flags' => $payload['risk_flags'],
                 ],
+            );
+
+            StockTechnicalIndicator1d::query()->updateOrCreate(
+                [
+                    'stock_id' => $stock->id,
+                    'trade_date' => $payload['score_date'],
+                ],
+                $this->indicatorRow($payload),
             );
 
             $calculated++;
@@ -79,22 +88,37 @@ class CalculateTechnicalScores extends Command
         $close = (float) $latest->close;
         $previousClose = $previous ? (float) $previous->close : $close;
         $sma5 = $this->sma($closes, 5);
+        $sma10 = $this->sma($closes, 10);
         $sma20 = $this->sma($closes, 20);
         $sma60 = $this->sma($closes, 60);
+        $sma120 = $this->sma($closes, 120);
+        $sma240 = $this->sma($closes, 240);
         $ema12 = $this->ema($closes, 12);
         $ema26 = $this->ema($closes, 26);
+        $rsi6 = $this->rsi($closes, 6);
+        $rsi12 = $this->rsi($closes, 12);
         $rsi14 = $this->rsi($closes, 14);
         $macd = $this->macd($closes);
         $kd = $this->kd($prices, 9, 3, 3);
         $bollinger = $this->bollinger($closes, 20);
         $atr14 = $this->atr($prices, 14);
         $avgVolume20 = $this->average(array_slice($volumes, -20));
+        $avgVolume5 = $this->average(array_slice($volumes, -5));
+        $volumeRatio5 = $avgVolume5 > 0 ? ((float) $latest->volume / $avgVolume5) : null;
         $volumeRatio = $avgVolume20 > 0 ? ((float) $latest->volume / $avgVolume20) : null;
         $returns20 = $this->returns(array_slice($closes, -21));
         $volatility20 = $this->standardDeviation($returns20);
         $high20BeforeToday = max(array_slice($highs, -21, 20) ?: [$close]);
         $base20 = count($closes) >= 21 ? $closes[count($closes) - 21] : null;
+        $base5 = count($closes) >= 6 ? $closes[count($closes) - 6] : null;
+        $base10 = count($closes) >= 11 ? $closes[count($closes) - 11] : null;
+        $base60 = count($closes) >= 61 ? $closes[count($closes) - 61] : null;
+        $return5 = $base5 && $base5 > 0 ? ($close / $base5 - 1) : 0.0;
+        $return10 = $base10 && $base10 > 0 ? ($close / $base10 - 1) : 0.0;
         $return20 = $base20 && $base20 > 0 ? ($close / $base20 - 1) : 0.0;
+        $return60 = $base60 && $base60 > 0 ? ($close / $base60 - 1) : 0.0;
+        $support20 = min(array_map(fn ($price) => (float) ($price->low ?: $price->close), array_slice($prices, -20)) ?: [$close]);
+        $resistance20 = max(array_slice($highs, -20) ?: [$close]);
 
         $score = 50;
         $riskFlags = [];
@@ -207,10 +231,15 @@ class CalculateTechnicalScores extends Command
             'score' => $score,
             'close' => $close,
             'sma5' => $sma5,
+            'sma10' => $sma10,
             'sma20' => $sma20,
             'sma60' => $sma60,
+            'sma120' => $sma120,
+            'sma240' => $sma240,
             'ema12' => $ema12,
             'ema26' => $ema26,
+            'rsi6' => $rsi6,
+            'rsi12' => $rsi12,
             'rsi14' => $rsi14,
             'macd' => $macd['macd'],
             'macd_signal' => $macd['signal'],
@@ -226,9 +255,19 @@ class CalculateTechnicalScores extends Command
             'bollinger_middle20' => $bollinger['middle'],
             'bollinger_lower20' => $bollinger['lower'],
             'atr14' => $atr14,
+            'bais5' => $this->bais($close, $sma5),
+            'bais10' => $this->bais($close, $sma10),
+            'bais20' => $this->bais($close, $sma20),
+            'bais60' => $this->bais($close, $sma60),
+            'return5' => round($return5 * 100, 2),
+            'return10' => round($return10 * 100, 2),
             'return20' => round($return20 * 100, 2),
+            'return60' => round($return60 * 100, 2),
+            'volume_ratio5' => $volumeRatio5 === null ? null : round($volumeRatio5, 2),
             'volume_ratio20' => $volumeRatio === null ? null : round($volumeRatio, 2),
             'volatility20' => $volatility20 === null ? null : round($volatility20 * 100, 2),
+            'support20' => round($support20, 4),
+            'resistance20' => round($resistance20, 4),
             'breakout20' => $close >= $high20BeforeToday && $close > $previousClose,
             'signals' => $this->technicalSignals(
                 close: $close,
@@ -250,6 +289,39 @@ class CalculateTechnicalScores extends Command
             ),
             'risk_flags' => array_values(array_unique($riskFlags)),
         ];
+    }
+
+    /**
+     * @param array<string, mixed> $payload
+     * @return array<string, mixed>
+     */
+    private function indicatorRow(array $payload): array
+    {
+        $keys = [
+            'close', 'sma5', 'sma10', 'sma20', 'sma60', 'sma120', 'sma240',
+            'ema12', 'ema26', 'rsi6', 'rsi12', 'rsi14',
+            'macd', 'macd_signal', 'macd_histogram',
+            'macd_previous', 'macd_signal_previous', 'macd_histogram_previous',
+            'k9', 'd9', 'k9_previous', 'd9_previous',
+            'bollinger_upper20', 'bollinger_middle20', 'bollinger_lower20',
+            'atr14', 'bais5', 'bais10', 'bais20', 'bais60',
+            'return5', 'return10', 'return20', 'return60',
+            'volume_ratio5', 'volume_ratio20', 'volatility20',
+            'support20', 'resistance20',
+        ];
+
+        $row = [
+            'breakout20' => (bool) ($payload['breakout20'] ?? false),
+            'technical_score' => $payload['score'] ?? null,
+            'signals' => $payload['signals'] ?? [],
+            'risk_flags' => $payload['risk_flags'] ?? [],
+        ];
+
+        foreach ($keys as $key) {
+            $row[$key] = $payload[$key] ?? null;
+        }
+
+        return $row;
     }
 
     private function technicalSignals(
@@ -569,6 +641,15 @@ class CalculateTechnicalScores extends Command
         }
 
         return $series;
+    }
+
+    private function bais(float $close, ?float $movingAverage): ?float
+    {
+        if ($close <= 0 || $movingAverage === null || $movingAverage <= 0) {
+            return null;
+        }
+
+        return round((($close / $movingAverage) - 1) * 100, 4);
     }
 
     private function average(array $values): float

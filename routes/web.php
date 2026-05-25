@@ -282,7 +282,11 @@ Route::get('/', function () {
     };
 
     $signalsFor = function (object $stock, array $tones = [] ) use ($payloadFor): \Illuminate\Support\Collection {
-        return collect($payloadFor($stock)['signals'] ?? [])
+        $signals = isset($stock->technical_signals)
+            ? (json_decode((string) $stock->technical_signals, true) ?: [])
+            : ($payloadFor($stock)['signals'] ?? []);
+
+        return collect($signals)
             ->filter(fn ($signal) => empty($tones) || in_array($signal['tone'] ?? null, $tones, true))
             ->pluck('title')
             ->map(fn ($title) => (string) $title)
@@ -295,6 +299,10 @@ Route::get('/', function () {
     $hasSignal = fn (\Illuminate\Support\Collection $signals, string $title): bool => $signals->contains($title);
 
     $bais20 = function (object $stock) use ($payloadFor): ?float {
+        if (isset($stock->bais20) && $stock->bais20 !== null) {
+            return (float) $stock->bais20;
+        }
+
         $payload = $payloadFor($stock);
         $close = (float) ($stock->close ?? 0);
         $sma20 = isset($payload['sma20']) ? (float) $payload['sma20'] : 0.0;
@@ -488,6 +496,10 @@ Route::get('/', function () {
             $join->on('stocks.id', '=', 'stock_prices_1d.stock_id')
                 ->whereRaw('stock_prices_1d.trade_date = (select max(sp.trade_date) from stock_prices_1d sp where sp.stock_id = stocks.id)');
         })
+        ->leftJoin('stock_technical_indicators_1d', function ($join) {
+            $join->on('stocks.id', '=', 'stock_technical_indicators_1d.stock_id')
+                ->whereRaw('stock_technical_indicators_1d.trade_date = (select max(sti.trade_date) from stock_technical_indicators_1d sti where sti.stock_id = stocks.id)');
+        })
         ->leftJoin('stock_chips_1d', function ($join) {
             $join->on('stocks.id', '=', 'stock_chips_1d.stock_id')
                 ->whereRaw('stock_chips_1d.trade_date = (select max(sc.trade_date) from stock_chips_1d sc where sc.stock_id = stocks.id)');
@@ -513,6 +525,20 @@ Route::get('/', function () {
             'stock_prices_1d.close',
             'stock_prices_1d.change_pct',
             'stock_prices_1d.volume',
+            'stock_technical_indicators_1d.sma20',
+            'stock_technical_indicators_1d.bais20',
+            'stock_technical_indicators_1d.return20',
+            'stock_technical_indicators_1d.volume_ratio20',
+            'stock_technical_indicators_1d.rsi14',
+            'stock_technical_indicators_1d.macd',
+            'stock_technical_indicators_1d.macd_signal',
+            'stock_technical_indicators_1d.macd_histogram',
+            'stock_technical_indicators_1d.k9',
+            'stock_technical_indicators_1d.d9',
+            'stock_technical_indicators_1d.bollinger_upper20',
+            'stock_technical_indicators_1d.bollinger_middle20',
+            'stock_technical_indicators_1d.bollinger_lower20',
+            'stock_technical_indicators_1d.signals as technical_signals',
             'stock_chips_1d.margin_balance',
             'stock_chips_1d.short_balance',
             'stock_financials.per',
@@ -528,8 +554,8 @@ Route::get('/', function () {
         ->get()
         ->map(function ($stock) use ($payloadFor) {
             $payload = $payloadFor($stock);
-            $stock->return20 = (float) ($payload['return20'] ?? 0);
-            $stock->volume_ratio20 = (float) ($payload['volume_ratio20'] ?? 0);
+            $stock->return20 = (float) ($stock->return20 ?? ($payload['return20'] ?? 0));
+            $stock->volume_ratio20 = (float) ($stock->volume_ratio20 ?? ($payload['volume_ratio20'] ?? 0));
 
             return $stock;
         });
