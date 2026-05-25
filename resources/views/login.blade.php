@@ -82,6 +82,32 @@
             padding: 12px 14px;
             font-size: 16px;
         }
+        .remember-row {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-top: 12px;
+            color: #657385;
+            font-size: 14px;
+            font-weight: 700;
+        }
+        .remember-row input {
+            width: 18px;
+            height: 18px;
+            margin: 0;
+            accent-color: #c1121f;
+        }
+        .sr-only {
+            position: absolute;
+            width: 1px;
+            height: 1px;
+            padding: 0;
+            margin: -1px;
+            overflow: hidden;
+            clip: rect(0, 0, 0, 0);
+            white-space: nowrap;
+            border: 0;
+        }
         button {
             width: 100%;
             border: 0;
@@ -165,13 +191,13 @@
         @endif
 
         @if (($mode ?? 'login') === 'register')
-            <form method="post" action="/register">
+            <form method="post" action="/register" autocomplete="on">
                 @csrf
                 <label for="name">名稱</label>
                 <input id="name" name="name" value="{{ old('name') }}" autocomplete="name" autofocus required>
 
                 <label for="email">Email</label>
-                <input id="email" name="email" type="email" value="{{ old('email') }}" autocomplete="email" required>
+                <input id="email" name="email" type="email" value="{{ old('email') }}" autocomplete="username" required>
 
                 <label for="password">密碼</label>
                 <input id="password" name="password" type="password" autocomplete="new-password" required>
@@ -183,21 +209,27 @@
                 <p class="hint">一般帳號可以使用網站與追蹤清單，但不能產生 AI 分析報告。</p>
             </form>
         @else
-            <form method="post" action="/login">
+            <form id="member-login-form" method="post" action="/login" autocomplete="on">
                 @csrf
                 <label for="email">Email</label>
-                <input id="email" name="email" type="email" value="{{ old('email') }}" autocomplete="email" autofocus>
+                <input id="email" name="email" type="email" value="{{ old('email') }}" autocomplete="username" autofocus>
 
                 <label for="password">密碼</label>
                 <input id="password" name="password" type="password" autocomplete="current-password" required>
+
+                <label class="remember-row" for="remember_login">
+                    <input id="remember_login" name="remember_login" type="checkbox" value="1">
+                    <span>記住帳號，密碼由瀏覽器或手機安全保存</span>
+                </label>
 
                 <button type="submit">登入</button>
             </form>
 
             <div class="divider">管理者</div>
-            <form method="post" action="/login">
+            <form method="post" action="/login" autocomplete="on">
                 @csrf
                 <input type="hidden" name="admin_login" value="1">
+                <input class="sr-only" name="username" value="marketx-admin" autocomplete="username" tabindex="-1" aria-hidden="true">
                 <label for="admin_password">管理員密碼</label>
                 <input id="admin_password" name="password" type="password" autocomplete="current-password">
                 <button type="submit">管理者登入</button>
@@ -207,9 +239,31 @@
     <script>
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', () => {
-                navigator.serviceWorker.register('/sw.js?v=20260525-pwa1').catch(() => {});
-            });
+            navigator.serviceWorker.register('/sw.js?v=20260525-pwa1').catch(() => {});
+        });
+    }
+
+    const memberLoginForm = document.getElementById('member-login-form');
+    const emailInput = document.getElementById('email');
+    const rememberLogin = document.getElementById('remember_login');
+
+    if (memberLoginForm && emailInput && rememberLogin) {
+        const rememberedEmail = localStorage.getItem('marketx.remember_email');
+
+        if (rememberedEmail && !emailInput.value) {
+            emailInput.value = rememberedEmail;
+            rememberLogin.checked = true;
         }
+
+        memberLoginForm.addEventListener('submit', () => {
+            if (rememberLogin.checked && emailInput.value.trim()) {
+                localStorage.setItem('marketx.remember_email', emailInput.value.trim());
+                return;
+            }
+
+            localStorage.removeItem('marketx.remember_email');
+        });
+    }
     </script>
 </body>
 </html>
