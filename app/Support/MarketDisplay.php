@@ -16,6 +16,7 @@ class MarketDisplay
             'Crude Oil' => '原油',
             'Gold' => '黃金',
             'TSM ADR' => '台積電 ADR',
+            'TAIFEX TX Night' => '臺股期貨夜盤',
         ][$indicator] ?? $indicator;
     }
 

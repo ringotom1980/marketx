@@ -46,7 +46,7 @@ class GlobalRadarBuilder
         foreach ($markets as $indicator => $row) {
             $state = $row->state;
 
-            if (in_array($indicator, ['S&P 500', 'NASDAQ', 'SOX', 'TSM ADR'], true)) {
+            if (in_array($indicator, ['S&P 500', 'NASDAQ', 'SOX', 'TSM ADR', 'TAIFEX TX Night'], true)) {
                 $score += in_array($state, ['strong', 'positive'], true) ? 5 : (in_array($state, ['weak', 'soft'], true) ? -5 : 0);
             }
 
@@ -158,6 +158,7 @@ class GlobalRadarBuilder
             'Crude Oil' => '油價影響通膨、能源與航運成本',
             'Gold' => '黃金反映避險需求與利率預期',
             'TSM ADR' => '觀察台積電與台股權值股風向',
+            'TAIFEX TX Night' => '觀察台股盤後接軌美股後的隔日開盤風向',
             default => '觀察全球資金風向',
         };
     }
@@ -192,6 +193,9 @@ class GlobalRadarBuilder
             'TSM ADR' => $this->isPositive($state, $change)
                 ? '台積電 ADR 偏強，有利隔日台股權值股與半導體情緒。'
                 : ($this->isNegative($state, $change) ? '台積電 ADR 轉弱，隔日台股電子權值股容易承壓。' : '台積電 ADR 變化不大，台股仍需看本地量能與外資動向。'),
+            'TAIFEX TX Night' => $this->isPositive($state, $change)
+                ? '臺股期貨夜盤偏強，代表日盤收盤後的國際變化被市場偏正向反映。'
+                : ($this->isNegative($state, $change) ? '臺股期貨夜盤轉弱，代表收盤後風險偏好下降，隔日開盤要更保守。' : '臺股期貨夜盤變化不大，隔日台股仍以現貨量能與外資動向為主。'),
             default => '目前作為全球資金風向參考，需搭配其他指標一起判斷。',
         };
     }
@@ -226,6 +230,9 @@ class GlobalRadarBuilder
             'TSM ADR' => $this->isPositive($state, $change)
                 ? '台積電 ADR 是台股隔日電子權值股的重要先行參考。'
                 : '若 ADR 轉弱，即使題材熱，台股也可能先震盪消化。',
+            'TAIFEX TX Night' => $this->isPositive($state, $change)
+                ? '夜盤轉強通常有利隔日開盤情緒，尤其對指數權值股較有參考性。'
+                : '夜盤轉弱時，隔日高分股也要留意開盤補跌或追價風險。',
             default => '對台股影響需與美元、美債、費半和事件熱度一起判讀。',
         };
     }
@@ -242,6 +249,7 @@ class GlobalRadarBuilder
             'Crude Oil' => '觀察是否由供給中斷或地緣政治推升，這種油價上漲比較容易造成壓力。',
             'Gold' => '觀察黃金與美元是否同漲；若同漲，通常代表避險需求更明顯。',
             'TSM ADR' => '觀察 ADR 與台股現貨是否同步；若不同步，隔日容易修正價差。',
+            'TAIFEX TX Night' => '觀察夜盤收盤與日盤開盤是否同向；若夜盤大漲大跌，隔日開盤波動通常會放大。',
             default => '觀察是否和其他全球指標形成同方向訊號。',
         };
     }
@@ -264,6 +272,14 @@ class GlobalRadarBuilder
 
         if (in_array($markets->get('SOX')?->state, ['strong', 'positive'], true)) {
             $chains[] = '費半偏強 → 半導體與 AI 供應鏈有支撐 → 台股電子權值股較有表現空間';
+        }
+
+        if (in_array($markets->get('TAIFEX TX Night')?->state, ['positive'], true)) {
+            $chains[] = '臺股期貨夜盤偏強 → 國際盤後變化先反映 → 隔日台股開盤情緒較有支撐';
+        }
+
+        if (in_array($markets->get('TAIFEX TX Night')?->state, ['weak'], true)) {
+            $chains[] = '臺股期貨夜盤轉弱 → 隔日開盤風險升高 → 高檔股需留意開盤震盪';
         }
 
         if ($events->contains(fn ($event) => str_contains((string) $event->title, '能源') || str_contains((string) $event->summary, '油'))) {
