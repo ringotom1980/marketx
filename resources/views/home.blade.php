@@ -174,34 +174,26 @@
             position: relative;
             height: 22px;
             border-radius: 999px;
-            background: linear-gradient(90deg, #a8b5c3 0%, #f1c97a 58%, #f2a0a6 100%);
+            background: #f1f1f1;
             overflow: hidden;
             box-shadow: inset 0 0 0 1px rgba(101, 115, 133, .06);
         }
         .theme-heat-meter span {
             display: block;
             height: 100%;
-            width: 100%;
+            min-width: 32px;
             border-radius: inherit;
-            background: rgba(255, 255, 255, .58);
+            background: linear-gradient(90deg, #cfc5c7 0%, #e9a4a8 62%, #f25b60 100%);
         }
         .theme-heat-score {
             position: absolute;
-            top: 50%;
-            left: var(--heat-left);
-            transform: translate(-50%, -50%);
+            inset: 0 auto 0 0;
             display: flex;
             align-items: center;
-            justify-content: center;
-            min-width: 32px;
-            height: 18px;
-            padding: 0 7px;
-            border-radius: 999px;
-            background: rgba(255, 255, 255, .82);
+            padding-left: 10px;
             color: var(--ink);
             font-size: 12px;
             font-weight: 900;
-            box-shadow: 0 1px 4px rgba(16, 24, 40, .12);
             pointer-events: none;
         }
         @media (min-width: 821px) {
@@ -269,8 +261,8 @@
                     @php($themeScore = min(100, max(0, (int) $theme['score'])))
                     <div class="theme-heat-row">
                         <div class="theme-heat-name">{{ $theme['name'] }}</div>
-                        <div class="theme-heat-meter" style="--heat-left: {{ min(92, max(8, $themeScore)) }}%" aria-label="{{ $theme['name'] }} 熱度 {{ $themeScore }}">
-                            <span></span>
+                        <div class="theme-heat-meter" aria-label="{{ $theme['name'] }} 熱度 {{ $themeScore }}">
+                            <span style="width: {{ $themeScore }}%"></span>
                             <strong class="theme-heat-score">{{ $themeScore }}</strong>
                         </div>
                     </div>
