@@ -675,6 +675,7 @@ Route::get('/', function () {
         })
         ->select(
             'themes.id',
+            'themes.slug',
             'themes.name',
             'theme_scores.heat_score',
             DB::raw('(select ts_prev.heat_score from theme_scores ts_prev where ts_prev.theme_id = themes.id and ts_prev.score_date < theme_scores.score_date order by ts_prev.score_date desc limit 1) as previous_heat_score')
@@ -693,6 +694,7 @@ Route::get('/', function () {
 
             return [
                 'name' => $theme->name,
+                'slug' => $theme->slug,
                 'score' => $score,
                 'trend' => match (true) {
                     $previous === null => 'watch',
@@ -983,11 +985,10 @@ Route::get('/themes', function () {
             $join->on('themes.id', '=', 'theme_scores.theme_id')
                 ->whereRaw('theme_scores.score_date = (select max(ts.score_date) from theme_scores ts where ts.theme_id = themes.id)');
         })
-        ->select('themes.id', 'themes.name', 'themes.description', 'themes.ai_status', 'theme_scores.heat_score', 'theme_scores.news_score', 'theme_scores.price_score', 'theme_scores.chip_score', 'theme_scores.score_date')
+        ->select('themes.id', 'themes.slug', 'themes.name', 'themes.description', 'themes.ai_status', 'theme_scores.heat_score', 'theme_scores.news_score', 'theme_scores.price_score', 'theme_scores.chip_score', 'theme_scores.score_date')
         ->where('themes.is_active', true)
-        ->orderByDesc('theme_scores.heat_score')
+        ->orderByRaw('coalesce(theme_scores.heat_score, 0) desc')
         ->orderBy('themes.name')
-        ->limit(20)
         ->get()
         ->map(function ($theme) use ($themePhase, $themeTone) {
             $mappedCount = DB::table('stock_theme_map')->where('theme_id', $theme->id)->count();
@@ -1036,6 +1037,7 @@ Route::get('/themes', function () {
 
             return [
                 'name' => $theme->name,
+                'slug' => $theme->slug,
                 'score' => $score,
                 'phase' => $themePhase($score, (int) ($theme->news_score ?? 0), (int) ($theme->price_score ?? 0)),
                 'tone' => $themeTone($score),

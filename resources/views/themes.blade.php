@@ -10,7 +10,7 @@
 
     <section class="grid two">
         @forelse ($themes as $theme)
-            <article class="panel">
+            <article class="panel" id="theme-{{ $theme['slug'] }}" style="scroll-margin-top:96px">
                 <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px">
                     <div>
                         <h2 style="margin-bottom:6px">{{ $theme['name'] }}</h2>

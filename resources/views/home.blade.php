@@ -290,7 +290,7 @@
                     @php($themeScore = min(100, max(0, (int) $theme['score'])))
                     <div class="theme-heat-row">
                         <div class="theme-heat-name">
-                            <span>{{ $theme['name'] }}</span>
+                            <a href="/themes#theme-{{ $theme['slug'] }}" style="color:inherit;text-decoration:none">{{ $theme['name'] }}</a>
                             <span class="theme-trend-pill {{ $theme['trend'] ?? 'watch' }}">{{ $theme['trend_label'] ?? '觀察中' }}</span>
                         </div>
                         <div class="theme-heat-meter" style="--heat-score: {{ $themeScore }}%" aria-label="{{ $theme['name'] }} 熱度 {{ $themeScore }}">
