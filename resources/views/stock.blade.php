@@ -106,37 +106,21 @@
         </div>
     </section>
 
-    <section class="grid two">
-        <div class="panel">
-            <h2>六大模組狀態</h2>
-            <table class="table">
-                <tbody>
-                @foreach ($modules as $module)
-                    <tr>
-                        <th>{{ $module['name'] }}</th>
-                        <td><span class="badge {{ $module['tone'] }}">{{ $module['label'] }}</span></td>
-                    </tr>
+    <section class="panel">
+        <h2>全球事件影響鏈</h2>
+        @if (! empty($eventChains))
+            <div class="signal-list">
+                @foreach ($eventChains as $chain)
+                    <div class="signal-item">
+                        <span class="badge amber">{{ $chain['event'] }}</span>
+                        <p>{{ $chain['path'] }}</p>
+                        <p>{{ $chain['judgement'] }}</p>
+                    </div>
                 @endforeach
-                </tbody>
-            </table>
-        </div>
-
-        <div class="panel">
-            <h2>全球事件影響鏈</h2>
-            @if (! empty($eventChains))
-                <div class="signal-list">
-                    @foreach ($eventChains as $chain)
-                        <div class="signal-item">
-                            <span class="badge amber">{{ $chain['event'] }}</span>
-                            <p>{{ $chain['path'] }}</p>
-                            <p>{{ $chain['judgement'] }}</p>
-                        </div>
-                    @endforeach
-                </div>
-            @else
-                <p class="lead">目前沒有明確全球事件直接連到此股票，先以技術、籌碼與財務分數觀察。</p>
-            @endif
-        </div>
+            </div>
+        @else
+            <p class="lead">目前沒有明確全球事件直接連到此股票，先以技術、籌碼與財務狀態觀察。</p>
+        @endif
     </section>
 
     <section class="panel" style="margin-top:16px">
