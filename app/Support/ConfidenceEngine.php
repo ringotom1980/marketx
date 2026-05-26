@@ -30,87 +30,82 @@ class ConfidenceEngine
             ->orderByDesc('year_month')
             ->first();
 
-        $technicalResult = $this->technical($technical);
-        $chipResult = $this->chip($chip, $stock);
-        $fundamentalResult = $this->fundamental($financial, $revenue);
-        $themeResult = $this->theme((int) ($score->theme_score ?? 0));
-
-        $weights = [
-            'technical' => 0.35,
-            'chip' => 0.25,
-            'fundamental' => 0.25,
-            'theme' => 0.15,
+        $modules = [
+            'technical' => $this->technical($technical),
+            'chip' => $this->chip($chip, $stock),
+            'fundamental' => $this->fundamental($financial, $revenue),
+            'theme' => $this->theme((int) ($score->theme_score ?? 0), (int) ($score->event_score ?? 0)),
         ];
 
-        $technicalOpportunity = $this->moduleConfidence(
-            $technicalResult['bull_score'],
-            $technicalResult['bear_score'],
-            $technicalResult['risk_penalty'],
-            35,
-            18,
-        );
-        $chipOpportunity = $this->moduleConfidence(
-            $chipResult['bull_score'],
-            $chipResult['bear_score'],
-            $chipResult['risk_penalty'],
-            25,
-            12,
-        );
-        $fundamentalOpportunity = $this->moduleConfidence(
-            $fundamentalResult['bull_score'],
-            $fundamentalResult['bear_score'],
-            $fundamentalResult['risk_penalty'],
-            25,
-            12,
-        );
-        $themeOpportunity = max(35, min(82, 45 + ($themeResult['bonus_score'] * 2) - ($themeResult['risk_penalty'] * 3)));
+        $weights = [
+            'technical' => 0.40,
+            'chip' => 0.25,
+            'fundamental' => 0.25,
+            'theme' => 0.10,
+        ];
 
-        $confidence = (int) round(
-            ($technicalOpportunity * $weights['technical'])
-            + ($chipOpportunity * $weights['chip'])
-            + ($fundamentalOpportunity * $weights['fundamental'])
-            + ($themeOpportunity * $weights['theme'])
-        );
-        $confidence = max(5, min(95, $confidence));
+        $confidence = 0.0;
 
-        $bull = $technicalResult['bull_score'] + $chipResult['bull_score'] + $fundamentalResult['bull_score'] + $themeResult['bonus_score'];
-        $bear = $technicalResult['bear_score'] + $chipResult['bear_score'] + $fundamentalResult['bear_score'];
-        $riskPenalty = min(42, $technicalResult['risk_penalty'] + $chipResult['risk_penalty'] + $fundamentalResult['risk_penalty'] + $themeResult['risk_penalty']);
-        $riskConfidence = $this->riskConfidence($technicalResult, $chipResult, $fundamentalResult, $themeResult);
-        $weakConfidence = $this->weakConfidence($technicalResult, $chipResult, $fundamentalResult);
+        foreach ($weights as $name => $weight) {
+            $confidence += ((int) $modules[$name]['score']) * $weight;
+        }
+
+        $confidence = max(0, min(100, (int) round($confidence)));
+        $riskConfidence = $this->weightedPressure($modules, $weights, true);
+        $weakConfidence = $this->weightedPressure($modules, $weights, false);
 
         $reasons = [
-            'bull' => array_slice(array_merge($technicalResult['bull_reasons'], $chipResult['bull_reasons'], $fundamentalResult['bull_reasons'], $themeResult['bull_reasons']), 0, 8),
-            'bear' => array_slice(array_merge($technicalResult['bear_reasons'], $chipResult['bear_reasons'], $fundamentalResult['bear_reasons']), 0, 8),
-            'risk' => array_slice(array_merge($technicalResult['risk_reasons'], $chipResult['risk_reasons'], $fundamentalResult['risk_reasons'], $themeResult['risk_reasons']), 0, 8),
+            'bull' => array_slice(array_values(array_unique(array_merge(
+                $modules['technical']['bull_reasons'],
+                $modules['chip']['bull_reasons'],
+                $modules['fundamental']['bull_reasons'],
+                $modules['theme']['bull_reasons'],
+            ))), 0, 10),
+            'bear' => array_slice(array_values(array_unique(array_merge(
+                $modules['technical']['bear_reasons'],
+                $modules['chip']['bear_reasons'],
+                $modules['fundamental']['bear_reasons'],
+                $modules['theme']['bear_reasons'],
+            ))), 0, 10),
+            'risk' => array_slice(array_values(array_unique(array_merge(
+                $modules['technical']['risk_reasons'],
+                $modules['chip']['risk_reasons'],
+                $modules['fundamental']['risk_reasons'],
+                $modules['theme']['risk_reasons'],
+            ))), 0, 10),
         ];
 
         $mergedRiskFlags = array_values(array_unique(array_merge(
             $riskFlags,
-            $technicalResult['risk_flags'],
-            $chipResult['risk_flags'],
-            $fundamentalResult['risk_flags'],
-            $themeResult['risk_flags'],
+            $modules['technical']['risk_flags'],
+            $modules['chip']['risk_flags'],
+            $modules['fundamental']['risk_flags'],
+            $modules['theme']['risk_flags'],
         )));
 
         return [
             'score' => $confidence,
             'payload' => [
-                'version' => 2,
-                'bull_score' => round($bull, 2),
-                'bear_score' => round($bear, 2),
-                'risk_penalty_score' => round($riskPenalty, 2),
-                'technical_bull_score' => round($technicalResult['bull_score'], 2),
-                'technical_bear_score' => round($technicalResult['bear_score'], 2),
-                'chip_bull_score' => round($chipResult['bull_score'], 2),
-                'chip_bear_score' => round($chipResult['bear_score'], 2),
-                'fundamental_bull_score' => round($fundamentalResult['bull_score'], 2),
-                'fundamental_bear_score' => round($fundamentalResult['bear_score'], 2),
-                'theme_bonus_score' => round($themeResult['bonus_score'], 2),
-                'technical_opportunity_confidence' => $technicalOpportunity,
-                'chip_opportunity_confidence' => $chipOpportunity,
-                'fundamental_opportunity_confidence' => $fundamentalOpportunity,
-                'theme_opportunity_confidence' => $themeOpportunity,
+                'version' => 3,
+                'method' => 'indicator_points_weighted',
+                'weights' => [
+                    'technical' => 40,
+                    'chip' => 25,
+                    'fundamental' => 25,
+                    'theme' => 10,
+                ],
+                'technical_score' => $modules['technical']['score'],
+                'chip_score' => $modules['chip']['score'],
+                'fundamental_score' => $modules['fundamental']['score'],
+                'theme_score' => $modules['theme']['score'],
+                'technical_bull_score' => $modules['technical']['bull_score'],
+                'technical_bear_score' => $modules['technical']['bear_score'],
+                'chip_bull_score' => $modules['chip']['bull_score'],
+                'chip_bear_score' => $modules['chip']['bear_score'],
+                'fundamental_bull_score' => $modules['fundamental']['bull_score'],
+                'fundamental_bear_score' => $modules['fundamental']['bear_score'],
+                'theme_bonus_score' => $modules['theme']['bull_score'],
+                'risk_penalty_score' => array_sum(array_column($modules, 'risk_penalty')),
                 'opportunity_confidence' => $confidence,
                 'risk_confidence' => $riskConfidence,
                 'weak_confidence' => $weakConfidence,
@@ -125,25 +120,22 @@ class ConfidenceEngine
      */
     private function technical(mixed $row): array
     {
-        $bull = 0.0;
-        $bear = 0.0;
-        $risk = 0.0;
-        $bullReasons = [];
-        $bearReasons = [];
-        $riskReasons = [];
-        $riskFlags = [];
+        $module = $this->module();
 
         if (! $row) {
-            return compact('bull', 'bear', 'risk') + [
-                'bull_score' => 0, 'bear_score' => 0, 'risk_penalty' => 6,
-                'bull_reasons' => [], 'bear_reasons' => [], 'risk_reasons' => ['技術資料不足'], 'risk_flags' => ['technical_missing'],
-            ];
+            $this->risk($module, true, 8, '技術資料不足', 'technical_missing');
+
+            return $this->finish($module);
         }
 
-        $close = (float) ($row->close ?? 0);
+        $close = $this->num($row->close);
+        $sma5 = $this->num($row->sma5);
         $sma20 = $this->num($row->sma20);
         $sma60 = $this->num($row->sma60);
         $sma120 = $this->num($row->sma120);
+        $sma240 = $this->num($row->sma240);
+        $ema12 = $this->num($row->ema12);
+        $ema26 = $this->num($row->ema26);
         $rsi14 = $this->num($row->rsi14);
         $macd = $this->num($row->macd);
         $macdSignal = $this->num($row->macd_signal);
@@ -155,289 +147,329 @@ class ConfidenceEngine
         $d9 = $this->num($row->d9);
         $kPrev = $this->num($row->k9_previous);
         $dPrev = $this->num($row->d9_previous);
-        $bais20 = $this->num($row->bais20);
-        $return20 = $this->num($row->return20);
-        $volumeRatio20 = $this->num($row->volume_ratio20);
-        $bollUpper = $this->num($row->bollinger_upper20);
+        $bollMiddle = $this->num($row->bollinger_middle20);
         $bollLower = $this->num($row->bollinger_lower20);
+        $bais20 = $this->num($row->bais20);
+        $return5 = $this->num($row->return5);
+        $return20 = $this->num($row->return20);
+        $return60 = $this->num($row->return60);
+        $volumeRatio20 = $this->num($row->volume_ratio20);
 
-        if ($sma20 !== null && $sma60 !== null && $close > $sma20 && $sma20 > $sma60) {
-            $bull += 8; $bullReasons[] = '站上月線且均線偏多';
-        }
-        if ($sma20 !== null && $close < $sma20) {
-            $bear += 8; $bearReasons[] = '跌破月線'; $riskFlags[] = 'below_sma20';
-        }
-        if ($sma60 !== null && $sma120 !== null && $sma60 < $sma120) {
-            $bear += 5; $bearReasons[] = '中期均線偏空';
-        }
-        if ($macdPrev !== null && $macdSignalPrev !== null && $macd !== null && $macdSignal !== null) {
-            if ($macdPrev <= $macdSignalPrev && $macd > $macdSignal) {
-                $bull += 8; $bullReasons[] = 'MACD 黃金交叉';
-            } elseif ($macdPrev >= $macdSignalPrev && $macd < $macdSignal) {
-                $bear += 8; $bearReasons[] = 'MACD 死亡交叉'; $riskFlags[] = 'macd_dead_cross';
-            }
-        }
-        if ($macdHist !== null && $macdHistPrev !== null) {
-            if ($macdHist > 0 && $macdHistPrev <= 0) {
-                $bull += 5; $bullReasons[] = 'MACD 翻正';
-            } elseif ($macdHist > 0 && $macdHist < $macdHistPrev) {
-                $bear += 4; $bearReasons[] = 'MACD 正數縮減';
-            } elseif ($macdHist < 0 && $macdHist > $macdHistPrev) {
-                $bull += 3; $bullReasons[] = 'MACD 負數縮減';
-            }
-        }
-        if ($kPrev !== null && $dPrev !== null && $k9 !== null && $d9 !== null) {
-            if ($kPrev <= $dPrev && $k9 > $d9) {
-                $bull += 6; $bullReasons[] = 'KD 黃金交叉';
-            } elseif ($kPrev >= $dPrev && $k9 < $d9) {
-                $bear += 6; $bearReasons[] = 'KD 死亡交叉';
-            }
-        }
-        if ($rsi14 !== null) {
-            if ($rsi14 >= 55 && $rsi14 <= 72) {
-                $bull += 5; $bullReasons[] = 'RSI 強勢區';
-            } elseif ($rsi14 > 78) {
-                $risk += 5; $riskReasons[] = 'RSI 過熱'; $riskFlags[] = 'rsi_overheated';
-            } elseif ($rsi14 < 35) {
-                $bear += 5; $bearReasons[] = 'RSI 弱勢';
-            }
-        }
-        if ($bollUpper !== null && $bollLower !== null) {
-            if ($close > $bollUpper) {
-                $bull += 4; $bullReasons[] = '突破布林上緣';
-            } elseif ($close < $bollLower) {
-                $bear += 5; $bearReasons[] = '跌破布林下緣'; $riskFlags[] = 'below_bollinger_lower';
-            }
-        }
-        if ((bool) ($row->breakout20 ?? false)) {
-            $bull += 6; $bullReasons[] = '突破 20 日高點';
-        }
-        if ($volumeRatio20 !== null && $volumeRatio20 >= 1.5 && $return20 !== null && $return20 > 0) {
-            $bull += 5; $bullReasons[] = '價量同步增溫';
-        }
-        if ($bais20 !== null && $bais20 >= 12) {
-            $risk += 6; $riskReasons[] = '乖離率過大'; $riskFlags[] = 'bais_overheated';
-        } elseif ($bais20 !== null && $bais20 <= -10) {
-            $bear += 4; $bearReasons[] = '負乖離偏弱';
-        }
+        $this->bull($module, $close !== null && $sma5 !== null && $close > $sma5, 4, '站上5日線');
+        $this->bull($module, $close !== null && $sma20 !== null && $close > $sma20, 5, '站上月線');
+        $this->bull($module, $sma20 !== null && $sma60 !== null && $sma20 > $sma60, 5, '月線高於季線');
+        $this->bull($module, $sma60 !== null && $sma120 !== null && $sma60 > $sma120, 5, '季線高於半年線');
+        $this->bull($module, $sma120 !== null && $sma240 !== null && $sma120 > $sma240, 4, '長期均線偏多');
+        $this->bull($module, $ema12 !== null && $ema26 !== null && $ema12 > $ema26, 4, 'EMA 動能偏多');
+        $this->bull($module, $this->crossUp($macdPrev, $macdSignalPrev, $macd, $macdSignal), 7, 'MACD 黃金交叉');
+        $this->bull($module, $macd !== null && $macdSignal !== null && $macd > $macdSignal, 4, 'MACD 多方排列');
+        $this->bull($module, $macdHist !== null && $macdHistPrev !== null && $macdHist > $macdHistPrev, 4, 'MACD 動能增加');
+        $this->bull($module, $macdHist !== null && $macdHist > 0, 4, 'MACD 翻正');
+        $this->bull($module, $this->crossUp($kPrev, $dPrev, $k9, $d9), 6, 'KD 黃金交叉');
+        $this->bull($module, $k9 !== null && $d9 !== null && $k9 > $d9, 3, 'KD 多方排列');
+        $this->bull($module, $rsi14 !== null && $rsi14 >= 55 && $rsi14 <= 72, 5, 'RSI 強勢區');
+        $this->bull($module, (bool) ($row->breakout20 ?? false), 6, '20日突破');
+        $this->bull($module, $close !== null && $bollMiddle !== null && $close > $bollMiddle, 4, '站上布林中線');
+        $this->bull($module, $volumeRatio20 !== null && $volumeRatio20 >= 1.2 && $return5 !== null && $return5 > 0, 5, '價漲量增');
+        $this->bull($module, $return5 !== null && $return5 > 0, 3, '短線轉強');
+        $this->bull($module, $return20 !== null && $return20 > 0 && $return20 < 15, 4, '月線趨勢向上');
+        $this->bull($module, $bais20 !== null && $bais20 >= 0 && $bais20 <= 8, 4, '乖離健康');
 
-        foreach (($row->risk_flags ? json_decode((string) $row->risk_flags, true) : []) ?: [] as $flag) {
+        $this->bear($module, $close !== null && $sma20 !== null && $close < $sma20, 5, '跌破月線', 'below_sma20');
+        $this->bear($module, $sma20 !== null && $sma60 !== null && $sma20 < $sma60, 5, '月線低於季線');
+        $this->bear($module, $sma60 !== null && $sma120 !== null && $sma60 < $sma120, 5, '季線低於半年線');
+        $this->bear($module, $ema12 !== null && $ema26 !== null && $ema12 < $ema26, 4, 'EMA 動能偏空');
+        $this->bear($module, $this->crossDown($macdPrev, $macdSignalPrev, $macd, $macdSignal), 7, 'MACD 死亡交叉', 'macd_dead_cross');
+        $this->bear($module, $macd !== null && $macdSignal !== null && $macd < $macdSignal, 4, 'MACD 空方排列');
+        $this->bear($module, $macdHist !== null && $macdHistPrev !== null && $macdHist > 0 && $macdHist < $macdHistPrev, 4, 'MACD 正數縮減');
+        $this->bear($module, $macdHist !== null && $macdHist < 0, 4, 'MACD 偏空');
+        $this->bear($module, $this->crossDown($kPrev, $dPrev, $k9, $d9), 6, 'KD 死亡交叉');
+        $this->bear($module, $k9 !== null && $d9 !== null && $k9 < $d9, 3, 'KD 空方排列');
+        $this->bear($module, $rsi14 !== null && $rsi14 < 35, 5, 'RSI 弱勢區');
+        $this->bear($module, $close !== null && $bollLower !== null && $close < $bollLower, 6, '跌破布林下緣', 'below_bollinger_lower');
+        $this->bear($module, $return5 !== null && $return5 <= -5, 4, '短線轉弱');
+        $this->bear($module, $return20 !== null && $return20 <= -8, 5, '月線趨勢轉弱');
+        $this->bear($module, $return60 !== null && $return60 <= -12, 4, '中期趨勢轉弱');
+        $this->risk($module, $rsi14 !== null && $rsi14 > 78, 5, 'RSI 過熱', 'rsi_overheated');
+        $this->risk($module, $bais20 !== null && $bais20 >= 12, 6, '乖離過大', 'bais_overheated');
+        $this->bear($module, $bais20 !== null && $bais20 <= -10, 4, '乖離偏弱');
+
+        foreach ($this->jsonArray($row->risk_flags ?? null) as $flag) {
             if ($flag === 'high_volume_down') {
-                $risk += 8; $riskReasons[] = '高檔爆量轉弱'; $riskFlags[] = $flag;
+                $this->risk($module, true, 8, '爆量轉弱', $flag);
             }
         }
 
-        return [
-            'bull_score' => min(35, $bull),
-            'bear_score' => min(35, $bear),
-            'risk_penalty' => min(18, $risk),
-            'bull_reasons' => array_values(array_unique($bullReasons)),
-            'bear_reasons' => array_values(array_unique($bearReasons)),
-            'risk_reasons' => array_values(array_unique($riskReasons)),
-            'risk_flags' => array_values(array_unique($riskFlags)),
-        ];
+        return $this->finish($module);
     }
 
+    /**
+     * @return array<string,mixed>
+     */
     private function chip(mixed $chip, Stock $stock): array
     {
+        $module = $this->module();
+
         if (! $chip) {
-            return ['bull_score' => 0, 'bear_score' => 0, 'risk_penalty' => 5, 'bull_reasons' => [], 'bear_reasons' => [], 'risk_reasons' => ['籌碼資料不足'], 'risk_flags' => ['chip_missing']];
+            $this->risk($module, true, 8, '籌碼資料不足', 'chip_missing');
+
+            return $this->finish($module);
         }
 
         $latestPrice = $stock->dailyPrices()->latest('trade_date')->first();
-        $volume = max(1, (int) ($latestPrice?->volume ?? 1));
-        $foreignRatio = (float) $chip->foreign_net_buy / $volume;
-        $trustRatio = (float) $chip->investment_trust_net_buy / $volume;
-        $institutionalRatio = (float) $chip->institutional_net_buy / $volume;
-        $marginRatio = (float) ($chip->margin_balance ?? 0) / $volume;
-        $shortRatio = (float) ($chip->short_balance ?? 0) / $volume;
-        $bull = 0.0; $bear = 0.0; $risk = 0.0;
-        $bullReasons = []; $bearReasons = []; $riskReasons = []; $riskFlags = [];
+        $volume = max(1, (float) ($latestPrice?->volume ?? 1));
+        $previous = DB::table('stock_chips_1d')
+            ->where('stock_id', $stock->id)
+            ->where('trade_date', '<', $chip->trade_date)
+            ->orderByDesc('trade_date')
+            ->first();
 
-        if ($institutionalRatio >= 0.04) {
-            $bull += 8; $bullReasons[] = '三大法人明顯買超';
-        } elseif ($institutionalRatio <= -0.04) {
-            $bear += 8; $bearReasons[] = '三大法人明顯賣超'; $riskFlags[] = 'institutional_selling';
-        }
-        if ($foreignRatio >= 0.03) {
-            $bull += 6; $bullReasons[] = '外資買超';
-        } elseif ($foreignRatio <= -0.03) {
-            $bear += 6; $bearReasons[] = '外資賣超';
-        }
-        if ($trustRatio >= 0.015) {
-            $bull += 5; $bullReasons[] = '投信買超';
-        } elseif ($trustRatio <= -0.015) {
-            $bear += 5; $bearReasons[] = '投信賣超';
-        }
-        if ((float) $chip->foreign_net_buy > 0 && (float) $chip->investment_trust_net_buy > 0) {
-            $bull += 5; $bullReasons[] = '外資與投信同步買超';
-        }
-        if ((float) $chip->foreign_net_buy < 0 && (float) $chip->investment_trust_net_buy < 0) {
-            $bear += 5; $bearReasons[] = '外資與投信同步賣超'; $riskFlags[] = 'foreign_and_trust_selling';
-        }
-        if ($marginRatio >= 5) {
-            $risk += 5; $riskReasons[] = '融資餘額偏重'; $riskFlags[] = 'margin_heavy';
-        }
-        if ($shortRatio >= 0.5) {
-            $risk += 3; $riskReasons[] = '融券壓力偏高';
-        }
+        $foreignRatio = (float) ($chip->foreign_net_buy ?? 0) / $volume;
+        $trustRatio = (float) ($chip->investment_trust_net_buy ?? 0) / $volume;
+        $dealerRatio = (float) ($chip->dealer_net_buy ?? 0) / $volume;
+        $institutionalRatio = (float) ($chip->institutional_net_buy ?? 0) / $volume;
+        $marginBalance = (float) ($chip->margin_balance ?? 0);
+        $shortBalance = (float) ($chip->short_balance ?? 0);
+        $marginChangeRatio = $previous && (float) ($previous->margin_balance ?? 0) > 0
+            ? ($marginBalance - (float) $previous->margin_balance) / (float) $previous->margin_balance
+            : null;
 
-        return [
-            'bull_score' => min(25, $bull),
-            'bear_score' => min(25, $bear),
-            'risk_penalty' => min(12, $risk),
-            'bull_reasons' => array_values(array_unique($bullReasons)),
-            'bear_reasons' => array_values(array_unique($bearReasons)),
-            'risk_reasons' => array_values(array_unique($riskReasons)),
-            'risk_flags' => array_values(array_unique($riskFlags)),
-        ];
+        $this->bull($module, $institutionalRatio >= 0.04, 18, '三大法人明顯買超');
+        $this->bull($module, $institutionalRatio > 0 && $institutionalRatio < 0.04, 8, '三大法人買超');
+        $this->bull($module, $foreignRatio >= 0.025, 10, '外資買超');
+        $this->bull($module, $trustRatio >= 0.012, 10, '投信買超');
+        $this->bull($module, $dealerRatio >= 0.012, 6, '自營商買超');
+        $this->bull($module, (float) ($chip->foreign_net_buy ?? 0) > 0 && (float) ($chip->investment_trust_net_buy ?? 0) > 0, 10, '外資投信同步買超');
+        $this->bull($module, $marginChangeRatio !== null && $marginChangeRatio <= -0.03, 6, '融資下降');
+        $this->bull($module, $shortBalance / $volume < 0.15, 4, '券資壓力低');
+        $this->bull($module, $this->num($chip->foreign_held_ratio ?? null) !== null && $this->num($chip->foreign_held_ratio) >= 20, 5, '外資持股穩定');
+
+        $this->bear($module, $institutionalRatio <= -0.04, 18, '三大法人明顯賣超', 'institutional_selling');
+        $this->bear($module, $institutionalRatio < 0 && $institutionalRatio > -0.04, 8, '三大法人賣超');
+        $this->bear($module, $foreignRatio <= -0.025, 10, '外資賣超');
+        $this->bear($module, $trustRatio <= -0.012, 10, '投信賣超');
+        $this->bear($module, $dealerRatio <= -0.012, 6, '自營商賣超');
+        $this->bear($module, (float) ($chip->foreign_net_buy ?? 0) < 0 && (float) ($chip->investment_trust_net_buy ?? 0) < 0, 10, '外資投信同步賣超', 'foreign_and_trust_selling');
+        $this->risk($module, $marginChangeRatio !== null && $marginChangeRatio >= 0.05, 8, '融資快速增加', 'margin_increasing');
+        $this->risk($module, $marginBalance / $volume >= 5, 7, '融資偏重', 'margin_heavy');
+        $this->risk($module, $shortBalance / $volume >= 0.5, 5, '券資壓力高');
+        $this->risk($module, (bool) ($chip->day_trade_suspended ?? false), 4, '當沖受限', 'day_trade_suspended');
+
+        return $this->finish($module);
     }
 
+    /**
+     * @return array<string,mixed>
+     */
     private function fundamental(mixed $financial, mixed $revenue): array
     {
-        $bull = 0.0; $bear = 0.0; $risk = 0.0;
-        $bullReasons = []; $bearReasons = []; $riskReasons = []; $riskFlags = [];
+        $module = $this->module();
 
-        if ($revenue?->yoy_pct !== null) {
-            $yoy = (float) $revenue->yoy_pct;
-            if ($yoy >= 20) {
-                $bull += 8; $bullReasons[] = '月營收年增強勁';
-            } elseif ($yoy >= 5) {
-                $bull += 5; $bullReasons[] = '月營收年增';
-            } elseif ($yoy <= -15) {
-                $bear += 8; $bearReasons[] = '月營收明顯衰退'; $riskFlags[] = 'revenue_decline';
-            } elseif ($yoy < 0) {
-                $bear += 4; $bearReasons[] = '月營收年減';
-            }
-        }
-        if ($revenue?->mom_pct !== null) {
-            $mom = (float) $revenue->mom_pct;
-            if ($mom >= 8) {
-                $bull += 4; $bullReasons[] = '月營收月增';
-            } elseif ($mom <= -8) {
-                $bear += 4; $bearReasons[] = '月營收月減';
-            }
-        }
-        if ($financial?->eps !== null) {
-            $eps = (float) $financial->eps;
-            if ($eps >= 3) {
-                $bull += 5; $bullReasons[] = 'EPS 表現強';
-            } elseif ($eps < 0) {
-                $bear += 6; $bearReasons[] = 'EPS 轉虧'; $riskFlags[] = 'eps_loss';
-            }
-        }
-        if ($financial?->roe !== null) {
-            $roe = (float) $financial->roe;
-            if ($roe >= 15) {
-                $bull += 5; $bullReasons[] = 'ROE 表現佳';
-            } elseif ($roe < 5) {
-                $bear += 4; $bearReasons[] = 'ROE 偏低';
-            }
-        }
-        if ($financial?->gross_margin !== null) {
-            $gross = (float) $financial->gross_margin;
-            if ($gross >= 30) {
-                $bull += 4; $bullReasons[] = '毛利率具支撐';
-            } elseif ($gross < 10) {
-                $bear += 4; $bearReasons[] = '毛利率偏低';
-            }
-        }
-        if ($financial?->per !== null) {
-            $per = (float) $financial->per;
-            if ($per > 0 && $per <= 15) {
-                $bull += 3; $bullReasons[] = '評價相對保守';
-            } elseif ($per > 40) {
-                $risk += 6; $riskReasons[] = '本益比偏高'; $riskFlags[] = 'high_per';
-            } elseif ($per > 25) {
-                $risk += 3; $riskReasons[] = '本益比略高';
-            }
+        if (! $financial && ! $revenue) {
+            $this->risk($module, true, 8, '財報營收資料不足', 'fundamental_missing');
+
+            return $this->finish($module);
         }
 
+        $yoy = $this->num($revenue?->yoy_pct ?? null);
+        $mom = $this->num($revenue?->mom_pct ?? null);
+        $eps = $this->num($financial?->eps ?? null);
+        $roe = $this->num($financial?->roe ?? null);
+        $gross = $this->num($financial?->gross_margin ?? null);
+        $operating = $this->num($financial?->operating_margin ?? null);
+        $per = $this->num($financial?->per ?? null);
+        $pb = $this->num($financial?->pb_ratio ?? null);
+
+        $this->bull($module, $yoy !== null && $yoy >= 20, 20, '營收年增強');
+        $this->bull($module, $yoy !== null && $yoy >= 5 && $yoy < 20, 12, '營收年增');
+        $this->bull($module, $mom !== null && $mom >= 8, 8, '營收月增');
+        $this->bull($module, $eps !== null && $eps >= 3, 12, 'EPS 表現佳');
+        $this->bull($module, $eps !== null && $eps > 0 && $eps < 3, 6, 'EPS 為正');
+        $this->bull($module, $roe !== null && $roe >= 15, 12, 'ROE 良好');
+        $this->bull($module, $gross !== null && $gross >= 30, 8, '毛利率佳');
+        $this->bull($module, $operating !== null && $operating >= 15, 5, '營益率佳');
+        $this->bull($module, $per !== null && $per > 0 && $per <= 15, 8, '本益比偏低');
+        $this->bull($module, $per !== null && $per > 15 && $per <= 25, 4, '本益比尚可');
+        $this->bull($module, $pb !== null && $pb > 0 && $pb <= 2, 4, '股價淨值比尚可');
+
+        $this->bear($module, $yoy !== null && $yoy <= -15, 20, '營收年減擴大', 'revenue_decline');
+        $this->bear($module, $yoy !== null && $yoy < 0 && $yoy > -15, 8, '營收年減');
+        $this->bear($module, $mom !== null && $mom <= -8, 8, '營收月減');
+        $this->bear($module, $eps !== null && $eps < 0, 15, 'EPS 虧損', 'eps_loss');
+        $this->bear($module, $roe !== null && $roe < 5, 8, 'ROE 偏低');
+        $this->bear($module, $gross !== null && $gross < 10, 8, '毛利率偏低');
+        $this->bear($module, $operating !== null && $operating < 0, 6, '營益率轉負');
+        $this->risk($module, $per !== null && $per > 40, 12, '本益比過高', 'high_per');
+        $this->risk($module, $per !== null && $per > 30 && $per <= 40, 6, '本益比偏高');
+        $this->risk($module, $pb !== null && $pb > 6, 4, '股價淨值比偏高');
+
+        return $this->finish($module);
+    }
+
+    /**
+     * @return array<string,mixed>
+     */
+    private function theme(int $themeScore, int $eventScore): array
+    {
+        $module = $this->module();
+
+        $this->bull($module, $themeScore >= 85, 70, '題材熱度高');
+        $this->bull($module, $themeScore >= 70 && $themeScore < 85, 55, '題材明顯升溫');
+        $this->bull($module, $themeScore >= 55 && $themeScore < 70, 40, '題材升溫');
+        $this->bull($module, $themeScore >= 40 && $themeScore < 55, 25, '題材開始升溫');
+        $this->bull($module, $eventScore >= 75, 15, '事件面偏多');
+        $this->bull($module, $eventScore >= 55 && $eventScore < 75, 8, '事件面有支撐');
+        $this->bear($module, $themeScore < 30, 12, '題材熱度低');
+        $this->bear($module, $eventScore > 0 && $eventScore < 40, 8, '事件面支撐不足');
+        $this->risk($module, $themeScore >= 90, 10, '題材過熱', 'theme_overheated');
+
+        return $this->finish($module);
+    }
+
+    /**
+     * @return array<string,mixed>
+     */
+    private function module(): array
+    {
         return [
-            'bull_score' => min(25, $bull),
-            'bear_score' => min(25, $bear),
-            'risk_penalty' => min(12, $risk),
-            'bull_reasons' => array_values(array_unique($bullReasons)),
-            'bear_reasons' => array_values(array_unique($bearReasons)),
-            'risk_reasons' => array_values(array_unique($riskReasons)),
-            'risk_flags' => array_values(array_unique($riskFlags)),
+            'bull_score' => 0.0,
+            'bear_score' => 0.0,
+            'risk_penalty' => 0.0,
+            'bull_reasons' => [],
+            'bear_reasons' => [],
+            'risk_reasons' => [],
+            'risk_flags' => [],
         ];
     }
 
-    private function theme(int $themeScore): array
+    /**
+     * @param array<string,mixed> $module
+     */
+    private function bull(array &$module, bool $condition, float $points, string $reason): void
     {
-        $bonus = match (true) {
-            $themeScore >= 85 => 15,
-            $themeScore >= 75 => 12,
-            $themeScore >= 60 => 8,
-            $themeScore >= 45 => 4,
-            default => 0,
-        };
-        $risk = $themeScore >= 90 ? 3 : 0;
+        if (! $condition) {
+            return;
+        }
+
+        $module['bull_score'] += $points;
+        $module['bull_reasons'][] = $reason;
+    }
+
+    /**
+     * @param array<string,mixed> $module
+     */
+    private function bear(array &$module, bool $condition, float $points, string $reason, ?string $flag = null): void
+    {
+        if (! $condition) {
+            return;
+        }
+
+        $module['bear_score'] += $points;
+        $module['bear_reasons'][] = $reason;
+
+        if ($flag !== null) {
+            $module['risk_flags'][] = $flag;
+        }
+    }
+
+    /**
+     * @param array<string,mixed> $module
+     */
+    private function risk(array &$module, bool $condition, float $points, string $reason, ?string $flag = null): void
+    {
+        if (! $condition) {
+            return;
+        }
+
+        $module['risk_penalty'] += $points;
+        $module['risk_reasons'][] = $reason;
+
+        if ($flag !== null) {
+            $module['risk_flags'][] = $flag;
+        }
+    }
+
+    /**
+     * @param array<string,mixed> $module
+     * @return array<string,mixed>
+     */
+    private function finish(array $module): array
+    {
+        $score = (int) round(max(0, min(100, $module['bull_score'] - $module['bear_score'] - $module['risk_penalty'])));
 
         return [
-            'bonus_score' => $bonus,
-            'risk_penalty' => $risk,
-            'bull_reasons' => $bonus >= 12 ? ['題材熱度高'] : ($bonus > 0 ? ['題材有熱度'] : []),
-            'risk_reasons' => $risk > 0 ? ['題材過熱需留意'] : [],
-            'risk_flags' => $risk > 0 ? ['theme_overheated'] : [],
+            'score' => $score,
+            'bull_score' => round($module['bull_score'], 2),
+            'bear_score' => round($module['bear_score'], 2),
+            'risk_penalty' => round($module['risk_penalty'], 2),
+            'bull_reasons' => array_values(array_unique($module['bull_reasons'])),
+            'bear_reasons' => array_values(array_unique($module['bear_reasons'])),
+            'risk_reasons' => array_values(array_unique($module['risk_reasons'])),
+            'risk_flags' => array_values(array_unique($module['risk_flags'])),
         ];
+    }
+
+    /**
+     * @param array<string,array<string,mixed>> $modules
+     * @param array<string,float> $weights
+     */
+    private function weightedPressure(array $modules, array $weights, bool $includeRisk): int
+    {
+        $score = 0.0;
+
+        foreach ($weights as $name => $weight) {
+            $points = (float) $modules[$name]['bear_score'];
+
+            if ($includeRisk) {
+                $points += (float) $modules[$name]['risk_penalty'];
+            }
+
+            $score += min(100, $points) * $weight;
+        }
+
+        return max(0, min(100, (int) round($score)));
+    }
+
+    private function crossUp(?float $previousValue, ?float $previousSignal, ?float $value, ?float $signal): bool
+    {
+        return $previousValue !== null
+            && $previousSignal !== null
+            && $value !== null
+            && $signal !== null
+            && $previousValue <= $previousSignal
+            && $value > $signal;
+    }
+
+    private function crossDown(?float $previousValue, ?float $previousSignal, ?float $value, ?float $signal): bool
+    {
+        return $previousValue !== null
+            && $previousSignal !== null
+            && $value !== null
+            && $signal !== null
+            && $previousValue >= $previousSignal
+            && $value < $signal;
+    }
+
+    /**
+     * @return array<int, mixed>
+     */
+    private function jsonArray(mixed $value): array
+    {
+        if (is_array($value)) {
+            return $value;
+        }
+
+        if (! is_string($value) || $value === '') {
+            return [];
+        }
+
+        $decoded = json_decode($value, true);
+
+        return is_array($decoded) ? $decoded : [];
     }
 
     private function num(mixed $value): ?float
     {
         return $value === null ? null : (float) $value;
-    }
-
-    private function moduleConfidence(float $bull, float $bear, float $risk, float $maxDirection, float $maxRisk): int
-    {
-        $bullRatio = $maxDirection > 0 ? min(1.0, $bull / $maxDirection) : 0.0;
-        $bearRatio = $maxDirection > 0 ? min(1.0, $bear / $maxDirection) : 0.0;
-        $riskRatio = $maxRisk > 0 ? min(1.0, $risk / $maxRisk) : 0.0;
-
-        $score = 50 + ($bullRatio * 40) - ($bearRatio * 30) - ($riskRatio * 22);
-
-        return max(5, min(95, (int) round($score)));
-    }
-
-    /**
-     * @param array<string,mixed> $technical
-     * @param array<string,mixed> $chip
-     * @param array<string,mixed> $fundamental
-     * @param array<string,mixed> $theme
-     */
-    private function riskConfidence(array $technical, array $chip, array $fundamental, array $theme): int
-    {
-        $technicalRisk = min(1.0, ((float) $technical['risk_penalty'] + ((float) $technical['bear_score'] * 0.55)) / 32);
-        $chipRisk = min(1.0, ((float) $chip['risk_penalty'] + ((float) $chip['bear_score'] * 0.55)) / 24);
-        $fundamentalRisk = min(1.0, ((float) $fundamental['risk_penalty'] + ((float) $fundamental['bear_score'] * 0.45)) / 22);
-        $themeRisk = min(1.0, ((float) $theme['risk_penalty']) / 8);
-
-        $score = 20
-            + ($technicalRisk * 35)
-            + ($chipRisk * 25)
-            + ($fundamentalRisk * 25)
-            + ($themeRisk * 15);
-
-        return max(5, min(95, (int) round($score)));
-    }
-
-    /**
-     * @param array<string,mixed> $technical
-     * @param array<string,mixed> $chip
-     * @param array<string,mixed> $fundamental
-     */
-    private function weakConfidence(array $technical, array $chip, array $fundamental): int
-    {
-        $technicalWeak = min(1.0, ((float) $technical['bear_score'] + ((float) $technical['risk_penalty'] * 0.45)) / 38);
-        $chipWeak = min(1.0, ((float) $chip['bear_score'] + ((float) $chip['risk_penalty'] * 0.35)) / 28);
-        $fundamentalWeak = min(1.0, ((float) $fundamental['bear_score'] + ((float) $fundamental['risk_penalty'] * 0.35)) / 28);
-
-        $score = 20
-            + ($technicalWeak * 45)
-            + ($chipWeak * 25)
-            + ($fundamentalWeak * 30);
-
-        return max(5, min(95, (int) round($score)));
     }
 }
