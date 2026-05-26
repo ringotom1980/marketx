@@ -359,6 +359,7 @@ Route::get('/', function () {
         $sma120 = $stock->sma120 === null ? null : (float) $stock->sma120;
         $return20 = (float) ($stock->return20 ?? 0);
         $return60 = (float) ($stock->return60 ?? 0);
+        $volumeRatio20 = (float) ($stock->volume_ratio20 ?? 0);
         $bais = $bais20($stock);
         $volumeMultiple = $volume / max(1, $previousVolume);
 
@@ -372,9 +373,9 @@ Route::get('/', function () {
         $longConsolidation = abs($return60) <= 8
             && abs($return20) <= 6
             && ($bais === null || abs($bais) <= 8);
-        $priceRises = $close > max($open, $previousClose) && (float) ($stock->change_pct ?? 0) > 0;
-        $volumeExplodes = $volumeMultiple >= 3;
-        $notOverheated = $return20 <= 8 && ($bais === null || $bais <= 8);
+        $priceRises = (float) ($stock->change_pct ?? 0) > 0 && ($close >= $open || $close > $previousClose);
+        $volumeExplodes = $volumeMultiple >= 2.5 || $volumeRatio20 >= 1.8;
+        $notOverheated = $return20 <= 10 && ($bais === null || $bais <= 10);
 
         return ($belowAverage || $shortSelloff || $longDowntrend || $longConsolidation)
             && $priceRises
@@ -545,11 +546,13 @@ Route::get('/', function () {
             $reasons->push($reason('長期盤整', 'warning'));
         }
 
-        if ($volumeMultiple >= 3) {
-            $reasons->push($reason('量增逾3倍', 'warning'));
+        if ($volumeMultiple >= 2.5) {
+            $reasons->push($reason('量增逾2.5倍', 'warning'));
+        } elseif ((float) ($stock->volume_ratio20 ?? 0) >= 1.8) {
+            $reasons->push($reason('量能高於均量', 'warning'));
         }
 
-        if ((float) ($stock->change_pct ?? 0) > 0 && $close > (float) ($stock->previous_close ?? 0)) {
+        if ((float) ($stock->change_pct ?? 0) > 0) {
             $reasons->push($reason('放量上漲', 'up'));
         }
 
