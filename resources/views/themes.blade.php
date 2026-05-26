@@ -64,7 +64,7 @@
                             @foreach ($theme['related_stocks'] as $stock)
                                 <tr>
                                     <th><a href="/s/{{ $stock['symbol'] }}">{{ $stock['name'] }}</a></th>
-                                    <td>{{ $stock['decision'] ?? '等待計算' }}</td>
+                                    <td>{{ $stock['state'] ?? '等待計算' }}</td>
                                     <td>信心 {{ $stock['confidence'] ?? 0 }}%</td>
                                 </tr>
                             @endforeach

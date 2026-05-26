@@ -1203,16 +1203,29 @@ Route::get('/themes', function () {
                 })
                 ->where('stock_theme_map.theme_id', $theme->id)
                 ->whereNotNull('stock_scores.total_score')
-                ->orderByDesc('stock_scores.total_score')
+                ->orderByDesc('stock_scores.confidence_score')
                 ->limit(20)
-                ->get(['stocks.symbol', 'stocks.name', 'stock_scores.total_score', 'stock_scores.confidence_score', 'stock_scores.decision'])
-                ->map(fn ($stock) => [
-                    'symbol' => $stock->symbol,
-                    'name' => $stock->name,
-                    'score' => $stock->total_score,
-                    'confidence' => $stock->confidence_score,
-                    'decision' => $stock->decision,
-                ])
+                ->get(['stocks.symbol', 'stocks.name', 'stock_scores.total_score', 'stock_scores.confidence_score', 'stock_scores.confidence_payload'])
+                ->map(function ($stock) {
+                    $payload = is_string($stock->confidence_payload)
+                        ? (json_decode($stock->confidence_payload, true) ?: [])
+                        : ((array) ($stock->confidence_payload ?? []));
+                    $confidence = (int) ($payload['opportunity_confidence'] ?? $stock->confidence_score ?? 0);
+
+                    return [
+                        'symbol' => $stock->symbol,
+                        'name' => $stock->name,
+                        'score' => $stock->total_score,
+                        'confidence' => $confidence,
+                        'state' => match (true) {
+                            $confidence >= 78 => '高度觀察',
+                            $confidence >= 68 => '偏多觀察',
+                            $confidence >= 55 => '中性觀察',
+                            $confidence >= 40 => '保守觀察',
+                            default => '弱勢觀察',
+                        },
+                    ];
+                })
                 ->all();
 
             return [
