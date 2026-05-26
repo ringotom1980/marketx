@@ -23,6 +23,8 @@ class RunGlobalMorningPipeline extends Command
             ['global_influence', 'market:calculate-global-influence', []],
             ['dynamic_themes', 'market:detect-dynamic-themes', []],
             ['theme_scores', 'market:calculate-theme-scores', []],
+            ['decision_scores_global', 'market:calculate-decision-scores', []],
+            ['stock_radar_cards_global', 'market:build-stock-radar-cards', []],
         ];
 
         if (! $this->option('skip-ai')) {

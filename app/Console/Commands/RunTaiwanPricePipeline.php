@@ -19,6 +19,7 @@ class RunTaiwanPricePipeline extends Command
             ['taiwan_prices_fast', 'market:import-stocks', []],
             ['technical_scores_fast', 'market:calculate-technical-scores', ['--min-days' => 10]],
             ['decision_scores_fast', 'market:calculate-decision-scores', []],
+            ['stock_radar_cards_fast', 'market:build-stock-radar-cards', []],
         ] as [$name, $command, $parameters]) {
             $result = $this->runStep($name, $command, $parameters);
 

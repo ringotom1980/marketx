@@ -26,6 +26,7 @@ class RunDailyPipeline extends Command
                 ['dynamic_theme_mappings', 'market:map-dynamic-themes', []],
                 ['theme_scores', 'market:calculate-theme-scores', []],
                 ['decision_scores', 'market:calculate-decision-scores', []],
+                ['stock_radar_cards', 'market:build-stock-radar-cards', []],
             ]
             : [
                 ['global_market', 'market:import-global-market', []],
@@ -48,6 +49,7 @@ class RunDailyPipeline extends Command
                 ['dynamic_theme_mappings', 'market:map-dynamic-themes', []],
                 ['theme_scores', 'market:calculate-theme-scores', []],
                 ['decision_scores', 'market:calculate-decision-scores', []],
+                ['stock_radar_cards', 'market:build-stock-radar-cards', []],
             ];
 
         if (! $this->option('skip-ai')) {

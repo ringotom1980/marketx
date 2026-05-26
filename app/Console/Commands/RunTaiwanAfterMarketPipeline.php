@@ -21,6 +21,7 @@ class RunTaiwanAfterMarketPipeline extends Command
             ['official_chip_metrics_aftermarket', 'market:import-official-chip-metrics', []],
             ['technical_scores_aftermarket', 'market:calculate-technical-scores', ['--min-days' => 10]],
             ['decision_scores_aftermarket', 'market:calculate-decision-scores', []],
+            ['stock_radar_cards_aftermarket', 'market:build-stock-radar-cards', []],
         ] as [$name, $command, $parameters]) {
             $result = $this->runStep($name, $command, $parameters);
 

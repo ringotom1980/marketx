@@ -598,172 +598,48 @@ Route::get('/', function () {
         return $reasons->unique('label')->take(3)->values()->all();
     };
 
-    $stockCandidates = Stock::query()
-        ->join('stock_scores', function ($join) {
-            $join->on('stocks.id', '=', 'stock_scores.stock_id')
-                ->whereRaw('stock_scores.score_date = (select max(ss.score_date) from stock_scores ss where ss.stock_id = stocks.id)');
-        })
-        ->leftJoin('stock_prices_1d', function ($join) {
-            $join->on('stocks.id', '=', 'stock_prices_1d.stock_id')
-                ->whereRaw('stock_prices_1d.trade_date = (select max(sp.trade_date) from stock_prices_1d sp where sp.stock_id = stocks.id)');
-        })
-        ->leftJoin('stock_technical_indicators_1d', function ($join) {
-            $join->on('stocks.id', '=', 'stock_technical_indicators_1d.stock_id')
-                ->whereRaw('stock_technical_indicators_1d.trade_date = (select max(sti.trade_date) from stock_technical_indicators_1d sti where sti.stock_id = stocks.id)');
-        })
-        ->leftJoin('stock_chips_1d', function ($join) {
-            $join->on('stocks.id', '=', 'stock_chips_1d.stock_id')
-                ->whereRaw('stock_chips_1d.trade_date = (select max(sc.trade_date) from stock_chips_1d sc where sc.stock_id = stocks.id)');
-        })
-        ->leftJoin('stock_financials', function ($join) {
-            $join->on('stocks.id', '=', 'stock_financials.stock_id')
-                ->whereRaw('stock_financials.period = (select max(sf.period) from stock_financials sf where sf.stock_id = stocks.id)');
-        })
-        ->leftJoin('stock_revenues', function ($join) {
-            $join->on('stocks.id', '=', 'stock_revenues.stock_id')
-                ->whereRaw('stock_revenues.year_month = (select max(sr.year_month) from stock_revenues sr where sr.stock_id = stocks.id)');
-        })
-        ->select(
-            'stocks.symbol',
-            'stocks.name',
-            'stock_scores.total_score',
-            'stock_scores.confidence_score',
-            'stock_scores.confidence_payload',
-            'stock_scores.theme_score',
-            'stock_scores.technical_score',
-            'stock_scores.chip_score',
-            'stock_scores.fundamental_score',
-            'stock_scores.technical_payload',
-            'stock_prices_1d.open',
-            'stock_prices_1d.high',
-            'stock_prices_1d.low',
-            'stock_prices_1d.close',
-            'stock_prices_1d.change_pct',
-            'stock_prices_1d.volume',
-            'stock_technical_indicators_1d.sma20',
-            'stock_technical_indicators_1d.sma60',
-            'stock_technical_indicators_1d.sma120',
-            'stock_technical_indicators_1d.bais20',
-            'stock_technical_indicators_1d.return20',
-            'stock_technical_indicators_1d.return10',
-            'stock_technical_indicators_1d.return60',
-            'stock_technical_indicators_1d.volume_ratio20',
-            'stock_technical_indicators_1d.rsi14',
-            'stock_technical_indicators_1d.macd',
-            'stock_technical_indicators_1d.macd_signal',
-            'stock_technical_indicators_1d.macd_histogram',
-            'stock_technical_indicators_1d.k9',
-            'stock_technical_indicators_1d.d9',
-            'stock_technical_indicators_1d.bollinger_upper20',
-            'stock_technical_indicators_1d.bollinger_middle20',
-            'stock_technical_indicators_1d.bollinger_lower20',
-            'stock_technical_indicators_1d.resistance20',
-            'stock_technical_indicators_1d.signals as technical_signals',
-            'stock_chips_1d.margin_balance',
-            'stock_chips_1d.short_balance',
-            'stock_financials.per',
-            'stock_revenues.mom_pct',
-            'stock_revenues.yoy_pct',
-            DB::raw('(select sp_prev.close from stock_prices_1d sp_prev where sp_prev.stock_id = stocks.id and sp_prev.trade_date < stock_prices_1d.trade_date order by sp_prev.trade_date desc limit 1) as previous_close'),
-            DB::raw('(select sp_prev.volume from stock_prices_1d sp_prev where sp_prev.stock_id = stocks.id and sp_prev.trade_date < stock_prices_1d.trade_date order by sp_prev.trade_date desc limit 1) as previous_volume')
-        )
-        ->whereNotNull('stock_scores.total_score')
-        ->where('stock_scores.technical_score', '>', 0)
-        ->orderByDesc('stock_scores.confidence_score')
-        ->orderByDesc('stock_scores.total_score')
-        ->orderBy('stocks.symbol')
-        ->limit(180)
-        ->get()
-        ->map(function ($stock) use ($payloadFor) {
-            $payload = $payloadFor($stock);
-            $stock->return20 = (float) ($stock->return20 ?? ($payload['return20'] ?? 0));
-            $stock->volume_ratio20 = (float) ($stock->volume_ratio20 ?? ($payload['volume_ratio20'] ?? 0));
+    $latestRadarDate = DB::table('stock_radar_cards')->max('card_date');
+    $stockRadarConfig = collect([
+        'priority' => ['title' => '優先觀察', 'empty' => '目前沒有符合條件的優先觀察股'],
+        'risk' => ['title' => '風險升高', 'empty' => '目前沒有符合條件的風險升高股'],
+        'potential' => ['title' => '潛力觀察', 'empty' => '目前沒有符合條件的潛力觀察股'],
+        'low_volume' => ['title' => '低檔爆量', 'empty' => '目前沒有符合條件的低檔爆量股'],
+        'weak' => ['title' => '持續弱勢', 'empty' => '目前沒有符合條件的持續弱勢股'],
+    ]);
 
-            return $stock;
-        });
+    $stockRadarRows = $latestRadarDate
+        ? DB::table('stock_radar_cards')
+            ->join('stocks', 'stocks.id', '=', 'stock_radar_cards.stock_id')
+            ->where('stock_radar_cards.card_date', $latestRadarDate)
+            ->orderBy('stock_radar_cards.card_type')
+            ->orderBy('stock_radar_cards.rank')
+            ->get([
+                'stock_radar_cards.card_type',
+                'stock_radar_cards.rank',
+                'stock_radar_cards.confidence_score',
+                'stock_radar_cards.reasons',
+                'stocks.symbol',
+                'stocks.name',
+            ])
+        : collect();
 
-    $confidencePayloadFor = function (object $stock): array {
-        $payload = $stock->confidence_payload ?? null;
+    $stockRadarCards = $stockRadarConfig->map(function (array $config, string $type) use ($stockRadarRows) {
+        $items = $stockRadarRows
+            ->where('card_type', $type)
+            ->sortBy('rank')
+            ->map(fn ($row) => [
+                'symbol' => $row->symbol,
+                'name' => $row->name,
+                'confidence' => (int) $row->confidence_score,
+                'reasons' => json_decode((string) $row->reasons, true) ?: [],
+            ])
+            ->values();
 
-        if (is_string($payload)) {
-            $payload = json_decode($payload, true);
-        }
+        return ['title' => $config['title'], 'empty' => $config['empty'], 'items' => $items];
+    })->values();
 
-        return is_array($payload) ? $payload : [];
-    };
-
-    $payloadReasons = function (object $stock, string $type) use ($confidencePayloadFor, $reason): array {
-        $payload = $confidencePayloadFor($stock);
-        $groups = $payload['reasons'] ?? [];
-        $items = collect();
-        $push = function (array $labels, string $tone) use ($items, $reason): void {
-            foreach ($labels as $label) {
-                $label = trim((string) $label);
-
-                if ($label !== '') {
-                    $items->push($reason($label, $tone));
-                }
-            }
-        };
-
-        if (in_array($type, ['priority', 'potential'], true)) {
-            $push($groups['bull'] ?? [], 'up');
-            $push($groups['risk'] ?? [], 'warning');
-        } elseif ($type === 'risk') {
-            $push($groups['risk'] ?? [], 'warning');
-            $push($groups['bear'] ?? [], 'down');
-        } elseif ($type === 'weak') {
-            $push($groups['bear'] ?? [], 'down');
-            $push($groups['risk'] ?? [], 'warning');
-        } else {
-            $push($groups['bull'] ?? [], 'warning');
-            $push($groups['risk'] ?? [], 'warning');
-            $push($groups['bear'] ?? [], 'down');
-        }
-
-        return $items
-            ->unique('label')
-            ->take(4)
-            ->values()
-            ->all();
-    };
-
-    $cardConfidence = function (object $stock, string $type) use ($confidencePayloadFor): int {
-        $payload = $confidencePayloadFor($stock);
-        return (int) ($payload['opportunity_confidence'] ?? $stock->confidence_score ?? 0);
-    };
-
-    $stockCardItem = fn (object $stock, array $fallbackReasons, string $type): array => [
-        'symbol' => $stock->symbol,
-        'name' => $stock->name,
-        'confidence' => $cardConfidence($stock, $type),
-        'reasons' => $type === 'low_volume' ? $fallbackReasons : ($payloadReasons($stock, $type) ?: $fallbackReasons),
-    ];
-
-    $topStocks = $stockCandidates
-        ->map(function ($stock) use ($priorityReasons) {
-            $stock->radar_reasons = $priorityReasons($stock);
-            return $stock;
-        })
-        ->filter(function ($stock) use ($bais20, $reasonLabels, $candidateHas) {
-            $labels = $reasonLabels($stock->radar_reasons);
-
-            return (int) ($stock->confidence_score ?? 0) >= 65
-                && (int) ($stock->total_score ?? 0) >= 58
-                && ($bais20($stock) === null || abs($bais20($stock)) <= 12)
-                && $candidateHas($labels, ['MACD 黃金交叉', 'KD 黃金交叉', '20 日突破', '價漲量增', '均線多頭排列', '題材升溫', '營收轉強'])
-                && count($labels) >= 2;
-        })
-        ->sortByDesc(fn ($stock) => sprintf(
-            '%03d-%03d-%03d',
-            (int) ($stock->confidence_score ?? 0),
-            (int) ($stock->theme_score ?? 0),
-            (int) ($stock->technical_score ?? 0),
-        ))
-        ->map(fn ($stock) => $stockCardItem($stock, $stock->radar_reasons, 'priority'))
-        ->take(6)
-        ->values();
-    $usedSymbols = $topStocks->pluck('symbol')->all();
+    $topStocks = $stockRadarCards->get(0)['items'] ?? collect();
+    $riskStocks = $stockRadarCards->get(1)['items'] ?? collect();
 
     $events = DB::table('global_event_clusters')
         ->orderByDesc('cluster_date')
@@ -807,100 +683,6 @@ Route::get('/', function () {
             'name' => $theme->name,
             'score' => (int) ($theme->heat_score ?? 0),
         ]);
-
-    $riskStocks = $stockCandidates
-        ->reject(fn ($stock) => in_array($stock->symbol, $usedSymbols, true))
-        ->map(function ($stock) use ($riskReasons) {
-            $stock->radar_reasons = $riskReasons($stock);
-            return $stock;
-        })
-        ->filter(function ($stock) use ($reasonLabels, $candidateHas, $cardConfidence) {
-            $labels = $reasonLabels($stock->radar_reasons);
-
-            return $cardConfidence($stock, 'risk') >= 35
-                && $cardConfidence($stock, 'risk') <= 78
-                && $candidateHas($labels, ['乖離過大', 'RSI 過熱', 'KD 過熱', '爆量轉弱', '高檔放量轉弱', '評價偏高', '融資偏重', '跌破月線', '跌破布林下緣'])
-                && count($labels) >= 2;
-        })
-        ->sortByDesc(fn ($stock) => sprintf(
-            '%03d-%06.2f-%06.2f',
-            $cardConfidence($stock, 'risk'),
-            abs((float) ($stock->bais20 ?? 0)),
-            max(0, (float) ($stock->return20 ?? 0)),
-        ))
-        ->map(fn ($stock) => $stockCardItem($stock, $stock->radar_reasons, 'risk'))
-        ->take(6)
-        ->values();
-    $usedSymbols = array_merge($usedSymbols, $riskStocks->pluck('symbol')->all());
-
-    $potentialStocks = $stockCandidates
-        ->reject(fn ($stock) => in_array($stock->symbol, $usedSymbols, true))
-        ->map(function ($stock) use ($potentialReasons) {
-            $stock->radar_reasons = $potentialReasons($stock);
-            return $stock;
-        })
-        ->filter(function ($stock) use ($reasonLabels) {
-            $labels = $reasonLabels($stock->radar_reasons);
-
-            return (int) ($stock->confidence_score ?? 0) >= 50
-                && (int) ($stock->total_score ?? 0) >= 48
-                && (float) ($stock->return20 ?? 0) < 8
-                && count($labels) >= 2;
-        })
-        ->sortByDesc(fn ($stock) => sprintf(
-            '%03d-%03d-%03d',
-            (int) ($stock->confidence_score ?? 0),
-            (int) ($stock->theme_score ?? 0),
-            (int) ($stock->technical_score ?? 0),
-        ))
-        ->map(fn ($stock) => $stockCardItem($stock, $stock->radar_reasons, 'potential'))
-        ->take(6)
-        ->values();
-    $usedSymbols = array_merge($usedSymbols, $potentialStocks->pluck('symbol')->all());
-
-    $lowVolumeStocks = $stockCandidates
-        ->reject(fn ($stock) => in_array($stock->symbol, $usedSymbols, true))
-        ->map(function ($stock) use ($lowVolumeReasons) {
-            $stock->radar_reasons = $lowVolumeReasons($stock);
-            return $stock;
-        })
-        ->filter(fn ($stock) => $isLowBaseVolumeBreakout($stock)
-            && count($stock->radar_reasons) >= 2)
-        ->sortByDesc(fn ($stock) => sprintf(
-            '%03d-%06.2f-%06.2f',
-            $cardConfidence($stock, 'low_volume'),
-            (float) ($stock->volume ?? 0) / max(1, (float) ($stock->previous_volume ?? 0)),
-            (float) ($stock->volume_ratio20 ?? 0),
-        ))
-        ->map(fn ($stock) => $stockCardItem($stock, $stock->radar_reasons, 'low_volume'))
-        ->take(6)
-        ->values();
-    $usedSymbols = array_merge($usedSymbols, $lowVolumeStocks->pluck('symbol')->all());
-
-    $weakStocks = $stockCandidates
-        ->reject(fn ($stock) => in_array($stock->symbol, $usedSymbols, true))
-        ->map(function ($stock) use ($weakReasons) {
-            $stock->radar_reasons = $weakReasons($stock);
-            return $stock;
-        })
-        ->filter(fn ($stock) => ((int) ($stock->technical_score ?? 0) < 48 || (float) ($stock->return20 ?? 0) <= -8)
-            && count($stock->radar_reasons) >= 2)
-        ->sortByDesc(fn ($stock) => sprintf(
-            '%03d-%03d',
-            $cardConfidence($stock, 'weak'),
-            100 - (int) ($stock->technical_score ?? 0),
-        ))
-        ->map(fn ($stock) => $stockCardItem($stock, $stock->radar_reasons, 'weak'))
-        ->take(6)
-        ->values();
-
-    $stockRadarCards = collect([
-        ['title' => '優先觀察', 'empty' => '尚未產生觀察名單', 'items' => $topStocks],
-        ['title' => '風險升高', 'empty' => '目前沒有明顯風險升高名單', 'items' => $riskStocks],
-        ['title' => '潛力觀察', 'empty' => '尚未找到潛力觀察名單', 'items' => $potentialStocks],
-        ['title' => '低檔爆量', 'empty' => '目前沒有明顯低檔爆量名單', 'items' => $lowVolumeStocks],
-        ['title' => '持續弱勢', 'empty' => '目前沒有明顯持續弱勢名單', 'items' => $weakStocks],
-    ]);
 
     return view('home', [
         'markets' => $markets,
