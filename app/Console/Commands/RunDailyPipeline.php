@@ -25,7 +25,7 @@ class RunDailyPipeline extends Command
                 ['dynamic_themes', 'market:detect-dynamic-themes', []],
                 ['dynamic_theme_mappings', 'market:map-dynamic-themes', []],
                 ['theme_scores', 'market:calculate-theme-scores', []],
-                ['theme_ai_summaries', 'market:ai-summarize-themes', ['--live' => true, '--batch' => 2]],
+                ['theme_ai_summaries', 'market:ai-summarize-themes', ['--live' => true, '--batch' => 1]],
                 ['decision_scores', 'market:calculate-decision-scores', []],
                 ['stock_radar_cards', 'market:build-stock-radar-cards', []],
             ]
@@ -50,7 +50,7 @@ class RunDailyPipeline extends Command
                 ['dynamic_themes', 'market:detect-dynamic-themes', []],
                 ['dynamic_theme_mappings', 'market:map-dynamic-themes', []],
                 ['theme_scores', 'market:calculate-theme-scores', []],
-                ['theme_ai_summaries', 'market:ai-summarize-themes', ['--live' => true, '--batch' => 2]],
+                ['theme_ai_summaries', 'market:ai-summarize-themes', ['--live' => true, '--batch' => 1]],
                 ['decision_scores', 'market:calculate-decision-scores', []],
                 ['stock_radar_cards', 'market:build-stock-radar-cards', []],
             ];

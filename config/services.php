@@ -45,10 +45,10 @@ return [
         'gemini_api_key' => env('GEMINI_API_KEY'),
         'gemini_model' => env('GEMINI_MODEL', 'gemini-2.5-flash'),
         'groq_api_key' => env('GROQ_API_KEY'),
-        'groq_model' => env('GROQ_MODEL', 'llama-3.1-8b-instant'),
+        'groq_model' => env('GROQ_MODEL', 'llama-3.3-70b-versatile'),
         'max_event_ai_per_day' => env('MAX_EVENT_AI_PER_DAY', 150),
         'max_stock_ai_per_day' => env('MAX_STOCK_AI_PER_DAY', 10),
-        'max_theme_ai_per_day' => env('MAX_THEME_AI_PER_DAY', 20),
+        'max_theme_ai_per_day' => env('MAX_THEME_AI_PER_DAY', 40),
         'max_dynamic_ai_per_day' => env('MAX_DYNAMIC_AI_PER_DAY', 5),
     ],
 

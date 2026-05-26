@@ -13,8 +13,10 @@ class AiSummarizeThemes extends Command
 {
     protected $signature = 'market:ai-summarize-themes
         {--date= : Theme score date, default today}
-        {--batch=2 : Themes per Groq call}
-        {--live : Actually call Groq. Without this option, only logs skipped results}';
+        {--batch=1 : Themes per Groq call}
+        {--live : Actually call Groq. Without this option, only logs skipped results}
+        {--force : Regenerate summaries even when a cached summary exists}
+        {--slug=* : Only summarize specific theme slug(s)}';
 
     protected $description = 'Use Groq to generate cached plain-language theme status summaries.';
 
@@ -22,8 +24,9 @@ class AiSummarizeThemes extends Command
     {
         $task = 'theme_summary';
         $scoreDate = $this->option('date') ?: CarbonImmutable::now('Asia/Taipei')->toDateString();
-        $batchSize = max(1, min(2, (int) $this->option('batch')));
+        $batchSize = max(1, min(1, (int) $this->option('batch')));
         $live = (bool) $this->option('live');
+        $force = (bool) $this->option('force');
 
         if (! $limiter->canRun($task)) {
             $this->warn('Daily AI limit reached for '.$task);
@@ -35,6 +38,7 @@ class AiSummarizeThemes extends Command
             ->where('themes.is_active', true)
             ->where('theme_scores.score_date', $scoreDate)
             ->whereNotNull('theme_scores.heat_score')
+            ->when($this->option('slug') !== [], fn ($query) => $query->whereIn('themes.slug', $this->option('slug')))
             ->orderByDesc('theme_scores.heat_score')
             ->get([
                 'theme_scores.id as score_id',
@@ -48,7 +52,11 @@ class AiSummarizeThemes extends Command
                 'theme_scores.chip_score',
                 'theme_scores.payload',
             ])
-            ->filter(function ($theme) {
+            ->filter(function ($theme) use ($force) {
+                if ($force) {
+                    return true;
+                }
+
                 $payload = $this->payload($theme->payload);
 
                 return blank(data_get($payload, 'ai_summary.status_zh'));
@@ -84,7 +92,9 @@ class AiSummarizeThemes extends Command
                 $slug = (string) ($row['slug'] ?? '');
                 $theme = $batch->firstWhere('slug', $slug);
 
-                if (! $theme || blank($row['status_zh'] ?? null)) {
+                $status = trim((string) ($row['status_zh'] ?? ''));
+
+                if (! $theme || blank($status) || ! str_contains($status, $theme->name)) {
                     continue;
                 }
 
@@ -92,7 +102,7 @@ class AiSummarizeThemes extends Command
                 $payload['ai_summary'] = [
                     'provider' => 'groq',
                     'model' => $result->model,
-                    'status_zh' => trim((string) $row['status_zh']),
+                    'status_zh' => $status,
                     'price_reason_zh' => trim((string) ($row['price_reason_zh'] ?? '')),
                     'generated_at' => now()->toIso8601String(),
                 ];
@@ -107,7 +117,7 @@ class AiSummarizeThemes extends Command
                 $updated++;
             }
 
-            sleep(12);
+            sleep(8);
         }
 
         $this->info('Theme AI summaries updated: '.$updated);
@@ -134,6 +144,8 @@ class AiSummarizeThemes extends Command
                 'stocks.symbol',
                 'stocks.name',
                 'stock_scores.confidence_score',
+                'stock_scores.technical_score',
+                'stock_scores.chip_score',
                 'stock_prices_1d.close',
                 'stock_prices_1d.change',
                 'stock_prices_1d.change_pct',
@@ -142,6 +154,8 @@ class AiSummarizeThemes extends Command
                 'symbol' => $stock->symbol,
                 'name' => $stock->name,
                 'confidence' => $stock->confidence_score,
+                'technical_score' => $stock->technical_score,
+                'chip_score' => $stock->chip_score,
                 'close' => $stock->close,
                 'change' => $stock->change,
                 'change_pct' => $stock->change_pct,
@@ -164,6 +178,14 @@ class AiSummarizeThemes extends Command
             ->values()
             ->all();
 
+        $upCount = collect($stocks)->filter(fn ($stock) => (float) ($stock['change'] ?? 0) > 0)->count();
+        $downCount = collect($stocks)->filter(fn ($stock) => (float) ($stock['change'] ?? 0) < 0)->count();
+        $flatCount = max(0, count($stocks) - $upCount - $downCount);
+        $avgChangePct = collect($stocks)
+            ->pluck('change_pct')
+            ->filter(fn ($value) => $value !== null)
+            ->avg();
+
         return [
             'slug' => $theme->slug,
             'name' => $theme->name,
@@ -172,6 +194,12 @@ class AiSummarizeThemes extends Command
             'price_score' => $theme->price_score,
             'volume_score' => $theme->volume_score,
             'chip_score' => $theme->chip_score,
+            'stock_breadth' => [
+                'up' => $upCount,
+                'down' => $downCount,
+                'flat' => $flatCount,
+                'avg_change_pct' => $avgChangePct === null ? null : round((float) $avgChangePct, 2),
+            ],
             'top_stocks' => $stocks,
             'recent_events' => $events,
         ];
@@ -180,11 +208,19 @@ class AiSummarizeThemes extends Command
     private function prompt(string $scoreDate, array $themes): string
     {
         return implode("\n", [
-            '你是《股市在幹嘛》的 Groq 題材摘要層。',
-            '任務：根據題材分數、代表股票今日漲跌與新聞事件，寫出白話的「目前狀態」與「今天股價漲跌原因」。',
+            '你是《股市在幹嘛》的台股題材研究助理，請用繁體中文寫給一般投資人看的題材狀態。',
+            '任務：根據題材熱度、代表股票今日漲跌、技術/籌碼分數與新聞事件，寫出真正有資訊量的「目前狀態」。',
             '限制：不要預測價格，不要給買賣建議，不要說明計分公式，不要使用簡體中文。',
-            '每個題材 status_zh 只寫 1 句，50 字以內。',
-            'price_reason_zh 只寫 1 句，40 字以內。',
+            'status_zh 固定 3 句，總長 110 到 180 字。',
+            '第 1 句：說這個題材今天偏強、偏弱或觀察，並指出主要來源。',
+            '第 2 句：說代表股票今天上漲或下跌可能跟什麼資料有關，必須提到 1 到 3 檔輸入中的股票名稱。',
+            '第 3 句：說一個具體風險或觀察條件，例如法人是否延續、族群是否擴散、是否只有少數股票撐場。',
+            'price_reason_zh 可以留空字串，因為股價原因要寫進 status_zh。',
+            '禁止使用這些空話或怪詞：行業熱度高漲、全球需求增加、新技術發展、技術指標下滑、籌碼調整、可能與昨日有關、高企、分數表現出色、技術和籌碼分數。',
+            '如果要描述分數，只能翻成自然台股語言，例如：量價轉強、代表股偏強、法人偏正向、族群漲跌不一致。',
+            '如果 recent_events 是空的，不要提新聞；如果 recent_events 有資料，也只能提輸入裡的事件重點。',
+            '不要每個題材都寫成同一個格式；必須依照該題材名稱、代表股、新聞或漲跌廣度調整內容。',
+            '語氣要求：像研究員簡短說明，不要像罐頭模板。必須使用輸入中的題材名稱與股票名稱，不能複製其他題材的內容。',
             '只能根據輸入資料，不要捏造沒有出現的公司、事件或數字。',
             '請輸出 JSON array，每筆包含 slug, status_zh, price_reason_zh。',
             '只輸出 JSON，不要 markdown，不要補充說明。',
