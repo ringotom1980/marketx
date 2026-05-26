@@ -48,6 +48,7 @@ return [
         'groq_model' => env('GROQ_MODEL', 'llama-3.1-8b-instant'),
         'max_event_ai_per_day' => env('MAX_EVENT_AI_PER_DAY', 150),
         'max_stock_ai_per_day' => env('MAX_STOCK_AI_PER_DAY', 10),
+        'max_theme_ai_per_day' => env('MAX_THEME_AI_PER_DAY', 20),
         'max_dynamic_ai_per_day' => env('MAX_DYNAMIC_AI_PER_DAY', 5),
     ],
 

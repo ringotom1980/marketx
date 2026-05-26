@@ -1068,7 +1068,7 @@ Route::get('/themes', function () {
             $join->on('themes.id', '=', 'theme_scores.theme_id')
                 ->whereRaw('theme_scores.score_date = (select max(ts.score_date) from theme_scores ts where ts.theme_id = themes.id)');
         })
-        ->select('themes.id', 'themes.slug', 'themes.name', 'themes.description', 'themes.ai_status', 'theme_scores.heat_score', 'theme_scores.news_score', 'theme_scores.price_score', 'theme_scores.volume_score', 'theme_scores.chip_score', 'theme_scores.score_date')
+        ->select('themes.id', 'themes.slug', 'themes.name', 'themes.description', 'themes.ai_status', 'theme_scores.heat_score', 'theme_scores.news_score', 'theme_scores.price_score', 'theme_scores.volume_score', 'theme_scores.chip_score', 'theme_scores.score_date', 'theme_scores.payload')
         ->where('themes.is_active', true)
         ->orderByRaw('coalesce(theme_scores.heat_score, 0) desc')
         ->orderBy('themes.name')
@@ -1128,6 +1128,12 @@ Route::get('/themes', function () {
             $priceScore = (int) ($theme->price_score ?? 0);
             $volumeScore = (int) ($theme->volume_score ?? 0);
             $chipScore = (int) ($theme->chip_score ?? 0);
+            $payload = is_string($theme->payload ?? null)
+                ? (json_decode($theme->payload, true) ?: [])
+                : ((array) ($theme->payload ?? []));
+            $aiSummary = data_get($payload, 'ai_summary.status_zh');
+            $aiPriceReason = data_get($payload, 'ai_summary.price_reason_zh');
+            $fallbackStatus = $themeStatus($theme->name, $score, $newsScore, $priceScore, $volumeScore, $chipScore);
 
             return [
                 'name' => $theme->name,
@@ -1135,7 +1141,8 @@ Route::get('/themes', function () {
                 'score' => $score,
                 'phase' => $themePhase($score, $newsScore, $priceScore),
                 'tone' => $themeTone($score),
-                'status' => $themeStatus($theme->name, $score, $newsScore, $priceScore, $volumeScore, $chipScore),
+                'status' => filled($aiSummary) ? $aiSummary : $fallbackStatus,
+                'price_reason' => filled($aiPriceReason) ? $aiPriceReason : null,
                 'reasons' => $themeReasons($score, $newsScore, $priceScore, $volumeScore, $chipScore, $mappedCount),
                 'risks' => $themeRisks($score, $eventCount, $priceScore, $chipScore, $mappedCount),
                 'event_count' => $eventCount,

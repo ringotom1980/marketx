@@ -35,6 +35,7 @@ class AiUsageLimiter
         return match ($task) {
             'event_preprocess', 'event_research' => (int) config('services.marketx.max_event_ai_per_day', 20),
             'stock_research' => (int) config('services.marketx.max_stock_ai_per_day', 50),
+            'theme_summary' => (int) config('services.marketx.max_theme_ai_per_day', 20),
             default => (int) config('services.marketx.max_dynamic_ai_per_day', 20),
         };
     }

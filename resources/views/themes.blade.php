@@ -22,6 +22,9 @@
                 <div style="margin-top:18px">
                     <h3 style="font-size:16px;margin:0 0 8px">目前狀態：</h3>
                     <p class="lead" style="font-size:15px;margin:0">{{ $theme['status'] }}</p>
+                    @if (! empty($theme['price_reason']))
+                        <p class="lead" style="font-size:14px;margin:8px 0 0">{{ $theme['price_reason'] }}</p>
+                    @endif
                 </div>
 
                 <div style="margin-top:18px">
