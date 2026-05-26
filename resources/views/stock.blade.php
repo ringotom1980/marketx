@@ -46,12 +46,18 @@
             width: 100%;
             height: 340px;
             touch-action: none;
+            user-select: none;
+            -webkit-user-select: none;
+            -webkit-touch-callout: none;
         }
 
         .k-chart-wrap canvas {
             width: 100%;
             height: 100%;
             display: block;
+            user-select: none;
+            -webkit-user-select: none;
+            -webkit-touch-callout: none;
         }
 
         .chart-empty {
@@ -144,7 +150,7 @@
         <div class="k-chart-wrap">
             <canvas id="stock-k-chart"></canvas>
         </div>
-        <p class="chart-tip">可雙指縮放、左右拖曳；長按或滑鼠停留可顯示十字線與開高低收。</p>
+        <p class="chart-tip">長按顯示十字線；點其他 K 棒可移動十字線，按住左右拖曳可平移，雙指可縮放。</p>
         <p class="chart-empty" id="stock-chart-empty">目前尚未接入個股當日分時資料，先看日 K、周 K、年 K。</p>
     </section>
 
@@ -220,6 +226,10 @@
             let dragStartX = 0;
             let dragStartStart = 0;
             let pinchDistance = null;
+            let longPressTimer = null;
+            let crosshairMode = false;
+            let pointerMoved = false;
+            let longPressFired = false;
 
             const colors = {
                 up: '#b42318',
@@ -410,37 +420,49 @@
             }, { passive: false });
 
             canvas.addEventListener('pointerdown', (event) => {
+                event.preventDefault();
                 canvas.setPointerCapture(event.pointerId);
                 dragging = true;
                 dragStartX = event.clientX;
                 dragStartStart = start;
+                pointerMoved = false;
+                longPressFired = false;
+                if (longPressTimer) {
+                    window.clearTimeout(longPressTimer);
+                }
+                longPressTimer = window.setTimeout(() => {
+                    if (!canvas._metrics || pointerMoved) return;
+                    const rect = canvas.getBoundingClientRect();
+                    crosshairMode = true;
+                    longPressFired = true;
+                    crossIndex = xToIndex(event.clientX - rect.left, canvas._metrics);
+                    draw();
+                }, 420);
             });
 
             canvas.addEventListener('pointermove', (event) => {
                 if (!canvas._metrics) return;
-                const rect = canvas.getBoundingClientRect();
-                if (crossIndex !== null && !dragging) {
-                    crossIndex = xToIndex(event.clientX - rect.left, canvas._metrics);
-                    draw();
-                    return;
-                }
-                if (!dragging) {
-                    crossIndex = xToIndex(event.clientX - rect.left, canvas._metrics);
-                    draw();
-                    return;
-                }
+                if (!dragging) return;
                 const delta = event.clientX - dragStartX;
                 if (Math.abs(delta) < 6) {
                     return;
                 }
+                pointerMoved = true;
+                if (longPressTimer) {
+                    window.clearTimeout(longPressTimer);
+                    longPressTimer = null;
+                }
                 const shift = Math.round(delta / canvas._metrics.step);
                 start = dragStartStart - shift;
-                crossIndex = null;
                 draw();
             });
 
             canvas.addEventListener('pointerup', (event) => {
-                if (dragging && canvas._metrics && Math.abs(event.clientX - dragStartX) < 6) {
+                if (longPressTimer) {
+                    window.clearTimeout(longPressTimer);
+                    longPressTimer = null;
+                }
+                if (dragging && canvas._metrics && !pointerMoved && !longPressFired && crosshairMode) {
                     const rect = canvas.getBoundingClientRect();
                     crossIndex = xToIndex(event.clientX - rect.left, canvas._metrics);
                     draw();
@@ -449,12 +471,24 @@
             });
 
             canvas.addEventListener('pointerleave', () => {
+                if (longPressTimer) {
+                    window.clearTimeout(longPressTimer);
+                    longPressTimer = null;
+                }
                 dragging = false;
                 draw();
             });
 
+            canvas.addEventListener('contextmenu', (event) => event.preventDefault());
+            canvas.addEventListener('selectstart', (event) => event.preventDefault());
+
             canvas.addEventListener('touchstart', (event) => {
                 if (event.touches.length === 2) {
+                    if (longPressTimer) {
+                        window.clearTimeout(longPressTimer);
+                        longPressTimer = null;
+                    }
+                    dragging = false;
                     const [a, b] = event.touches;
                     pinchDistance = Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY);
                 }
