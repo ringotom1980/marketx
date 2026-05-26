@@ -174,16 +174,18 @@
             position: relative;
             height: 22px;
             border-radius: 999px;
-            background: #f1f1f1;
+            background: linear-gradient(90deg, #a8b5c3 0%, #f1c97a 58%, #f2a0a6 100%);
             overflow: hidden;
             box-shadow: inset 0 0 0 1px rgba(101, 115, 133, .06);
         }
         .theme-heat-meter span {
-            display: block;
-            height: 100%;
-            min-width: 32px;
-            border-radius: inherit;
-            background: linear-gradient(90deg, #cfc5c7 0%, #e9a4a8 62%, #f25b60 100%);
+            position: absolute;
+            top: 0;
+            right: 0;
+            bottom: 0;
+            width: calc(100% - var(--heat-score));
+            border-radius: 0 999px 999px 0;
+            background: #f1f1f1;
         }
         .theme-heat-score {
             position: absolute;
@@ -261,8 +263,8 @@
                     @php($themeScore = min(100, max(0, (int) $theme['score'])))
                     <div class="theme-heat-row">
                         <div class="theme-heat-name">{{ $theme['name'] }}</div>
-                        <div class="theme-heat-meter" aria-label="{{ $theme['name'] }} 熱度 {{ $themeScore }}">
-                            <span style="width: {{ $themeScore }}%"></span>
+                        <div class="theme-heat-meter" style="--heat-score: {{ $themeScore }}%" aria-label="{{ $theme['name'] }} 熱度 {{ $themeScore }}">
+                            <span></span>
                             <strong class="theme-heat-score">{{ $themeScore }}</strong>
                         </div>
                     </div>
