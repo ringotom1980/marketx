@@ -11,50 +11,60 @@
     <section class="grid two">
         @forelse ($themes as $theme)
             <article class="panel" id="theme-{{ $theme['slug'] }}" style="scroll-margin-top:96px">
-                <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px">
-                    <div>
-                        <h2 style="margin-bottom:6px">{{ $theme['name'] }}</h2>
+                <div style="display:flex;align-items:center;justify-content:space-between;gap:12px">
+                    <h2 style="margin:0">{{ $theme['name'] }}</h2>
+                    <div style="display:flex;align-items:center;gap:8px;white-space:nowrap">
                         <span class="badge {{ $theme['tone'] }}">{{ $theme['phase'] }}</span>
-                    </div>
-                    <div style="text-align:right">
-                        <p class="lead" style="font-size:12px">信心指數</p>
-                        <div class="score" style="font-size:32px">{{ $theme['confidence'] }}%</div>
+                        <strong>{{ $theme['confidence'] }}%</strong>
                     </div>
                 </div>
 
-                <div class="meter" style="margin:14px 0 12px">
-                    <span style="width: {{ min(100, max(0, $theme['confidence'])) }}%"></span>
+                <div style="margin-top:18px">
+                    <h3 style="font-size:16px;margin:0 0 8px">目前狀態：</h3>
+                    <p class="lead" style="font-size:15px;margin:0">{{ $theme['status'] }}</p>
                 </div>
 
-                <table class="table" style="margin-top:12px">
-                    <tbody>
-                    <tr>
-                        <th>新聞事件</th>
-                        <td>台灣 {{ $theme['taiwan_event_count'] }} / 國際 {{ $theme['global_event_count'] }}</td>
-                    </tr>
-                    <tr>
-                        <th>相關股票</th>
-                        <td>{{ $theme['stock_count'] }} 檔</td>
-                    </tr>
-                    <tr>
-                        <th>技術 / 籌碼</th>
-                        <td>
-                            <span class="badge {{ $theme['price_tone'] }}">{{ $theme['price_state'] }}</span>
-                            <span class="badge {{ $theme['chip_tone'] }}">{{ $theme['chip_state'] }}</span>
-                        </td>
-                    </tr>
-                    @if ($theme['top_stocks'] !== [])
-                        <tr>
-                            <th>代表股票</th>
-                            <td>
-                                @foreach ($theme['top_stocks'] as $stock)
-                                    <a href="/s/{{ $stock['symbol'] }}">{{ $stock['name'] }}</a>{{ ! $loop->last ? '、' : '' }}
-                                @endforeach
-                            </td>
-                        </tr>
-                    @endif
-                    </tbody>
-                </table>
+                <div style="margin-top:18px">
+                    <h3 style="font-size:16px;margin:0 0 8px">升溫原因</h3>
+                    <div style="display:flex;flex-wrap:wrap;gap:8px">
+                        @foreach ($theme['reasons'] as $reason)
+                            <span class="badge {{ $reason['tone'] }}">{{ $reason['label'] }}</span>
+                        @endforeach
+                    </div>
+                </div>
+
+                <div style="margin-top:18px">
+                    <h3 style="font-size:16px;margin:0 0 8px">風險提醒</h3>
+                    <div style="display:flex;flex-wrap:wrap;gap:8px">
+                        @foreach ($theme['risks'] as $risk)
+                            <span class="badge {{ $risk['tone'] }}">{{ $risk['label'] }}</span>
+                        @endforeach
+                    </div>
+                </div>
+
+                @if ($theme['top_stocks'] !== [])
+                    <div style="margin-top:18px">
+                        <h3 style="font-size:16px;margin:0 0 8px">代表股票</h3>
+                        <div style="display:flex;flex-wrap:wrap;gap:10px 14px">
+                            @foreach ($theme['top_stocks'] as $stock)
+                                @php
+                                    $change = $stock['change'];
+                                    $tone = $change === null ? 'var(--muted)' : ($change > 0 ? 'var(--red)' : ($change < 0 ? 'var(--green)' : 'var(--muted)'));
+                                    $arrow = $change === null ? '' : ($change > 0 ? '▲' : ($change < 0 ? '▼' : ''));
+                                    $changeText = $change === null ? '' : ' '.$arrow.rtrim(rtrim(number_format(abs($change), 2), '0'), '.');
+                                    $closeText = $stock['close'] === null ? '待更新' : rtrim(rtrim(number_format($stock['close'], 2), '0'), '.');
+                                @endphp
+                                <a href="/s/{{ $stock['symbol'] }}" style="color:inherit;text-decoration:none">
+                                    <strong>{{ $stock['name'] }}</strong>
+                                    <span>{{ $closeText }}</span>
+                                    @if ($changeText !== '')
+                                        <span style="color:{{ $tone }};font-weight:800">{{ $changeText }}</span>
+                                    @endif
+                                </a>
+                            @endforeach
+                        </div>
+                    </div>
+                @endif
 
                 @if ($theme['related_stocks'] !== [])
                     <details style="margin-top:12px">

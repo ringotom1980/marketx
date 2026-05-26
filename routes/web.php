@@ -980,17 +980,100 @@ Route::get('/themes', function () {
         $score >= 45 => 'amber',
         default => 'green',
     };
+    $themeStatus = function (string $name, int $score, int $newsScore, int $priceScore, int $volumeScore, int $chipScore): string {
+        $drivers = [];
+
+        if ($newsScore >= 55) {
+            $drivers[] = '新聞熱度';
+        }
+
+        if ($priceScore >= 60) {
+            $drivers[] = '代表股轉強';
+        }
+
+        if ($volumeScore >= 55) {
+            $drivers[] = '量價同步';
+        }
+
+        if ($chipScore >= 60) {
+            $drivers[] = '籌碼偏正向';
+        }
+
+        $driverText = $drivers === [] ? '相關股票與事件資料' : implode('、', array_slice($drivers, 0, 3));
+        $level = match (true) {
+            $score >= 80 => '高熱度',
+            $score >= 65 => '中高熱度',
+            $score >= 45 => '觀察熱度',
+            default => '低熱度觀察',
+        };
+
+        return $name.'題材由'.$driverText.'帶動，目前屬於'.$level.'。';
+    };
+    $themeReasons = function (int $score, int $newsScore, int $priceScore, int $volumeScore, int $chipScore, int $stockCount): array {
+        $reasons = [];
+
+        if ($newsScore >= 55) {
+            $reasons[] = ['label' => '新聞熱度增加', 'tone' => 'red'];
+        }
+
+        if ($priceScore >= 60) {
+            $reasons[] = ['label' => '代表股轉強', 'tone' => 'red'];
+        }
+
+        if ($volumeScore >= 55) {
+            $reasons[] = ['label' => '量價同步', 'tone' => 'red'];
+        }
+
+        if ($chipScore >= 60) {
+            $reasons[] = ['label' => '法人籌碼偏正向', 'tone' => 'red'];
+        }
+
+        if ($stockCount >= 10) {
+            $reasons[] = ['label' => '族群擴散', 'tone' => 'red'];
+        }
+
+        if ($score >= 70) {
+            $reasons[] = ['label' => '熱度維持高檔', 'tone' => 'red'];
+        }
+
+        return array_slice($reasons === [] ? [['label' => '題材觀察中', 'tone' => 'amber']] : $reasons, 0, 4);
+    };
+    $themeRisks = function (int $score, int $eventCount, int $priceScore, int $chipScore, int $stockCount): array {
+        $risks = [];
+
+        if ($stockCount < 5) {
+            $risks[] = ['label' => '題材尚未全面擴散', 'tone' => 'amber'];
+        }
+
+        if ($chipScore < 55) {
+            $risks[] = ['label' => '需觀察法人延續', 'tone' => 'amber'];
+        }
+
+        if ($priceScore < 55) {
+            $risks[] = ['label' => '代表股尚未同步轉強', 'tone' => 'amber'];
+        }
+
+        if ($eventCount === 0) {
+            $risks[] = ['label' => '新聞催化不足', 'tone' => 'amber'];
+        }
+
+        if ($score >= 80) {
+            $risks[] = ['label' => '熱度偏高留意拉回', 'tone' => 'amber'];
+        }
+
+        return array_slice($risks === [] ? [['label' => '觀察後續量價延續', 'tone' => 'amber']] : $risks, 0, 3);
+    };
     $themes = DB::table('themes')
         ->leftJoin('theme_scores', function ($join) {
             $join->on('themes.id', '=', 'theme_scores.theme_id')
                 ->whereRaw('theme_scores.score_date = (select max(ts.score_date) from theme_scores ts where ts.theme_id = themes.id)');
         })
-        ->select('themes.id', 'themes.slug', 'themes.name', 'themes.description', 'themes.ai_status', 'theme_scores.heat_score', 'theme_scores.news_score', 'theme_scores.price_score', 'theme_scores.chip_score', 'theme_scores.score_date')
+        ->select('themes.id', 'themes.slug', 'themes.name', 'themes.description', 'themes.ai_status', 'theme_scores.heat_score', 'theme_scores.news_score', 'theme_scores.price_score', 'theme_scores.volume_score', 'theme_scores.chip_score', 'theme_scores.score_date')
         ->where('themes.is_active', true)
         ->orderByRaw('coalesce(theme_scores.heat_score, 0) desc')
         ->orderBy('themes.name')
         ->get()
-        ->map(function ($theme) use ($themePhase, $themeTone) {
+        ->map(function ($theme) use ($themePhase, $themeTone, $themeStatus, $themeReasons, $themeRisks) {
             $mappedCount = DB::table('stock_theme_map')->where('theme_id', $theme->id)->count();
             $eventCount = DB::table('theme_event_matches')->where('theme_id', $theme->id)->count();
             $eventRegions = DB::table('theme_event_matches')
@@ -1008,11 +1091,15 @@ Route::get('/themes', function () {
                     $join->on('stocks.id', '=', 'stock_scores.stock_id')
                         ->whereRaw('stock_scores.score_date = (select max(ss.score_date) from stock_scores ss where ss.stock_id = stocks.id)');
                 })
+                ->leftJoin('stock_prices_1d', function ($join) {
+                    $join->on('stocks.id', '=', 'stock_prices_1d.stock_id')
+                        ->whereRaw('stock_prices_1d.trade_date = (select max(sp.trade_date) from stock_prices_1d sp where sp.stock_id = stocks.id)');
+                })
                 ->where('stock_theme_map.theme_id', $theme->id)
                 ->whereNotNull('stock_scores.total_score')
                 ->orderByDesc('stock_scores.confidence_score')
                 ->limit(20)
-                ->get(['stocks.symbol', 'stocks.name', 'stock_scores.total_score', 'stock_scores.confidence_score', 'stock_scores.confidence_payload'])
+                ->get(['stocks.symbol', 'stocks.name', 'stock_scores.total_score', 'stock_scores.confidence_score', 'stock_scores.confidence_payload', 'stock_prices_1d.close', 'stock_prices_1d.change'])
                 ->map(function ($stock) {
                     $payload = is_string($stock->confidence_payload)
                         ? (json_decode($stock->confidence_payload, true) ?: [])
@@ -1024,6 +1111,8 @@ Route::get('/themes', function () {
                         'name' => $stock->name,
                         'score' => $stock->total_score,
                         'confidence' => $confidence,
+                        'close' => $stock->close === null ? null : (float) $stock->close,
+                        'change' => $stock->change === null ? null : (float) $stock->change,
                         'state' => match (true) {
                             $confidence >= 78 => '高度觀察',
                             $confidence >= 68 => '偏多觀察',
@@ -1035,12 +1124,20 @@ Route::get('/themes', function () {
                 })
                 ->all();
 
+            $newsScore = (int) ($theme->news_score ?? 0);
+            $priceScore = (int) ($theme->price_score ?? 0);
+            $volumeScore = (int) ($theme->volume_score ?? 0);
+            $chipScore = (int) ($theme->chip_score ?? 0);
+
             return [
                 'name' => $theme->name,
                 'slug' => $theme->slug,
                 'score' => $score,
-                'phase' => $themePhase($score, (int) ($theme->news_score ?? 0), (int) ($theme->price_score ?? 0)),
+                'phase' => $themePhase($score, $newsScore, $priceScore),
                 'tone' => $themeTone($score),
+                'status' => $themeStatus($theme->name, $score, $newsScore, $priceScore, $volumeScore, $chipScore),
+                'reasons' => $themeReasons($score, $newsScore, $priceScore, $volumeScore, $chipScore, $mappedCount),
+                'risks' => $themeRisks($score, $eventCount, $priceScore, $chipScore, $mappedCount),
                 'event_count' => $eventCount,
                 'taiwan_event_count' => (int) ($eventRegions->taiwan_count ?? 0),
                 'global_event_count' => (int) ($eventRegions->global_count ?? 0),
