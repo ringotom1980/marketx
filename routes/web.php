@@ -1098,7 +1098,6 @@ Route::get('/s/{symbol}', function (string $symbol, StockEventChainBuilder $even
         default => '目前弱勢或扣分條件較多，應優先控管風險。',
     };
     $stockEvaluationSummary = "目前看多信心為 {$confidence}%，狀態為「{$evaluation['label']}」。\n"
-        .'系統以技術 35%、籌碼 25%、財務 25%、題材 15% 加權計算。'
         ."\n主要支撐：{$supportText}。"
         ."\n主要風險：{$riskText}。"
         ."\n解讀：{$interpretation}";
