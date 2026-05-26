@@ -174,28 +174,34 @@
             position: relative;
             height: 22px;
             border-radius: 999px;
-            background: #f5f6f8;
+            background: linear-gradient(90deg, #a8b5c3 0%, #f1c97a 58%, #f2a0a6 100%);
             overflow: hidden;
             box-shadow: inset 0 0 0 1px rgba(101, 115, 133, .06);
         }
         .theme-heat-meter span {
             display: block;
             height: 100%;
-            min-width: 36px;
+            width: 100%;
             border-radius: inherit;
-            background: linear-gradient(90deg, #a8b5c3 0%, #f1c97a 58%, #f2a0a6 100%);
+            background: rgba(255, 255, 255, .58);
         }
         .theme-heat-score {
             position: absolute;
-            inset: 0;
+            top: 50%;
+            left: var(--heat-left);
+            transform: translate(-50%, -50%);
             display: flex;
             align-items: center;
-            justify-content: flex-end;
-            padding: 0 8px;
-            color: #fff;
+            justify-content: center;
+            min-width: 32px;
+            height: 18px;
+            padding: 0 7px;
+            border-radius: 999px;
+            background: rgba(255, 255, 255, .82);
+            color: var(--ink);
             font-size: 12px;
             font-weight: 900;
-            text-shadow: 0 1px 2px rgba(0, 0, 0, .35);
+            box-shadow: 0 1px 4px rgba(16, 24, 40, .12);
             pointer-events: none;
         }
         @media (min-width: 821px) {
@@ -263,8 +269,8 @@
                     @php($themeScore = min(100, max(0, (int) $theme['score'])))
                     <div class="theme-heat-row">
                         <div class="theme-heat-name">{{ $theme['name'] }}</div>
-                        <div class="theme-heat-meter" aria-label="{{ $theme['name'] }} 熱度 {{ $themeScore }}">
-                            <span style="width: {{ $themeScore }}%"></span>
+                        <div class="theme-heat-meter" style="--heat-left: {{ min(92, max(8, $themeScore)) }}%" aria-label="{{ $theme['name'] }} 熱度 {{ $themeScore }}">
+                            <span></span>
                             <strong class="theme-heat-score">{{ $themeScore }}</strong>
                         </div>
                     </div>
