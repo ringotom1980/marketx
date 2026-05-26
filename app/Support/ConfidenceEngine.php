@@ -395,7 +395,7 @@ class ConfidenceEngine
      */
     private function finish(array $module): array
     {
-        $score = (int) round(max(0, min(100, $module['bull_score'] - $module['bear_score'] - $module['risk_penalty'])));
+        $score = (int) round(max(0, min(100, 50 + $module['bull_score'] - $module['bear_score'] - $module['risk_penalty'])));
 
         return [
             'score' => $score,
