@@ -17,26 +17,26 @@ class StockRadarCardBuilder
         $candidates = $this->candidates();
         $used = [];
 
-        $priority = $this->select($candidates, 'priority', $limit, $used);
-        $used = array_merge($used, $priority->pluck('symbol')->all());
-
         $risk = $this->select($candidates, 'risk', $limit, $used);
         $used = array_merge($used, $risk->pluck('symbol')->all());
 
-        $potential = $this->select($candidates, 'potential', $limit, $used);
-        $used = array_merge($used, $potential->pluck('symbol')->all());
+        $priority = $this->select($candidates, 'priority', $limit, $used);
+        $used = array_merge($used, $priority->pluck('symbol')->all());
 
         $lowVolume = $this->select($candidates, 'low_volume', $limit, $used);
         $used = array_merge($used, $lowVolume->pluck('symbol')->all());
+
+        $potential = $this->select($candidates, 'potential', $limit, $used);
+        $used = array_merge($used, $potential->pluck('symbol')->all());
 
         $weak = $this->select($candidates, 'weak', $limit, $used);
 
         return [
             'card_date' => $cardDate,
-            'priority' => $priority,
             'risk' => $risk,
-            'potential' => $potential,
+            'priority' => $priority,
             'low_volume' => $lowVolume,
+            'potential' => $potential,
             'weak' => $weak,
         ];
     }
@@ -194,7 +194,9 @@ class StockRadarCardBuilder
                 && ($themeScore >= 40 || (int) ($stock->technical_score ?? 0) >= 55 || $this->revenueStrong($stock) || $this->institutionalBuying($stock))
                 && ! $this->isOverheated($stock),
             'low_volume' => $this->isLowBaseVolumeBreakout($stock),
-            'weak' => $technicalScore < 48 || $return20 <= -8 || $this->hasAny($stock->radar_reasons, ['均線空頭排列', '跌破月線', 'MACD 死亡交叉']),
+            'weak' => (int) ($stock->confidence ?? 0) < 55
+                && ! $this->isLowBaseVolumeBreakout($stock)
+                && ($technicalScore < 48 || $return20 <= -8 || $this->hasAny($stock->radar_reasons, ['均線空頭排列', '跌破月線', 'MACD 死亡交叉'])),
             default => false,
         };
     }
@@ -339,13 +341,13 @@ class StockRadarCardBuilder
     {
         $reasons = [];
 
-        if ($this->num($stock->close) !== null && $this->num($stock->sma60) !== null && $this->num($stock->close) < $this->num($stock->sma60)) {
-            $reasons[] = $this->reason('低於季線', 'warning');
+        if ($this->lowBase($stock)) {
+            $reasons[] = $this->reason('低檔整理', 'warning');
         }
         if ((float) ($stock->return20 ?? 0) <= -6 || (float) ($stock->return60 ?? 0) <= -10) {
             $reasons[] = $this->reason('前段修正', 'warning');
         }
-        if ((float) ($stock->volume_multiple ?? 0) >= 1.8) {
+        if ((float) ($stock->volume_multiple ?? 0) >= 1.8 || (float) ($stock->volume_ratio20 ?? 0) >= 1.5) {
             $reasons[] = $this->reason('量能放大', 'up');
         }
         if ($this->priceUp($stock)) {
@@ -393,20 +395,34 @@ class StockRadarCardBuilder
     private function isLowBaseVolumeBreakout(object $stock): bool
     {
         $close = $this->num($stock->close);
-        $sma60 = $this->num($stock->sma60);
         $return20 = (float) ($stock->return20 ?? 0);
         $return60 = (float) ($stock->return60 ?? 0);
         $volumeMultiple = (float) ($stock->volume_multiple ?? 0);
         $volumeRatio20 = (float) ($stock->volume_ratio20 ?? 0);
-        $lowBase = ($close !== null && $sma60 !== null && $close < $sma60)
-            || $return20 <= -6
-            || $return60 <= -10
-            || abs($return60) <= 6;
 
-        return $lowBase
+        return $this->lowBase($stock)
             && $this->priceUp($stock)
             && ($volumeMultiple >= 1.8 || $volumeRatio20 >= 1.5)
             && ! $this->isOverheated($stock);
+    }
+
+    private function lowBase(object $stock): bool
+    {
+        $close = $this->num($stock->close);
+        $previousClose = $this->num($stock->previous_close);
+        $sma60 = $this->num($stock->sma60);
+        $sma120 = $this->num($stock->sma120);
+        $sma240 = $this->num($stock->sma240);
+        $return20 = (float) ($stock->return20 ?? 0);
+        $return60 = (float) ($stock->return60 ?? 0);
+
+        return ($close !== null && $sma60 !== null && $close <= $sma60 * 1.03)
+            || ($previousClose !== null && $sma60 !== null && $previousClose < $sma60)
+            || ($close !== null && $sma120 !== null && $close < $sma120)
+            || ($close !== null && $sma240 !== null && $close < $sma240)
+            || $return20 <= -4
+            || $return60 <= -8
+            || abs($return60) <= 6;
     }
 
     private function highVolumeWeakReversal(object $stock): bool

@@ -871,6 +871,11 @@ Route::get('/s/{symbol}', function (string $symbol, StockEventChainBuilder $even
         ->where('stock_id', $stockRecord->id)
         ->orderByDesc('report_date')
         ->first();
+    $latestRadarCard = DB::table('stock_radar_cards')
+        ->where('stock_id', $stockRecord->id)
+        ->where('card_date', DB::table('stock_radar_cards')->max('card_date'))
+        ->orderByRaw("case card_type when 'risk' then 1 when 'priority' then 2 when 'low_volume' then 3 when 'potential' then 4 when 'weak' then 5 else 99 end")
+        ->first(['card_type', 'reasons']);
 
     $confidencePayload = $latestScore?->confidence_payload ?? [];
     if (is_string($confidencePayload)) {
@@ -891,6 +896,23 @@ Route::get('/s/{symbol}', function (string $symbol, StockEventChainBuilder $even
         $confidence >= 40 => ['label' => '保守觀察', 'tone' => 'amber'],
         default => ['label' => '弱勢觀察', 'tone' => 'green'],
     };
+    $radarReasons = $latestRadarCard ? (json_decode((string) $latestRadarCard->reasons, true) ?: []) : [];
+    $radarReasonLabels = collect($radarReasons)
+        ->pluck('label')
+        ->filter()
+        ->values()
+        ->all();
+
+    if ($latestRadarCard) {
+        $evaluation = match ($latestRadarCard->card_type) {
+            'priority' => ['label' => '優先觀察', 'tone' => 'red'],
+            'risk' => ['label' => '風險升高', 'tone' => 'amber'],
+            'potential' => ['label' => '潛力觀察', 'tone' => 'amber'],
+            'low_volume' => ['label' => '低檔爆量觀察', 'tone' => 'amber'],
+            'weak' => ['label' => '持續弱勢', 'tone' => 'green'],
+            default => $evaluation,
+        };
+    }
 
     $supportText = $bullReasons === []
         ? '目前多方支撐條件不足'
@@ -899,6 +921,11 @@ Route::get('/s/{symbol}', function (string $symbol, StockEventChainBuilder $even
         ? '目前沒有明顯風險旗標，但仍需留意盤勢變化'
         : implode('、', array_slice(array_values(array_unique(array_merge($riskReasons, $bearReasons))), 0, 4));
     $interpretation = match ($evaluation['label']) {
+        '優先觀察' => '此股目前列在首頁「優先觀察」，代表多項條件相對正向，但仍需看量價與籌碼是否延續。',
+        '風險升高' => '此股目前列在首頁「風險升高」，代表已有過熱、轉弱或籌碼風險，應優先控管風險。',
+        '潛力觀察' => '此股目前列在首頁「潛力觀察」，代表條件正在醞釀，但還需要更明確的轉強訊號。',
+        '低檔爆量觀察' => '此股目前列在首頁「低檔爆量」，代表低檔或整理後出現放量轉強，需觀察是否能延續。',
+        '持續弱勢' => '此股目前列在首頁「持續弱勢」，代表弱勢條件仍多，未轉強前應保守看待。',
         '高度觀察' => '多數核心條件偏正向，但仍不代表保證上漲，適合列入優先觀察。',
         '偏多觀察' => '整體條件偏正向，但仍要確認量價與籌碼是否延續。',
         '偏多但風險升高' => '雖然仍有多方條件，但風險旗標已出現，追價要更保守。',
@@ -906,7 +933,11 @@ Route::get('/s/{symbol}', function (string $symbol, StockEventChainBuilder $even
         '保守觀察' => '看多信心偏低，除非後續出現明確轉強訊號，否則不宜積極追價。',
         default => '目前弱勢或扣分條件較多，應優先控管風險。',
     };
+    $cardText = $latestRadarCard
+        ? "\n首頁分類：{$evaluation['label']}".($radarReasonLabels === [] ? '' : '，原因：'.implode('、', array_slice($radarReasonLabels, 0, 4)).'。')
+        : '';
     $stockEvaluationSummary = "目前看多信心為 {$confidence}%，狀態為「{$evaluation['label']}」。\n"
+        .$cardText
         ."\n主要支撐：{$supportText}。"
         ."\n主要風險：{$riskText}。"
         ."\n解讀：{$interpretation}";
