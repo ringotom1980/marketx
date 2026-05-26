@@ -33,13 +33,7 @@ class GlobalRadarBuilder
     public function build(): array
     {
         $markets = $this->latestMarkets();
-        $events = DB::table('global_event_clusters')
-            ->orderByDesc('cluster_date')
-            ->orderByDesc('importance_score')
-            ->limit(5)
-            ->get();
-
-        $score = $this->windScore($markets, $events);
+        $score = $this->windScore($markets);
 
         return [
             'asOf' => $this->latestUpdatedAt($markets),
@@ -48,14 +42,9 @@ class GlobalRadarBuilder
                 'score' => $score,
                 'tone' => $score >= 65 ? 'red' : ($score >= 45 ? 'amber' : 'green'),
                 'support' => $this->supportText($markets),
-                'pressure' => $this->pressureText($markets, $events),
+                'pressure' => $this->pressureText($markets),
             ],
             'groups' => $this->groups($markets),
-            'events' => $events->map(fn ($event) => [
-                'title' => EventClusterDisplay::title($event),
-                'body' => EventClusterDisplay::body($event),
-            ])->all(),
-            'watchpoints' => $this->watchpoints($markets, $events),
         ];
     }
 
@@ -134,7 +123,7 @@ class GlobalRadarBuilder
         ];
     }
 
-    private function windScore(Collection $markets, Collection $events): int
+    private function windScore(Collection $markets): int
     {
         $score = 50;
 
@@ -160,14 +149,6 @@ class GlobalRadarBuilder
             if ($indicator === 'Crude Oil') {
                 $score += $state === 'pressure_up' || (float) $row->change_pct > 1 ? -4 : 0;
             }
-        }
-
-        foreach ($events as $event) {
-            $score += match ($event->sentiment) {
-                'positive' => 2,
-                'negative' => -2,
-                default => 0,
-            };
         }
 
         return max(0, min(100, $score));
@@ -213,7 +194,7 @@ class GlobalRadarBuilder
         return $supports === [] ? '暫無明顯支撐訊號' : implode('、', array_unique($supports));
     }
 
-    private function pressureText(Collection $markets, Collection $events): string
+    private function pressureText(Collection $markets): string
     {
         $pressures = [];
 
@@ -228,7 +209,7 @@ class GlobalRadarBuilder
             $pressures[] = 'VIX 升高';
         }
 
-        if ($events->contains(fn ($event) => $event->sentiment === 'negative')) {
+        if (false) {
             $pressures[] = '負面事件增加';
         }
 

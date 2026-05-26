@@ -2,23 +2,14 @@
 
 @section('content')
     <style>
-        .global-head {
-            display: grid;
-            gap: 12px;
-        }
-
-        .global-score {
-            display: grid;
-            gap: 10px;
-        }
-
+        .global-head { display: grid; gap: 12px; }
+        .global-score { display: grid; gap: 10px; }
         .global-score-row {
             display: flex;
             align-items: center;
             justify-content: space-between;
             gap: 12px;
         }
-
         .global-score-meter {
             height: 12px;
             border-radius: 999px;
@@ -26,7 +17,6 @@
             overflow: hidden;
             position: relative;
         }
-
         .global-score-meter::after {
             content: "";
             position: absolute;
@@ -34,11 +24,7 @@
             background: rgba(241, 243, 245, .86);
             border-radius: 0 999px 999px 0;
         }
-
-        .market-section {
-            margin-top: 16px;
-        }
-
+        .market-section { margin-top: 16px; }
         .market-section-head {
             display: flex;
             align-items: flex-end;
@@ -46,42 +32,34 @@
             gap: 10px;
             margin-bottom: 10px;
         }
-
         .market-section-head h2 {
             margin: 0;
             font-size: 19px;
         }
-
         .market-card {
             display: grid;
             gap: 10px;
         }
-
         .market-card-top {
             display: flex;
             align-items: flex-start;
             justify-content: space-between;
             gap: 10px;
         }
-
         .market-name {
             display: grid;
             gap: 2px;
             min-width: 0;
         }
-
         .market-name strong {
             font-size: 17px;
             line-height: 1.25;
         }
-
         .market-name span,
-        .market-date,
-        .market-source {
+        .market-date {
             color: var(--muted);
             font-size: 12px;
         }
-
         .market-value {
             display: flex;
             align-items: baseline;
@@ -90,27 +68,22 @@
             border-top: 1px solid #edf0f3;
             padding-top: 10px;
         }
-
         .market-value strong {
             font-size: 22px;
             line-height: 1;
         }
-
         .market-change {
             font-weight: 900;
             white-space: nowrap;
         }
-
         .market-change.red { color: var(--red); }
         .market-change.green { color: var(--green); }
         .market-change.amber { color: var(--amber); }
-
         .market-read {
             color: var(--muted);
             line-height: 1.6;
             font-size: 14px;
         }
-
         @media (min-width: 900px) {
             .global-head { grid-template-columns: minmax(0, 1fr) 360px; align-items: stretch; }
         }
@@ -141,9 +114,11 @@
                     <p class="lead">{{ $group['lead'] }}</p>
                 </div>
             </div>
+
             <div class="panel" style="margin-bottom:12px">
                 <p class="lead">{{ $group['summary'] }}</p>
             </div>
+
             <div class="grid three">
                 @forelse ($group['cards'] as $card)
                     <article class="panel market-card">
@@ -157,9 +132,7 @@
 
                         <div class="market-value">
                             <strong>{{ $card['value'] }}</strong>
-                            <span class="market-change {{ $card['tone'] }}">
-                                {{ $card['changePct'] }}
-                            </span>
+                            <span class="market-change {{ $card['tone'] }}">{{ $card['changePct'] }}</span>
                         </div>
 
                         <p class="market-read">{{ $card['read'] }}</p>
@@ -173,26 +146,4 @@
             </div>
         </section>
     @endforeach
-
-    <section class="grid two" style="margin-top:16px">
-        <div class="panel">
-            <h2>今日全球事件</h2>
-            <div class="chain">
-                @forelse ($radar['events'] as $event)
-                    <div><strong>{{ $event['title'] }}</strong><br>{{ $event['body'] }}</div>
-                @empty
-                    <div>目前尚未聚合今日全球事件。</div>
-                @endforelse
-            </div>
-        </div>
-
-        <div class="panel">
-            <h2>觀察重點</h2>
-            <div class="chain">
-                @foreach ($radar['watchpoints'] as $point)
-                    <div>{{ $loop->iteration }}. {{ $point }}</div>
-                @endforeach
-            </div>
-        </div>
-    </section>
 @endsection
