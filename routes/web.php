@@ -241,7 +241,7 @@ Route::get('/', function () {
             'id' => 'taiex',
             'title' => '台股大盤 K 線',
             'subtitle' => '加權指數，日 K / 周 K / 月 K',
-            'source' => 'Yahoo Finance ^TWII',
+            'source' => '臺灣證券交易所：發行量加權股價指數歷史資料 / 市場成交資訊',
             'ranges' => $buildIndicatorK('TAIEX'),
         ],
         [

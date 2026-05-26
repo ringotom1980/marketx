@@ -11,7 +11,7 @@ class ImportGlobalMarketData extends Command
 {
     protected $signature = 'market:import-global-market';
 
-    protected $description = 'Import global market indicators from public Yahoo Finance chart data.';
+    protected $description = 'Import overseas market indicators from public Yahoo Finance chart data.';
 
     private const INDICATORS = [
         ['indicator' => 'S&P 500', 'symbol' => '^GSPC'],
