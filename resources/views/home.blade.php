@@ -166,9 +166,35 @@
             padding-bottom: 0;
         }
         .theme-heat-name {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 8px;
             color: var(--muted);
             font-weight: 800;
             font-size: 14px;
+        }
+        .theme-trend-pill {
+            display: inline-flex;
+            align-items: center;
+            border-radius: 999px;
+            padding: 3px 8px;
+            font-size: 11px;
+            font-weight: 900;
+            white-space: nowrap;
+            background: #fff7df;
+            color: #9f5b00;
+            border: 1px solid rgba(245, 158, 11, .18);
+        }
+        .theme-trend-pill.up {
+            background: #fff1f1;
+            color: var(--button);
+            border-color: rgba(193, 18, 31, .14);
+        }
+        .theme-trend-pill.down {
+            background: #eef3f8;
+            color: #58677a;
+            border-color: rgba(88, 103, 122, .14);
         }
         .theme-heat-meter {
             position: relative;
@@ -263,7 +289,10 @@
                 @forelse ($themes as $theme)
                     @php($themeScore = min(100, max(0, (int) $theme['score'])))
                     <div class="theme-heat-row">
-                        <div class="theme-heat-name">{{ $theme['name'] }}</div>
+                        <div class="theme-heat-name">
+                            <span>{{ $theme['name'] }}</span>
+                            <span class="theme-trend-pill {{ $theme['trend'] ?? 'watch' }}">{{ $theme['trend_label'] ?? '觀察中' }}</span>
+                        </div>
                         <div class="theme-heat-meter" style="--heat-score: {{ $themeScore }}%" aria-label="{{ $theme['name'] }} 熱度 {{ $themeScore }}">
                             <span></span>
                             <strong class="theme-heat-score">{{ $themeScore }}</strong>

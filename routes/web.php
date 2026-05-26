@@ -673,16 +673,39 @@ Route::get('/', function () {
             $join->on('themes.id', '=', 'theme_scores.theme_id')
                 ->whereRaw('theme_scores.score_date = (select max(ts.score_date) from theme_scores ts where ts.theme_id = themes.id)');
         })
-        ->select('themes.name', 'theme_scores.heat_score')
+        ->select(
+            'themes.id',
+            'themes.name',
+            'theme_scores.heat_score',
+            DB::raw('(select ts_prev.heat_score from theme_scores ts_prev where ts_prev.theme_id = themes.id and ts_prev.score_date < theme_scores.score_date order by ts_prev.score_date desc limit 1) as previous_heat_score')
+        )
         ->where('themes.is_active', true)
         ->orderByDesc('theme_scores.heat_score')
         ->orderBy('themes.name')
         ->limit(12)
         ->get()
-        ->map(fn ($theme) => [
-            'name' => $theme->name,
-            'score' => (int) ($theme->heat_score ?? 0),
-        ]);
+        ->map(function ($theme) {
+            $score = (int) ($theme->heat_score ?? 0);
+            $previous = $theme->previous_heat_score === null ? null : (int) $theme->previous_heat_score;
+            $change = $previous === null ? 0 : $score - $previous;
+
+            return [
+                'name' => $theme->name,
+                'score' => $score,
+                'trend' => match (true) {
+                    $previous === null => 'watch',
+                    $change >= 3 => 'up',
+                    $change <= -3 => 'down',
+                    default => 'watch',
+                },
+                'trend_label' => match (true) {
+                    $previous === null => '觀察中',
+                    $change >= 3 => '升溫中',
+                    $change <= -3 => '降溫中',
+                    default => '觀察中',
+                },
+            ];
+        });
 
     return view('home', [
         'markets' => $markets,
