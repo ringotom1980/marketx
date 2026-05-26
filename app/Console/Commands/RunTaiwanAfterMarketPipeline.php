@@ -21,6 +21,10 @@ class RunTaiwanAfterMarketPipeline extends Command
             ['taiwan_chips_aftermarket', 'market:import-chips', []],
             ['official_chip_metrics_aftermarket', 'market:import-official-chip-metrics', []],
             ['technical_scores_aftermarket', 'market:calculate-technical-scores', ['--min-days' => 10]],
+            ['theme_keywords_aftermarket', 'market:seed-theme-keywords', []],
+            ['dynamic_themes_aftermarket', 'market:detect-dynamic-themes', []],
+            ['dynamic_theme_mappings_aftermarket', 'market:map-dynamic-themes', []],
+            ['theme_scores_aftermarket', 'market:calculate-theme-scores', []],
             ['decision_scores_aftermarket', 'market:calculate-decision-scores', []],
             ['stock_radar_cards_aftermarket', 'market:build-stock-radar-cards', []],
         ] as [$name, $command, $parameters]) {
