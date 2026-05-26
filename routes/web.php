@@ -680,9 +680,11 @@ Route::get('/', function () {
             DB::raw('(select ts_prev.heat_score from theme_scores ts_prev where ts_prev.theme_id = themes.id and ts_prev.score_date < theme_scores.score_date order by ts_prev.score_date desc limit 1) as previous_heat_score')
         )
         ->where('themes.is_active', true)
+        ->whereNotNull('theme_scores.heat_score')
+        ->where('theme_scores.heat_score', '>', 0)
         ->orderByDesc('theme_scores.heat_score')
         ->orderBy('themes.name')
-        ->limit(12)
+        ->limit(10)
         ->get()
         ->map(function ($theme) {
             $score = (int) ($theme->heat_score ?? 0);
