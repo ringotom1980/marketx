@@ -174,16 +174,16 @@
             position: relative;
             height: 22px;
             border-radius: 999px;
-            background: #f1f4f7;
+            background: #f5f6f8;
             overflow: hidden;
-            box-shadow: inset 0 0 0 1px rgba(101, 115, 133, .08);
+            box-shadow: inset 0 0 0 1px rgba(101, 115, 133, .06);
         }
         .theme-heat-meter span {
             display: block;
             height: 100%;
             min-width: 36px;
             border-radius: inherit;
-            background: linear-gradient(90deg, #7b8794 0%, #d99a2b 58%, #c1121f 100%);
+            background: linear-gradient(90deg, #a8b5c3 0%, #f1c97a 58%, #f2a0a6 100%);
         }
         .theme-heat-score {
             position: absolute;
