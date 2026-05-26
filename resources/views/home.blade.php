@@ -151,6 +151,52 @@
             color: var(--green);
             border-color: rgba(20, 125, 85, .18);
         }
+        .theme-heat-list {
+            display: grid;
+            gap: 12px;
+        }
+        .theme-heat-row {
+            display: grid;
+            gap: 6px;
+            padding-bottom: 10px;
+            border-bottom: 1px solid var(--line);
+        }
+        .theme-heat-row:last-child {
+            border-bottom: 0;
+            padding-bottom: 0;
+        }
+        .theme-heat-name {
+            color: var(--muted);
+            font-weight: 800;
+            font-size: 14px;
+        }
+        .theme-heat-meter {
+            position: relative;
+            height: 22px;
+            border-radius: 999px;
+            background: #edf0f3;
+            overflow: hidden;
+        }
+        .theme-heat-meter span {
+            display: block;
+            height: 100%;
+            min-width: 36px;
+            border-radius: inherit;
+            background: linear-gradient(90deg, #3b82f6 0%, #f59e0b 55%, #dc2626 100%);
+        }
+        .theme-heat-score {
+            position: absolute;
+            inset: 0;
+            display: flex;
+            align-items: center;
+            justify-content: flex-end;
+            padding: 0 8px;
+            color: #fff;
+            font-size: 12px;
+            font-weight: 900;
+            text-shadow: 0 1px 2px rgba(0, 0, 0, .35);
+            pointer-events: none;
+        }
         @media (min-width: 821px) {
             .market-chart-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
             .market-chart-wrap { height: 340px; }
@@ -211,21 +257,20 @@
     <section class="grid three" style="margin-top:16px">
         <div class="panel">
             <h2>今日題材熱度</h2>
-            <table class="table">
-                <tbody>
+            <div class="theme-heat-list">
                 @forelse ($themes as $theme)
-                    <tr>
-                        <th>{{ $theme['name'] }}</th>
-                        <td>
-                            <div class="meter"><span style="width: {{ min(100, max(0, $theme['score'])) }}%"></span></div>
-                        </td>
-                        <td>{{ $theme['score'] }}</td>
-                    </tr>
+                    @php($themeScore = min(100, max(0, (int) $theme['score'])))
+                    <div class="theme-heat-row">
+                        <div class="theme-heat-name">{{ $theme['name'] }}</div>
+                        <div class="theme-heat-meter" aria-label="{{ $theme['name'] }} 熱度 {{ $themeScore }}">
+                            <span style="width: {{ $themeScore }}%"></span>
+                            <strong class="theme-heat-score">{{ $themeScore }}</strong>
+                        </div>
+                    </div>
                 @empty
-                    <tr><td colspan="3">尚未產生題材熱度資料</td></tr>
+                    <p class="lead">目前沒有題材熱度資料</p>
                 @endforelse
-                </tbody>
-            </table>
+            </div>
         </div>
 
         @foreach ($stockRadarCards as $card)
