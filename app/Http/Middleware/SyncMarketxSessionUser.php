@@ -27,6 +27,14 @@ class SyncMarketxSessionUser
             }
         }
 
+        if ($session?->isStarted()) {
+            DB::table('sessions')
+                ->where('id', $session->getId())
+                ->update([
+                    'user_id' => $session->get('marketx_user_id'),
+                ]);
+        }
+
         return $next($request);
     }
 

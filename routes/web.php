@@ -1410,6 +1410,12 @@ Route::get('/admin', function (AiPipelineService $aiPipeline) {
         ->orderByDesc('created_at')
         ->limit(12)
         ->get(['level', 'message', 'context', 'created_at']);
+    $authLastSeenLogs = DB::table('system_logs')
+        ->where('source', 'auth')
+        ->where('level', 'info')
+        ->orderByDesc('created_at')
+        ->limit(1000)
+        ->get(['context', 'created_at']);
     $sessionUserId = function (?string $payload): ?int {
         $decoded = base64_decode((string) $payload, true);
         if ($decoded === false) {
@@ -1423,25 +1429,53 @@ Route::get('/admin', function (AiPipelineService $aiPipeline) {
 
         return (int) $data['marketx_user_id'];
     };
+    DB::table('sessions')
+        ->whereNull('user_id')
+        ->orderByDesc('last_activity')
+        ->limit(200)
+        ->get(['id', 'payload'])
+        ->each(function ($session) use ($sessionUserId) {
+            $userId = $sessionUserId($session->payload);
+
+            if ($userId) {
+                DB::table('sessions')
+                    ->where('id', $session->id)
+                    ->update(['user_id' => $userId]);
+            }
+        });
     $sessionRows = DB::table('sessions')
-        ->get(['id', 'payload', 'last_activity']);
+        ->get(['id', 'user_id', 'payload', 'last_activity']);
     $lastSeenByUser = $sessionRows
         ->map(fn ($session) => [
-            'user_id' => $sessionUserId($session->payload),
+            'user_id' => $session->user_id ?: $sessionUserId($session->payload),
             'last_activity' => (int) $session->last_activity,
         ])
         ->filter(fn ($session) => $session['user_id'] !== null)
         ->groupBy('user_id')
         ->map(fn ($sessions) => $sessions->max('last_activity'));
+    $lastLoginByUser = $authLastSeenLogs
+        ->map(function ($log) {
+            $context = is_string($log->context) ? json_decode($log->context, true) : (array) $log->context;
+
+            return [
+                'user_id' => isset($context['user_id']) ? (int) $context['user_id'] : null,
+                'created_at' => $log->created_at,
+            ];
+        })
+        ->filter(fn ($log) => $log['user_id'] !== null)
+        ->groupBy('user_id')
+        ->map(fn ($logs) => $logs->max('created_at'));
     $members = User::query()
         ->orderByDesc('created_at')
         ->limit(100)
         ->get(['id', 'name', 'email', 'is_admin', 'created_at'])
-        ->map(function (User $user) use ($lastSeenByUser) {
+        ->map(function (User $user) use ($lastSeenByUser, $lastLoginByUser) {
             $lastActivity = $lastSeenByUser->get($user->id);
             $user->last_seen_at = $lastActivity
                 ? \Carbon\CarbonImmutable::createFromTimestamp((int) $lastActivity, 'Asia/Taipei')
-                : null;
+                : ($lastLoginByUser->get($user->id)
+                    ? \Carbon\CarbonImmutable::parse($lastLoginByUser->get($user->id))->timezone('Asia/Taipei')
+                    : null);
 
             return $user;
         });
@@ -1449,14 +1483,14 @@ Route::get('/admin', function (AiPipelineService $aiPipeline) {
         ->where('last_activity', '>=', now()->subMinutes(5)->timestamp)
         ->orderByDesc('last_activity')
         ->limit(50)
-        ->get(['id', 'payload', 'ip_address', 'user_agent', 'last_activity']);
+        ->get(['id', 'user_id', 'payload', 'ip_address', 'user_agent', 'last_activity']);
     $onlineUsers = User::query()
-        ->whereIn('id', $onlineSessions->map(fn ($session) => $sessionUserId($session->payload))->filter()->unique()->values())
+        ->whereIn('id', $onlineSessions->map(fn ($session) => $session->user_id ?: $sessionUserId($session->payload))->filter()->unique()->values())
         ->get(['id', 'name', 'email', 'is_admin'])
         ->keyBy('id');
     $onlineMembers = $onlineSessions
         ->map(function ($session) use ($sessionUserId, $onlineUsers) {
-            $userId = $sessionUserId($session->payload);
+            $userId = $session->user_id ?: $sessionUserId($session->payload);
             $user = $userId ? $onlineUsers->get($userId) : null;
             $session->user_id = $userId;
             $session->name = $user?->name;
