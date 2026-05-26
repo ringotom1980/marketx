@@ -19,32 +19,6 @@
                     </div>
                 </div>
 
-                <div style="margin-top:18px">
-                    <h3 style="font-size:16px;margin:0 0 8px">目前狀態：</h3>
-                    <p class="lead" style="font-size:15px;margin:0">{!! nl2br(e($theme['status'])) !!}</p>
-                    @if (! empty($theme['price_reason']))
-                        <p class="lead" style="font-size:14px;margin:8px 0 0">{{ $theme['price_reason'] }}</p>
-                    @endif
-                </div>
-
-                <div style="margin-top:18px">
-                    <h3 style="font-size:16px;margin:0 0 8px">升溫原因</h3>
-                    <div style="display:flex;flex-wrap:wrap;gap:8px">
-                        @foreach ($theme['reasons'] as $reason)
-                            <span class="badge {{ $reason['tone'] }}">{{ $reason['label'] }}</span>
-                        @endforeach
-                    </div>
-                </div>
-
-                <div style="margin-top:18px">
-                    <h3 style="font-size:16px;margin:0 0 8px">風險提醒</h3>
-                    <div style="display:flex;flex-wrap:wrap;gap:8px">
-                        @foreach ($theme['risks'] as $risk)
-                            <span class="badge {{ $risk['tone'] }}">{{ $risk['label'] }}</span>
-                        @endforeach
-                    </div>
-                </div>
-
                 @if ($theme['top_stocks'] !== [])
                     <div style="margin-top:18px">
                         <h3 style="font-size:16px;margin:0 0 8px">代表股票</h3>
