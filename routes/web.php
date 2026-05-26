@@ -367,6 +367,8 @@ Route::get('/', function () {
             || ($sma120 !== null && $close <= $sma120)
             || $return20 <= -5
             || $return60 <= -5;
+        $shortSelloff = $return20 <= -8 || (float) ($stock->return10 ?? 0) <= -6;
+        $longDowntrend = $return60 <= -12 || ($sma60 !== null && $sma120 !== null && $sma60 < $sma120);
         $longConsolidation = abs($return60) <= 8
             && abs($return20) <= 6
             && ($bais === null || abs($bais) <= 8);
@@ -374,7 +376,7 @@ Route::get('/', function () {
         $volumeExplodes = $volumeMultiple >= 3;
         $notOverheated = $return20 <= 8 && ($bais === null || $bais <= 8);
 
-        return ($belowAverage || $longConsolidation)
+        return ($belowAverage || $shortSelloff || $longDowntrend || $longConsolidation)
             && $priceRises
             && $volumeExplodes
             && $notOverheated;
@@ -531,6 +533,14 @@ Route::get('/', function () {
             $reasons->push($reason('低檔區', 'warning'));
         }
 
+        if ((float) ($stock->return20 ?? 0) <= -8 || (float) ($stock->return10 ?? 0) <= -6) {
+            $reasons->push($reason('短線急跌後放量', 'warning'));
+        }
+
+        if ((float) ($stock->return60 ?? 0) <= -12 || ($sma60 !== null && $sma120 !== null && $sma60 < $sma120)) {
+            $reasons->push($reason('長期下跌後轉強', 'warning'));
+        }
+
         if (abs((float) ($stock->return60 ?? 0)) <= 8 && abs((float) ($stock->return20 ?? 0)) <= 6) {
             $reasons->push($reason('長期盤整', 'warning'));
         }
@@ -632,6 +642,7 @@ Route::get('/', function () {
             'stock_technical_indicators_1d.sma120',
             'stock_technical_indicators_1d.bais20',
             'stock_technical_indicators_1d.return20',
+            'stock_technical_indicators_1d.return10',
             'stock_technical_indicators_1d.return60',
             'stock_technical_indicators_1d.volume_ratio20',
             'stock_technical_indicators_1d.rsi14',
