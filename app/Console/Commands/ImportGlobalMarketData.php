@@ -14,10 +14,18 @@ class ImportGlobalMarketData extends Command
     protected $description = 'Import overseas market indicators from public Yahoo Finance chart data.';
 
     private const INDICATORS = [
+        ['indicator' => 'Dow Jones', 'symbol' => '^DJI'],
         ['indicator' => 'S&P 500', 'symbol' => '^GSPC'],
         ['indicator' => 'NASDAQ', 'symbol' => '^IXIC'],
+        ['indicator' => 'Russell 2000', 'symbol' => '^RUT'],
         ['indicator' => 'SOX', 'symbol' => '^SOX'],
         ['indicator' => 'VIX', 'symbol' => '^VIX'],
+        ['indicator' => 'Nikkei 225', 'symbol' => '^N225'],
+        ['indicator' => 'Hang Seng', 'symbol' => '^HSI'],
+        ['indicator' => 'Hang Seng China Enterprises', 'symbol' => '^HSCE'],
+        ['indicator' => 'KOSPI', 'symbol' => '^KS11'],
+        ['indicator' => 'KOSDAQ', 'symbol' => '^KQ11'],
+        ['indicator' => 'Shanghai Composite', 'symbol' => '000001.SS'],
         ['indicator' => 'DXY', 'symbol' => 'DX-Y.NYB'],
         ['indicator' => 'US10Y', 'symbol' => '^TNX'],
         ['indicator' => 'Crude Oil', 'symbol' => 'CL=F'],
@@ -59,6 +67,7 @@ class ImportGlobalMarketData extends Command
                 $imported++;
             } catch (\Throwable $exception) {
                 $failed++;
+                $this->warn('Failed: '.$indicator['indicator'].' ('.$indicator['symbol'].') '.$exception->getMessage());
                 DB::table('system_logs')->insert([
                     'level' => 'warning',
                     'source' => 'Global Engine',
