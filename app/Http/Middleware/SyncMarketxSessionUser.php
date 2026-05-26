@@ -32,6 +32,7 @@ class SyncMarketxSessionUser
                 ->where('id', $session->getId())
                 ->update([
                     'user_id' => $session->get('marketx_user_id'),
+                    'last_activity' => time(),
                 ]);
         }
 
@@ -50,6 +51,7 @@ class SyncMarketxSessionUser
             ->where('id', $session->getId())
             ->update([
                 'user_id' => $session->get('marketx_user_id'),
+                'last_activity' => time(),
             ]);
     }
 }
