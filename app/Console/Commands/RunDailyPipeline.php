@@ -30,6 +30,7 @@ class RunDailyPipeline extends Command
             ]
             : [
                 ['global_market', 'market:import-global-market', []],
+                ['taiwan_index', 'market:import-taiwan-index', []],
                 ['taifex_night', 'market:backfill-taifex-night', ['--days' => 7]],
                 ['global_events', 'market:import-global-events', []],
                 ['event_clusters', 'market:cluster-global-events', []],

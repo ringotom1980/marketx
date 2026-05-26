@@ -17,6 +17,7 @@ class RunTaiwanAfterMarketPipeline extends Command
     {
         foreach ([
             ['taiwan_prices_aftermarket', 'market:import-stocks', []],
+            ['taiwan_index_aftermarket', 'market:import-taiwan-index', []],
             ['taiwan_chips_aftermarket', 'market:import-chips', []],
             ['official_chip_metrics_aftermarket', 'market:import-official-chip-metrics', []],
             ['technical_scores_aftermarket', 'market:calculate-technical-scores', ['--min-days' => 10]],

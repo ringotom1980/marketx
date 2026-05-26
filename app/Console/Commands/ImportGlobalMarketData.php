@@ -14,7 +14,6 @@ class ImportGlobalMarketData extends Command
     protected $description = 'Import global market indicators from public Yahoo Finance chart data.';
 
     private const INDICATORS = [
-        ['indicator' => 'TAIEX', 'symbol' => '^TWII'],
         ['indicator' => 'S&P 500', 'symbol' => '^GSPC'],
         ['indicator' => 'NASDAQ', 'symbol' => '^IXIC'],
         ['indicator' => 'SOX', 'symbol' => '^SOX'],
