@@ -179,22 +179,17 @@ class StockRadarCardBuilder
 
     private function matches(object $stock, string $type): bool
     {
-        $confidence = (int) $stock->confidence;
         $return20 = (float) ($stock->return20 ?? 0);
         $bais20 = $this->num($stock->bais20);
         $technicalScore = (int) ($stock->technical_score ?? 0);
         $themeScore = (int) ($stock->theme_score ?? 0);
 
         return match ($type) {
-            'priority' => $confidence >= 65
-                && (int) ($stock->total_score ?? 0) >= 58
+            'priority' => (int) ($stock->total_score ?? 0) >= 58
                 && ($bais20 === null || abs($bais20) <= 12)
                 && $this->hasAny($stock->radar_reasons, ['MACD 黃金交叉', 'KD 黃金交叉', '20日突破', '價漲量增', '均線多頭排列', '題材升溫', '營收轉強']),
-            'risk' => $confidence >= 25
-                && $confidence <= 78
-                && $this->hasAny($stock->radar_reasons, ['高檔放量轉弱', '爆量轉弱', '乖離過大', 'RSI 過熱', 'KD 過熱', 'MACD 正數縮減', '評價偏高', '融資偏重', '營收轉弱']),
-            'potential' => $confidence >= 50
-                && (int) ($stock->total_score ?? 0) >= 45
+            'risk' => $this->hasAny($stock->radar_reasons, ['高檔放量轉弱', '爆量轉弱', '乖離過大', 'RSI 過熱', 'KD 過熱', 'MACD 正數縮減', '評價偏高', '融資偏重', '營收轉弱']),
+            'potential' => (int) ($stock->total_score ?? 0) >= 45
                 && $return20 < 12
                 && ($themeScore >= 40 || (int) ($stock->technical_score ?? 0) >= 55 || $this->revenueStrong($stock) || $this->institutionalBuying($stock))
                 && ! $this->isOverheated($stock),
