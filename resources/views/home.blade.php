@@ -174,7 +174,7 @@
             position: relative;
             height: 22px;
             border-radius: 999px;
-            background: linear-gradient(90deg, #a8b5c3 0%, #f1c97a 58%, #f2a0a6 100%);
+            background: linear-gradient(90deg, #c9d8ee 0%, #f0d6b0 58%, #f4b8bd 100%);
             overflow: hidden;
             box-shadow: inset 0 0 0 1px rgba(101, 115, 133, .06);
         }
@@ -186,6 +186,7 @@
             width: calc(100% - var(--heat-score));
             border-radius: 0 999px 999px 0;
             background: #f1f1f1;
+            box-shadow: -10px 0 0 #f1f1f1;
         }
         .theme-heat-score {
             position: absolute;

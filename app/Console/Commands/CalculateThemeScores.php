@@ -18,8 +18,9 @@ class CalculateThemeScores extends Command
         $scoreDate = $this->option('date') ?: CarbonImmutable::now('Asia/Taipei')->toDateString();
         $calculated = 0;
         $skipped = 0;
+        $rawScores = [];
 
-        Theme::query()->where('is_active', true)->orderBy('id')->each(function (Theme $theme) use ($scoreDate, &$calculated, &$skipped) {
+        Theme::query()->where('is_active', true)->orderBy('id')->each(function (Theme $theme) use ($scoreDate, &$calculated, &$skipped, &$rawScores) {
             $mapped = DB::table('stock_theme_map')
                 ->where('theme_id', $theme->id)
                 ->pluck('stock_id');
@@ -70,11 +71,13 @@ class CalculateThemeScores extends Command
                 + ($flowScore * 0.15)
                 + ($freshnessScore * 0.10)
             );
+            $rawScores[$theme->id] = $heatScore;
+            $calibratedHeatScore = $this->calibratedHeatScore($heatScore, $rawScores);
 
             DB::table('theme_scores')->updateOrInsert(
                 ['theme_id' => $theme->id, 'score_date' => $scoreDate],
                 [
-                    'heat_score' => max(0, min(100, $heatScore)),
+                    'heat_score' => $calibratedHeatScore,
                     'news_score' => $newsScore,
                     'price_score' => $stockScore,
                     'volume_score' => $flowScore,
@@ -93,6 +96,8 @@ class CalculateThemeScores extends Command
                         'stock_score' => $stockScore,
                         'flow_score' => $flowScore,
                         'freshness_score' => $freshnessScore,
+                        'raw_heat_score' => $heatScore,
+                        'calibrated_heat_score' => $calibratedHeatScore,
                         'source' => 'theme_event_matches + global_events + stock_theme_map + stock_scores + stock_technical_indicators_1d',
                     ], JSON_UNESCAPED_SLASHES),
                     'updated_at' => now(),
@@ -103,6 +108,7 @@ class CalculateThemeScores extends Command
             $calculated++;
         });
 
+        $this->normalizeDailyHeatScores($scoreDate);
         $stockScoresUpdated = $this->updateStockThemeScores();
 
         $this->info('Theme scores calculated: '.$calculated);
@@ -110,6 +116,59 @@ class CalculateThemeScores extends Command
         $this->line('Stock theme scores updated: '.$stockScoresUpdated);
 
         return self::SUCCESS;
+    }
+
+    private function calibratedHeatScore(int $rawScore, array $rawScores): int
+    {
+        if ($rawScore <= 0) {
+            return 0;
+        }
+
+        $max = max($rawScores ?: [$rawScore]);
+
+        if ($max <= 0) {
+            return max(0, min(100, $rawScore));
+        }
+
+        $relative = 35 + (($rawScore / $max) * 60);
+
+        return max(0, min(100, (int) round(($rawScore * 0.45) + ($relative * 0.55))));
+    }
+
+    private function normalizeDailyHeatScores(string $scoreDate): void
+    {
+        $rows = DB::table('theme_scores')
+            ->where('score_date', $scoreDate)
+            ->whereNotNull('heat_score')
+            ->get(['id', 'heat_score', 'payload']);
+
+        if ($rows->isEmpty()) {
+            return;
+        }
+
+        $max = (int) $rows->max('heat_score');
+
+        if ($max >= 85 || $max <= 0) {
+            return;
+        }
+
+        $targetMax = 88;
+
+        foreach ($rows as $row) {
+            $current = (int) $row->heat_score;
+            $normalized = $current <= 0 ? 0 : (int) round(30 + (($current / $max) * ($targetMax - 30)));
+            $payload = json_decode((string) $row->payload, true) ?: [];
+            $payload['display_normalized_from'] = $current;
+            $payload['display_normalized_to'] = $normalized;
+
+            DB::table('theme_scores')
+                ->where('id', $row->id)
+                ->update([
+                    'heat_score' => max(0, min(100, $normalized)),
+                    'payload' => json_encode($payload, JSON_UNESCAPED_SLASHES),
+                    'updated_at' => now(),
+                ]);
+        }
     }
 
     private function newsScore(\Illuminate\Support\Collection $eventMatches, string $scoreDate): int
