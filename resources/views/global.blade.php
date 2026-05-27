@@ -2,7 +2,11 @@
 
 @section('content')
     <style>
-        .global-head { display: grid; gap: 12px; }
+        .global-head {
+            display: grid;
+            gap: 12px;
+            grid-template-columns: 1fr !important;
+        }
         .market-section { margin-top: 16px; }
         .market-section-head {
             display: flex;
