@@ -388,6 +388,99 @@
             line-height: 1.55;
         }
 
+        .install-tip-backdrop {
+            position: fixed;
+            inset: 0;
+            z-index: 50;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            padding: 18px;
+            background: rgba(22, 32, 42, .44);
+        }
+
+        .install-tip-backdrop.show {
+            display: flex;
+        }
+
+        .install-tip-modal {
+            width: min(100%, 430px);
+            max-height: calc(100vh - 36px);
+            overflow: auto;
+            border-radius: 14px;
+            background: #fff;
+            border: 1px solid var(--line);
+            box-shadow: 0 22px 60px rgba(15, 23, 42, .2);
+            padding: 20px;
+        }
+
+        .install-tip-head {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 14px;
+        }
+
+        .install-tip-head img {
+            width: 54px;
+            height: 54px;
+            display: block;
+        }
+
+        .install-tip-head h2 {
+            margin: 0;
+            font-size: 22px;
+            line-height: 1.25;
+        }
+
+        .install-tip-body {
+            display: grid;
+            gap: 12px;
+            color: var(--muted);
+            line-height: 1.7;
+            font-size: 15px;
+        }
+
+        .install-tip-section {
+            border: 1px solid #edf0f3;
+            border-radius: 10px;
+            padding: 12px;
+            background: #fafafa;
+        }
+
+        .install-tip-section strong {
+            display: block;
+            color: var(--ink);
+            margin-bottom: 6px;
+            font-size: 15px;
+        }
+
+        .install-tip-section ol {
+            margin: 0;
+            padding-left: 20px;
+        }
+
+        .install-tip-section li + li {
+            margin-top: 3px;
+        }
+
+        .install-tip-actions {
+            display: grid;
+            gap: 8px;
+            margin-top: 16px;
+        }
+
+        .install-tip-close {
+            width: 100%;
+        }
+
+        .install-tip-note {
+            text-align: center;
+            color: var(--muted);
+            font-size: 12px;
+            line-height: 1.5;
+        }
+
         @media (min-width: 821px) {
             .topbar-inner {
                 padding: 10px 20px;
@@ -477,7 +570,65 @@
         @yield('content')
     </main>
 </div>
+@if (session('show_home_screen_tip'))
+    <div class="install-tip-backdrop" id="install-tip" role="dialog" aria-modal="true" aria-labelledby="install-tip-title">
+        <div class="install-tip-modal">
+            <div class="install-tip-head">
+                <img src="/assets/app-icon-180.png?v=20260525-pwa1" alt="股市在幹嘛">
+                <div>
+                    <h2 id="install-tip-title">把股市在幹嘛加入手機主畫面</h2>
+                    <p class="lead" style="font-size:13px">下次就能像 APP 一樣直接開啟。</p>
+                </div>
+            </div>
+
+            <div class="install-tip-body">
+                <div class="install-tip-section">
+                    <strong>iPhone / Safari</strong>
+                    <ol>
+                        <li>點瀏覽器下方的「分享」按鈕。</li>
+                        <li>往下滑，選「加入主畫面」。</li>
+                        <li>名稱確認為「股市在幹嘛」，點右上角「新增」。</li>
+                    </ol>
+                </div>
+
+                <div class="install-tip-section">
+                    <strong>Android / Chrome</strong>
+                    <ol>
+                        <li>點右上角「⋮」選單。</li>
+                        <li>選「加入主畫面」或「安裝應用程式」。</li>
+                        <li>確認名稱後點「新增」或「安裝」。</li>
+                    </ol>
+                </div>
+            </div>
+
+            <div class="install-tip-actions">
+                <button class="button install-tip-close" id="install-tip-close" type="button">我知道了</button>
+                <div class="install-tip-note">加入主畫面後，手機桌面會顯示股市在幹嘛的圖示。</div>
+            </div>
+        </div>
+    </div>
+@endif
 <script>
+    (() => {
+        const tip = document.getElementById('install-tip');
+        const close = document.getElementById('install-tip-close');
+        const storageKey = 'marketx.home_screen_tip.dismissed';
+
+        if (tip && close && localStorage.getItem(storageKey) !== '1') {
+            tip.classList.add('show');
+            close.addEventListener('click', () => {
+                localStorage.setItem(storageKey, '1');
+                tip.classList.remove('show');
+            });
+            tip.addEventListener('click', (event) => {
+                if (event.target === tip) {
+                    localStorage.setItem(storageKey, '1');
+                    tip.classList.remove('show');
+                }
+            });
+        }
+    })();
+
     if ('serviceWorker' in navigator) {
         window.addEventListener('load', () => {
             navigator.serviceWorker.register('/sw.js?v=20260525-pwa1').catch(() => {});

@@ -98,7 +98,7 @@ Route::post('/login', function (Request $request) {
         'updated_at' => now(),
     ]);
 
-    return redirect()->intended('/');
+    return redirect()->intended('/')->with('show_home_screen_tip', true);
 });
 
 Route::get('/register', function () {
@@ -132,7 +132,7 @@ Route::post('/register', function (Request $request) {
         ->where('id', $request->session()->getId())
         ->update(['user_id' => $user->id]);
 
-    return redirect('/');
+    return redirect('/')->with('show_home_screen_tip', true);
 });
 
 Route::match(['get', 'post'], '/logout', function (Request $request) {
