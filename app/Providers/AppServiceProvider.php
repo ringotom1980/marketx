@@ -75,7 +75,9 @@ class AppServiceProvider extends ServiceProvider
                             'members' => DB::table('users')->count(),
                             'online' => DB::table('sessions')
                                 ->where('last_activity', '>=', now()->subMinutes(5)->timestamp)
-                                ->count(),
+                                ->whereNotNull('user_id')
+                                ->distinct('user_id')
+                                ->count('user_id'),
                         ],
                         'dataFreshness' => [
                             'taiwan_date' => DB::table('stock_prices_1d')->max('trade_date'),
