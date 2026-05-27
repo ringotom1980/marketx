@@ -470,8 +470,22 @@
             margin-top: 16px;
         }
 
-        .install-tip-close {
+        .install-tip-actions-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 8px;
+        }
+
+        .install-tip-secondary {
             width: 100%;
+            border: 1px solid var(--line);
+            background: #fff;
+            color: var(--muted);
+        }
+
+        .install-tip-secondary:hover {
+            background: #f7f8fa;
+            color: var(--ink);
         }
 
         .install-tip-note {
@@ -602,7 +616,10 @@
             </div>
 
             <div class="install-tip-actions">
-                <button class="button install-tip-close" id="install-tip-close" type="button">我知道了</button>
+                <div class="install-tip-actions-row">
+                    <button class="button install-tip-secondary" id="install-tip-close" type="button">我知道了</button>
+                    <button class="button" id="install-tip-done" type="button">我已加入主畫面</button>
+                </div>
                 <div class="install-tip-note">加入主畫面後，手機桌面會顯示股市在幹嘛的圖示。</div>
             </div>
         </div>
@@ -612,17 +629,20 @@
     (() => {
         const tip = document.getElementById('install-tip');
         const close = document.getElementById('install-tip-close');
+        const done = document.getElementById('install-tip-done');
         const storageKey = 'marketx.home_screen_tip.dismissed';
 
-        if (tip && close && localStorage.getItem(storageKey) !== '1') {
+        if (tip && close && done && localStorage.getItem(storageKey) !== '1') {
             tip.classList.add('show');
             close.addEventListener('click', () => {
+                tip.classList.remove('show');
+            });
+            done.addEventListener('click', () => {
                 localStorage.setItem(storageKey, '1');
                 tip.classList.remove('show');
             });
             tip.addEventListener('click', (event) => {
                 if (event.target === tip) {
-                    localStorage.setItem(storageKey, '1');
                     tip.classList.remove('show');
                 }
             });
