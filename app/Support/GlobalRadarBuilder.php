@@ -8,25 +8,17 @@ use Illuminate\Support\Facades\DB;
 class GlobalRadarBuilder
 {
     private const GROUPS = [
-        'us' => [
+        [
             'title' => '美國市場',
-            'lead' => '觀察美股風險偏好、科技股強弱與半導體供應鏈溫度。',
-            'indicators' => ['Dow Jones', 'S&P 500', 'NASDAQ', 'Russell 2000', 'SOX', 'VIX'],
+            'indicators' => ['Dow Jones', 'S&P 500', 'NASDAQ', 'Russell 2000', 'SOX', 'VIX', 'TSM ADR', 'UMC ADR'],
         ],
-        'asia' => [
+        [
             'title' => '亞洲主要市場',
-            'lead' => '觀察日股、港股、韓股與陸股是否和台股形成同向或背離。',
             'indicators' => ['Nikkei 225', 'Hang Seng', 'Hang Seng China Enterprises', 'KOSPI', 'KOSDAQ', 'Shanghai Composite'],
         ],
-        'macro' => [
+        [
             'title' => '匯率、利率與商品',
-            'lead' => '觀察美元、美債、油價與黃金，判斷資金壓力與避險情緒。',
             'indicators' => ['DXY', 'US10Y', 'Crude Oil', 'Gold'],
-        ],
-        'taiwan' => [
-            'title' => '台股關聯指標',
-            'lead' => '觀察台積電 ADR 與台指夜盤，補足台股開盤前的外部訊號。',
-            'indicators' => ['TSM ADR', 'TAIFEX TX Night'],
         ],
     ];
 
@@ -36,7 +28,16 @@ class GlobalRadarBuilder
 
         return [
             'asOf' => $this->latestUpdatedAt($markets),
-            'groups' => $this->groups($markets),
+            'groups' => collect(self::GROUPS)->map(function (array $group) use ($markets) {
+                return [
+                    'title' => $group['title'],
+                    'cards' => collect($group['indicators'])
+                        ->map(fn (string $indicator) => $this->card($indicator, $markets->get($indicator)))
+                        ->filter()
+                        ->values()
+                        ->all(),
+                ];
+            })->all(),
         ];
     }
 
@@ -67,29 +68,6 @@ class GlobalRadarBuilder
             ->last();
     }
 
-    private function groups(Collection $markets): array
-    {
-        $groups = [];
-
-        foreach (self::GROUPS as $key => $group) {
-            $cards = collect($group['indicators'])
-                ->map(fn (string $indicator) => $this->card($indicator, $markets->get($indicator)))
-                ->filter()
-                ->values()
-                ->all();
-
-            $groups[] = [
-                'key' => $key,
-                'title' => $group['title'],
-                'lead' => $group['lead'],
-                'cards' => $cards,
-                'summary' => $this->groupSummary($key, collect($cards)),
-            ];
-        }
-
-        return $groups;
-    }
-
     private function card(string $indicator, ?object $row): ?array
     {
         if (! $row) {
@@ -97,44 +75,18 @@ class GlobalRadarBuilder
         }
 
         $change = $row->change_pct === null ? null : (float) $row->change_pct;
-        $changeValue = $row->change === null ? null : (float) $row->change;
 
         return [
             'indicator' => $indicator,
             'name' => $this->displayName($indicator),
             'region' => $this->regionName($indicator),
             'value' => $this->formatValue($indicator, (float) $row->value),
-            'change' => $changeValue === null ? '-' : number_format($changeValue, 2),
-            'changePct' => $change === null ? '-' : number_format($change, 2).'%',
+            'changePct' => $this->formatChangePct($change),
             'changeRaw' => $change,
             'tone' => $this->tone($indicator, $row->state, $change),
             'state' => $this->stateName($indicator, $row->state, $change),
             'tradeDate' => (string) $row->trade_date,
-            'read' => $this->read($indicator, $row->state, $change),
-            'source' => $row->source,
         ];
-    }
-
-    private function groupSummary(string $key, Collection $cards): string
-    {
-        $up = $cards->whereIn('tone', ['red'])->count();
-        $down = $cards->whereIn('tone', ['green'])->count();
-
-        return match ($key) {
-            'us' => $up > $down
-                ? '美股主要指數偏強，代表外部風險偏好較佳。'
-                : ($down > $up ? '美股主要指數偏弱，台股開盤前需先看風險收斂。' : '美股訊號分歧，需觀察科技股與半導體是否同向。'),
-            'asia' => $up > $down
-                ? '亞洲市場多數走強，有利台股觀察區域資金回流。'
-                : ($down > $up ? '亞洲市場偏弱，需留意區域股市同步修正。' : '亞洲市場漲跌互見，台股較可能回到自身題材與籌碼表現。'),
-            'macro' => $down > $up
-                ? '匯率、利率或商品端壓力較高，需留意估值與成本壓力。'
-                : ($up > $down ? '宏觀壓力相對降溫，市場較容易回到成長與題材定價。' : '宏觀訊號中性，短線仍看股市本身量價。'),
-            'taiwan' => $up > $down
-                ? '台股關聯指標偏正向，對隔日台股情緒有支撐。'
-                : ($down > $up ? '台股關聯指標偏弱，隔日開盤需防守觀察。' : '台股關聯指標尚未明確表態。'),
-            default => '目前訊號混合。',
-        };
     }
 
     private function displayName(string $indicator): string
@@ -146,6 +98,8 @@ class GlobalRadarBuilder
             'Russell 2000' => '羅素 2000',
             'SOX' => '費城半導體',
             'VIX' => 'VIX 恐慌指數',
+            'TSM ADR' => '台積電 ADR',
+            'UMC ADR' => '聯電 ADR',
             'Nikkei 225' => '日經 225',
             'Hang Seng' => '恆生指數',
             'Hang Seng China Enterprises' => '恆生國企',
@@ -156,21 +110,18 @@ class GlobalRadarBuilder
             'US10Y' => '美國 10 年債',
             'Crude Oil' => '原油',
             'Gold' => '黃金',
-            'TSM ADR' => '台積電 ADR',
-            'TAIFEX TX Night' => '台指夜盤',
         ][$indicator] ?? $indicator;
     }
 
     private function regionName(string $indicator): string
     {
         return match ($indicator) {
-            'Dow Jones', 'S&P 500', 'NASDAQ', 'Russell 2000', 'SOX', 'VIX' => '美國',
+            'Dow Jones', 'S&P 500', 'NASDAQ', 'Russell 2000', 'SOX', 'VIX', 'TSM ADR', 'UMC ADR' => '美國',
             'Nikkei 225' => '日本',
             'Hang Seng', 'Hang Seng China Enterprises' => '香港',
             'KOSPI', 'KOSDAQ' => '韓國',
             'Shanghai Composite' => '中國',
-            'DXY', 'US10Y', 'Crude Oil', 'Gold' => '宏觀',
-            default => '台股關聯',
+            default => '宏觀',
         };
     }
 
@@ -210,48 +161,28 @@ class GlobalRadarBuilder
             return in_array($state, ['pressure_up', 'strong'], true) ? 'green' : (in_array($state, ['pressure_down', 'weak', 'soft'], true) ? 'red' : 'amber');
         }
 
-        if ($change === null) {
+        if ($change === null || $change == 0.0) {
             return 'amber';
         }
 
-        return $change >= 0 ? 'red' : 'green';
+        return $change > 0 ? 'red' : 'green';
     }
 
-    private function read(string $indicator, ?string $state, ?float $change): string
+    private function formatChangePct(?float $change): string
     {
-        $direction = $change === null ? '尚未取得漲跌幅' : ($change >= 0 ? '上漲' : '下跌');
+        if ($change === null) {
+            return '-';
+        }
 
-        return match ($indicator) {
-            'Dow Jones' => '大型藍籌股'.$direction.'，可觀察市場對景氣與企業獲利的整體態度。',
-            'S&P 500' => '美股大盤'.$direction.'，代表全球資金風險偏好的基準訊號。',
-            'NASDAQ' => '科技股'.$direction.'，會直接影響 AI、半導體與高估值族群情緒。',
-            'Russell 2000' => '中小型股'.$direction.'，可用來觀察資金是否擴散到非大型權值股。',
-            'SOX' => '半導體指數'.$direction.'，對台股電子權值、IC 設計與 AI 供應鏈影響最大。',
-            'VIX' => $state === 'high_risk' ? 'VIX 升高代表避險情緒增加，短線需降低追價衝動。' : 'VIX 偏低代表市場風險情緒穩定，但也要留意過度樂觀。',
-            'Nikkei 225' => '日股'.$direction.'，可觀察亞洲資金是否仍偏好大型出口與科技權值股。',
-            'Hang Seng' => '港股'.$direction.'，反映中港資金情緒與中國政策預期。',
-            'Hang Seng China Enterprises' => '國企股'.$direction.'，可觀察中國大型企業與金融地產鏈壓力。',
-            'KOSPI' => '韓股'.$direction.'，與半導體、記憶體、電子出口循環高度相關。',
-            'KOSDAQ' => '韓國成長股'.$direction.'，可作為亞洲成長股風險偏好的輔助訊號。',
-            'Shanghai Composite' => '陸股'.$direction.'，主要觀察中國政策、內需與資金信心。',
-            'DXY' => $state === 'pressure_up' ? '美元走強通常代表資金較保守，對新興市場與科技估值較不利。' : '美元壓力下降時，外資風險偏好通常較容易回升。',
-            'US10Y' => $state === 'pressure_up' ? '美債殖利率上升會提高估值壓力，成長股需特別留意。' : '美債殖利率回落時，對科技與高估值族群較友善。',
-            'Crude Oil' => $change !== null && $change > 0 ? '油價上漲可能推升通膨與成本壓力，航運、塑化與能源鏈需分開判讀。' : '油價走弱通常讓通膨壓力降溫，但也可能反映需求放緩。',
-            'Gold' => $change !== null && $change > 0 ? '黃金上漲代表避險或降息預期升溫，需搭配美元與美債一起看。' : '黃金回落時，通常代表避險需求下降或美元壓力轉強。',
-            'TSM ADR' => '台積電 ADR '.$direction.'，可作為隔日台股權值股與半導體情緒參考。',
-            'TAIFEX TX Night' => '台指夜盤'.$direction.'，反映台股收盤後到隔日開盤前的期貨情緒。',
-            default => '此指標作為全球市場輔助觀察。',
-        };
+        $symbol = $change > 0 ? '▲' : ($change < 0 ? '▼' : '•');
+
+        return $symbol.' '.number_format(abs($change), 2).'%';
     }
 
     private function formatValue(string $indicator, float $value): string
     {
         if ($indicator === 'US10Y') {
             return number_format($value, 3).'%';
-        }
-
-        if (in_array($indicator, ['Crude Oil', 'Gold', 'TSM ADR'], true)) {
-            return number_format($value, 2);
         }
 
         return number_format($value, 2);

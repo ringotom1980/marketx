@@ -31,6 +31,7 @@ class ImportGlobalMarketData extends Command
         ['indicator' => 'Crude Oil', 'symbol' => 'CL=F'],
         ['indicator' => 'Gold', 'symbol' => 'GC=F'],
         ['indicator' => 'TSM ADR', 'symbol' => 'TSM'],
+        ['indicator' => 'UMC ADR', 'symbol' => 'UMC'],
     ];
 
     public function handle(): int

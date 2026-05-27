@@ -6,7 +6,7 @@
         .market-section { margin-top: 16px; }
         .market-section-head {
             display: flex;
-            align-items: flex-end;
+            align-items: center;
             justify-content: space-between;
             gap: 10px;
             margin-bottom: 10px;
@@ -58,31 +58,20 @@
         .market-change.red { color: var(--red); }
         .market-change.green { color: var(--green); }
         .market-change.amber { color: var(--amber); }
-        .market-read {
-            color: var(--muted);
-            line-height: 1.6;
-            font-size: 14px;
-        }
     </style>
 
     <section class="page-head global-head">
         <div>
             <h1>全球雷達</h1>
-            <p class="lead">用主要國際指數看全球資金風向：美股、費半、VIX、日本、香港、韓國、匯率、利率、商品與台股關聯指標。</p>
+            <p class="lead">主要國際指數與台股相關 ADR 觀察。</p>
+            <p class="market-date">資料更新：{{ $radar['asOf'] ? \Carbon\CarbonImmutable::parse($radar['asOf'])->timezone('Asia/Taipei')->format('m/d H:i') : '待更新' }}</p>
         </div>
     </section>
 
     @foreach ($radar['groups'] as $group)
         <section class="market-section">
             <div class="market-section-head">
-                <div>
-                    <h2>{{ $group['title'] }}</h2>
-                    <p class="lead">{{ $group['lead'] }}</p>
-                </div>
-            </div>
-
-            <div class="panel" style="margin-bottom:12px">
-                <p class="lead">{{ $group['summary'] }}</p>
+                <h2>{{ $group['title'] }}</h2>
             </div>
 
             <div class="grid three">
@@ -101,7 +90,6 @@
                             <span class="market-change {{ $card['tone'] }}">{{ $card['changePct'] }}</span>
                         </div>
 
-                        <p class="market-read">{{ $card['read'] }}</p>
                         <div class="market-date">交易日：{{ $card['tradeDate'] }}</div>
                     </article>
                 @empty
