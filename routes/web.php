@@ -1190,7 +1190,12 @@ Route::get('/themes', function () {
             ];
         });
 
-    return view('themes', ['themes' => $themes]);
+    $aiReport = DB::table('theme_ai_reports')
+        ->orderByDesc('report_date')
+        ->orderByDesc('updated_at')
+        ->first(['report_date', 'title', 'summary', 'model', 'updated_at']);
+
+    return view('themes', ['themes' => $themes, 'aiReport' => $aiReport]);
 });
 
 Route::get('/watchlist', function (AiUsageLimiter $aiLimiter) {

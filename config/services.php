@@ -49,6 +49,7 @@ return [
         'max_event_ai_per_day' => env('MAX_EVENT_AI_PER_DAY', 150),
         'max_stock_ai_per_day' => env('MAX_STOCK_AI_PER_DAY', 10),
         'max_theme_ai_per_day' => env('MAX_THEME_AI_PER_DAY', 40),
+        'max_theme_premarket_ai_per_day' => env('MAX_THEME_PREMARKET_AI_PER_DAY', 1),
         'max_dynamic_ai_per_day' => env('MAX_DYNAMIC_AI_PER_DAY', 5),
         'max_global_ai_per_day' => env('MAX_GLOBAL_AI_PER_DAY', 1),
     ],
