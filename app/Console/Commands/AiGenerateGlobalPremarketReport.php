@@ -46,7 +46,7 @@ class AiGenerateGlobalPremarketReport extends Command
             return self::FAILURE;
         }
 
-        $text = trim((string) $result->text);
+        $text = $this->cleanReportText((string) $result->text);
 
         if (mb_strlen($text) < 80) {
             $this->warn('Gemini global premarket report too short.');
@@ -56,7 +56,7 @@ class AiGenerateGlobalPremarketReport extends Command
         DB::table('global_ai_reports')->updateOrInsert(
             ['report_date' => $reportDate],
             [
-                'title' => '今日全球盤前觀察',
+                'title' => '股市在幹嘛今日全球盤前觀察',
                 'summary' => $text,
                 'data_pack' => json_encode($dataPack, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
                 'model' => 'gemini:'.$result->model,
@@ -169,6 +169,8 @@ class AiGenerateGlobalPremarketReport extends Command
             '5. 不要說買進、賣出、強烈買進、目標價或預測點位。',
             '',
             '輸出格式，請固定使用以下 8 個段落標題，不要更名：',
+            '不要另外輸出總標題，因為網站卡片已經有固定標題。',
+            '不要使用 Markdown 粗體符號，例如 **文字**。請使用純文字。',
             '1、全球股市重點：整理美股、半導體、ADR、亞洲主要股市的實際漲跌與市場含意，至少 4 句。',
             '2、匯率利率：整理美元指數、美國 10 年債等資金壓力訊號，至少 3 句。',
             '3、原物料及貴金屬：整理原油、黃金等商品訊號及可能影響，至少 3 句。',
@@ -187,5 +189,28 @@ class AiGenerateGlobalPremarketReport extends Command
             'Data Pack:',
             json_encode($dataPack, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_PRETTY_PRINT),
         ]);
+    }
+
+    private function cleanReportText(string $text): string
+    {
+        $text = trim($text);
+        $text = str_replace(['**', '__'], '', $text);
+
+        $lines = preg_split('/\R/u', $text) ?: [];
+        $lines = array_values(array_filter($lines, function (string $line, int $index): bool {
+            $normalized = trim($line);
+
+            if ($index <= 2 && in_array($normalized, [
+                '今日全球盤前觀察',
+                '股市在幹嘛今日全球盤前觀察',
+                '一、今日全球盤前觀察',
+            ], true)) {
+                return false;
+            }
+
+            return true;
+        }, ARRAY_FILTER_USE_BOTH));
+
+        return trim(implode("\n", $lines));
     }
 }

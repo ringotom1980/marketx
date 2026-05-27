@@ -98,6 +98,32 @@
             cursor: pointer;
             font-size: 14px;
         }
+        .global-ai-title-row {
+            display: flex;
+            align-items: flex-start;
+            justify-content: space-between;
+            gap: 10px;
+            margin-bottom: 12px;
+        }
+        .global-ai-title-row h2 {
+            margin: 0;
+        }
+        .global-ai-updated {
+            flex: 0 0 auto;
+            color: var(--muted);
+            font-size: 12px;
+            line-height: 1.4;
+            white-space: nowrap;
+            padding-top: 3px;
+        }
+        @media (max-width: 520px) {
+            .global-ai-title-row {
+                align-items: flex-start;
+            }
+            .global-ai-updated {
+                font-size: 11px;
+            }
+        }
     </style>
 
     <section class="page-head global-head">
@@ -105,14 +131,16 @@
             <h1>全球雷達</h1>
             @if ($radar['aiReport'])
                 <div class="panel">
-                    <h2>{{ $radar['aiReport']['title'] }}</h2>
+                    <div class="global-ai-title-row">
+                        <h2>股市在幹嘛今日全球盤前觀察</h2>
+                        <span class="global-ai-updated">
+                            AI 更新：{{ \Carbon\CarbonImmutable::parse($radar['aiReport']['updatedAt'])->timezone('Asia/Taipei')->format('m/d H:i') }}
+                        </span>
+                    </div>
                     <div class="global-ai-report" data-global-ai-report>
                         <div class="global-ai-body">{{ $radar['aiReport']['summary'] }}</div>
                         <button class="global-ai-toggle" type="button" data-global-ai-toggle>點我展開</button>
                     </div>
-                    <p class="market-date" style="margin-top:10px">
-                        AI 更新：{{ \Carbon\CarbonImmutable::parse($radar['aiReport']['updatedAt'])->timezone('Asia/Taipei')->format('m/d H:i') }}
-                    </p>
                 </div>
             @else
                 <div class="panel">
