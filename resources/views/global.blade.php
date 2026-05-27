@@ -62,66 +62,59 @@
             position: relative;
         }
         .global-ai-body {
-            white-space: pre-line;
-            line-height: 1.75;
-            color: var(--ink);
+            color: var(--text);
+            font-size: 16px;
+            line-height: 1.9;
             max-height: 156px;
             overflow: hidden;
-            transition: max-height .2s ease;
+            position: relative;
+            white-space: pre-line;
         }
         .global-ai-report.expanded .global-ai-body {
             max-height: none;
         }
         .global-ai-report:not(.expanded)::after {
-            content: "";
-            position: absolute;
-            left: 0;
-            right: 0;
-            bottom: 42px;
-            height: 72px;
-            pointer-events: none;
             background: linear-gradient(to bottom, rgba(255, 255, 255, 0), var(--panel));
+            bottom: 42px;
+            content: "";
+            height: 58px;
+            left: 0;
+            pointer-events: none;
+            position: absolute;
+            right: 0;
         }
         .global-ai-toggle {
-            position: relative;
-            z-index: 1;
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            border: 1px solid rgba(193, 18, 31, .22);
-            border-radius: 999px;
-            background: #fff5f5;
-            color: var(--button);
-            padding: 7px 12px;
-            margin-top: 10px;
-            font-weight: 900;
-            cursor: pointer;
-            font-size: 14px;
+            margin-top: 14px;
         }
         .global-ai-title-row {
             display: flex;
             align-items: flex-start;
             justify-content: space-between;
-            gap: 10px;
-            margin-bottom: 12px;
+            gap: 12px;
+            margin-bottom: 14px;
         }
         .global-ai-title-row h2 {
             margin: 0;
         }
         .global-ai-updated {
-            flex: 0 0 auto;
             color: var(--muted);
-            font-size: 12px;
-            line-height: 1.4;
+            font-size: 14px;
+            font-weight: 700;
             white-space: nowrap;
-            padding-top: 3px;
+            padding-top: 4px;
         }
-        @media (max-width: 520px) {
+        @media (max-width: 640px) {
             .global-ai-title-row {
-                align-items: flex-start;
+                display: block;
             }
             .global-ai-updated {
-                font-size: 11px;
+                margin-top: 4px;
+                white-space: normal;
+            }
+            .global-ai-body {
+                font-size: 15px;
+                line-height: 1.85;
+                max-height: 148px;
             }
         }
     </style>
@@ -132,19 +125,19 @@
             @if ($radar['aiReport'])
                 <div class="panel">
                     <div class="global-ai-title-row">
-                        <h2>股市在幹嘛今日全球盤前觀察</h2>
+                        <h2>《股市在幹嘛》今日全球盤前觀察</h2>
                         <span class="global-ai-updated">
                             AI 更新：{{ \Carbon\CarbonImmutable::parse($radar['aiReport']['updatedAt'])->timezone('Asia/Taipei')->format('m/d H:i') }}
                         </span>
                     </div>
                     <div class="global-ai-report" data-global-ai-report>
                         <div class="global-ai-body">{{ $radar['aiReport']['summary'] }}</div>
-                        <button class="global-ai-toggle" type="button" data-global-ai-toggle>點我展開</button>
+                        <button class="button global-ai-toggle" type="button" data-global-ai-toggle>點我展開</button>
                     </div>
                 </div>
             @else
                 <div class="panel">
-                    <h2>今日全球盤前觀察</h2>
+                    <h2>《股市在幹嘛》今日全球盤前觀察</h2>
                     <p class="lead">今日 Gemini 全球盤前觀察產生中。</p>
                 </div>
             @endif

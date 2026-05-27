@@ -56,7 +56,7 @@ class AiGenerateGlobalPremarketReport extends Command
         DB::table('global_ai_reports')->updateOrInsert(
             ['report_date' => $reportDate],
             [
-                'title' => '股市在幹嘛今日全球盤前觀察',
+                'title' => '《股市在幹嘛》今日全球盤前觀察',
                 'summary' => $text,
                 'data_pack' => json_encode($dataPack, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
                 'model' => 'gemini:'.$result->model,
@@ -203,6 +203,7 @@ class AiGenerateGlobalPremarketReport extends Command
             if ($index <= 2 && in_array($normalized, [
                 '今日全球盤前觀察',
                 '股市在幹嘛今日全球盤前觀察',
+                '《股市在幹嘛》今日全球盤前觀察',
                 '一、今日全球盤前觀察',
             ], true)) {
                 return false;

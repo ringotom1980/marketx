@@ -54,7 +54,7 @@ class GlobalRadarBuilder
 
         return [
             'reportDate' => (string) $row->report_date,
-            'title' => $row->title ?: '今日全球盤前觀察',
+            'title' => $row->title ?: '《股市在幹嘛》今日全球盤前觀察',
             'summary' => (string) $row->summary,
             'model' => $row->model,
             'updatedAt' => $row->updated_at,
