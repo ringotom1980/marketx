@@ -18,6 +18,49 @@
 
 @section('content')
     <style>
+        .stock-head {
+            grid-template-columns: 1fr !important;
+        }
+
+        .stock-title-row {
+            align-items: center;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+
+        .stock-title-row h1 {
+            margin: 0;
+        }
+
+        .stock-watch-form {
+            margin: 0;
+        }
+
+        .stock-watch-button {
+            padding: 9px 12px;
+        }
+
+        .stock-quote-line {
+            align-items: center;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 12px;
+            margin-top: 10px;
+        }
+
+        .stock-price-change {
+            font-weight: 900;
+        }
+
+        .stock-price-change.red {
+            color: var(--red);
+        }
+
+        .stock-price-change.green {
+            color: var(--green);
+        }
+
         .chart-tabs {
             display: grid;
             grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -78,49 +121,42 @@
         @media (max-width: 520px) {
             .k-chart-wrap { height: 300px; }
             .chart-tab { padding: 9px 4px; font-size: 13px; }
+            .stock-watch-button { padding: 8px 10px; }
         }
     </style>
 
-    <section class="page-head">
+    @php
+        $closeValue = is_numeric($stock['close']) ? (float) $stock['close'] : null;
+        $changeValue = is_numeric($stock['change']) ? (float) $stock['change'] : null;
+        $closeText = $closeValue === null ? '無資料' : rtrim(rtrim(number_format($closeValue, 2), '0'), '.');
+        $changeArrow = $changeValue === null ? '' : ($changeValue > 0 ? '▲' : ($changeValue < 0 ? '▼' : ''));
+        $changeText = $changeValue === null ? '' : $changeArrow.rtrim(rtrim(number_format(abs($changeValue), 2), '0'), '.');
+        $changeTone = $changeValue === null ? '' : ($changeValue > 0 ? 'red' : ($changeValue < 0 ? 'green' : ''));
+    @endphp
+
+    <section class="page-head stock-head">
         <div>
-            <h1>{{ $stock['name'] }} {{ $stock['symbol'] }}</h1>
-            <p class="lead">{{ $stock['market'] }}｜收盤 {{ $stock['close'] }}｜漲跌 {{ $stock['change'] }}｜成交量 {{ $stock['volume'] }}</p>
-        </div>
-        <div class="panel">
-            <div class="badge {{ $decisionTone }}">{{ $stock['decision'] }}</div>
-            <p class="lead" style="margin-top:12px">信心指數</p>
-            <div class="score">{{ $stock['confidence'] }}%</div>
-            @if ($stock['isWatched'])
-                <form method="post" action="/watchlist/{{ $stock['symbol'] }}" style="margin-top:12px">
+            <div class="stock-title-row">
+                @if ($stock['isWatched'])
+                <form class="stock-watch-form" method="post" action="/watchlist/{{ $stock['symbol'] }}">
                     @csrf
                     @method('DELETE')
-                    <button class="button" type="submit" style="width:100%">取消追蹤</button>
+                    <button class="button stock-watch-button" type="submit">取消追蹤</button>
                 </form>
-            @else
-                <form method="post" action="/watchlist" style="margin-top:12px">
+                @else
+                <form class="stock-watch-form" method="post" action="/watchlist">
                     @csrf
                     <input type="hidden" name="symbol" value="{{ $stock['symbol'] }}">
-                    <button class="button" type="submit" style="width:100%">加入追蹤</button>
+                    <button class="button stock-watch-button" type="submit">加入追蹤</button>
                 </form>
-            @endif
-        </div>
-    </section>
-
-    <section class="panel">
-        <h2>全球事件影響鏈</h2>
-        @if (! empty($eventChains))
-            <div class="signal-list">
-                @foreach ($eventChains as $chain)
-                    <div class="signal-item">
-                        <span class="badge amber">{{ $chain['event'] }}</span>
-                        <p>{{ $chain['path'] }}</p>
-                        <p>{{ $chain['judgement'] }}</p>
-                    </div>
-                @endforeach
+                @endif
+                <h1>{{ $stock['name'] }} {{ $stock['symbol'] }}</h1>
             </div>
-        @else
-            <p class="lead">目前沒有明確全球事件直接連到此股票，先以技術、籌碼與財務狀態觀察。</p>
-        @endif
+            <p class="lead stock-quote-line">
+                <span class="stock-price-change {{ $changeTone }}">{{ $closeText }}{{ $changeText }}</span>
+                <span>成交量{{ $stock['volume'] }}</span>
+            </p>
+        </div>
     </section>
 
     <section class="panel" style="margin-top:16px">
