@@ -29,6 +29,17 @@
             gap: 10px;
         }
 
+        .stock-header-row {
+            align-items: flex-start;
+            display: flex;
+            justify-content: space-between;
+            gap: 16px;
+        }
+
+        .stock-header-main {
+            min-width: 0;
+        }
+
         .stock-title-row h1 {
             margin: 0;
         }
@@ -122,6 +133,9 @@
             .k-chart-wrap { height: 300px; }
             .chart-tab { padding: 9px 4px; font-size: 13px; }
             .stock-watch-button { padding: 8px 10px; }
+            .stock-header-row {
+                align-items: flex-start;
+            }
         }
     </style>
 
@@ -135,8 +149,17 @@
     @endphp
 
     <section class="page-head stock-head">
-        <div>
-            <div class="stock-title-row">
+        <div class="stock-header-row">
+            <div class="stock-header-main">
+                <div class="stock-title-row">
+                    <h1>{{ $stock['name'] }} {{ $stock['symbol'] }}</h1>
+                </div>
+                <p class="lead stock-quote-line">
+                    <span class="stock-price-change {{ $changeTone }}">{{ $closeText }}{{ $changeText }}</span>
+                    <span>成交量{{ $stock['volume'] }}</span>
+                </p>
+            </div>
+            <div>
                 @if ($stock['isWatched'])
                 <form class="stock-watch-form" method="post" action="/watchlist/{{ $stock['symbol'] }}">
                     @csrf
@@ -150,12 +173,7 @@
                     <button class="button stock-watch-button" type="submit">加入追蹤</button>
                 </form>
                 @endif
-                <h1>{{ $stock['name'] }} {{ $stock['symbol'] }}</h1>
             </div>
-            <p class="lead stock-quote-line">
-                <span class="stock-price-change {{ $changeTone }}">{{ $closeText }}{{ $changeText }}</span>
-                <span>成交量{{ $stock['volume'] }}</span>
-            </p>
         </div>
     </section>
 
