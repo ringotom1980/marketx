@@ -33,17 +33,9 @@ class GlobalRadarBuilder
     public function build(): array
     {
         $markets = $this->latestMarkets();
-        $score = $this->windScore($markets);
 
         return [
             'asOf' => $this->latestUpdatedAt($markets),
-            'wind' => [
-                'title' => $this->windTitle($score),
-                'score' => $score,
-                'tone' => $score >= 65 ? 'red' : ($score >= 45 ? 'amber' : 'green'),
-                'support' => $this->supportText($markets),
-                'pressure' => $this->pressureText($markets),
-            ],
             'groups' => $this->groups($markets),
         ];
     }
@@ -123,42 +115,10 @@ class GlobalRadarBuilder
         ];
     }
 
-    private function windScore(Collection $markets): int
-    {
-        $score = 50;
-
-        foreach ($markets as $indicator => $row) {
-            $state = $row->state;
-
-            if (in_array($indicator, ['Dow Jones', 'S&P 500', 'NASDAQ', 'Russell 2000', 'SOX', 'Nikkei 225', 'Hang Seng', 'Hang Seng China Enterprises', 'KOSPI', 'KOSDAQ', 'Shanghai Composite', 'TSM ADR', 'TAIFEX TX Night'], true)) {
-                $score += in_array($state, ['strong', 'positive'], true) ? 3 : (in_array($state, ['weak', 'soft'], true) ? -3 : 0);
-            }
-
-            if ($indicator === 'SOX') {
-                $score += in_array($state, ['strong', 'positive'], true) ? 2 : (in_array($state, ['weak', 'soft'], true) ? -2 : 0);
-            }
-
-            if ($indicator === 'VIX') {
-                $score += $state === 'low_risk' ? 6 : ($state === 'high_risk' ? -10 : 0);
-            }
-
-            if (in_array($indicator, ['DXY', 'US10Y'], true)) {
-                $score += $state === 'pressure_down' ? 4 : ($state === 'pressure_up' ? -6 : 0);
-            }
-
-            if ($indicator === 'Crude Oil') {
-                $score += $state === 'pressure_up' || (float) $row->change_pct > 1 ? -4 : 0;
-            }
-        }
-
-        return max(0, min(100, $score));
-    }
-
     private function groupSummary(string $key, Collection $cards): string
     {
         $up = $cards->whereIn('tone', ['red'])->count();
         $down = $cards->whereIn('tone', ['green'])->count();
-        $mixed = $cards->count() - $up - $down;
 
         return match ($key) {
             'us' => $up > $down
@@ -173,83 +133,7 @@ class GlobalRadarBuilder
             'taiwan' => $up > $down
                 ? '台股關聯指標偏正向，對隔日台股情緒有支撐。'
                 : ($down > $up ? '台股關聯指標偏弱，隔日開盤需防守觀察。' : '台股關聯指標尚未明確表態。'),
-            default => $mixed >= 0 ? '目前訊號混合。' : '',
-        };
-    }
-
-    private function supportText(Collection $markets): string
-    {
-        $supports = [];
-
-        foreach (['NASDAQ' => '科技股', 'SOX' => '半導體', 'Nikkei 225' => '日股', 'KOSPI' => '韓股', 'TSM ADR' => '台積電 ADR', 'TAIFEX TX Night' => '台指夜盤'] as $key => $label) {
-            if (in_array($markets->get($key)?->state, ['strong', 'positive'], true)) {
-                $supports[] = $label;
-            }
-        }
-
-        if ($markets->get('VIX')?->state === 'low_risk') {
-            $supports[] = 'VIX 低檔';
-        }
-
-        return $supports === [] ? '暫無明顯支撐訊號' : implode('、', array_unique($supports));
-    }
-
-    private function pressureText(Collection $markets): string
-    {
-        $pressures = [];
-
-        foreach (['DXY' => '美元轉強', 'US10Y' => '美債殖利率上升', 'Crude Oil' => '油價壓力', 'Hang Seng' => '港股偏弱', 'KOSDAQ' => '韓國成長股偏弱'] as $key => $label) {
-            $row = $markets->get($key);
-            if ($row && in_array($row->state, ['weak', 'soft', 'pressure_up'], true)) {
-                $pressures[] = $label;
-            }
-        }
-
-        if ($markets->get('VIX')?->state === 'high_risk') {
-            $pressures[] = 'VIX 升高';
-        }
-
-        if (false) {
-            $pressures[] = '負面事件增加';
-        }
-
-        return $pressures === [] ? '暫無明顯壓力訊號' : implode('、', array_unique($pressures));
-    }
-
-    private function watchpoints(Collection $markets, Collection $events): array
-    {
-        $points = [];
-
-        if ($markets->get('SOX')) {
-            $points[] = '費半與 NASDAQ 是否同向，是 AI、半導體與電子權值股的重要外部訊號。';
-        }
-
-        if ($markets->get('TAIFEX TX Night')) {
-            $points[] = '台指夜盤可作為隔日台股開盤情緒參考，但仍要搭配現貨量價確認。';
-        }
-
-        if ($markets->get('DXY') || $markets->get('US10Y')) {
-            $points[] = '美元與美債若同步走強，通常會提高成長股與高估值族群壓力。';
-        }
-
-        if ($markets->get('Hang Seng') || $markets->get('KOSPI')) {
-            $points[] = '港股、韓股若與台股背離，要注意區域資金是否集中在少數題材。';
-        }
-
-        if ($events->isNotEmpty()) {
-            $points[] = '全球事件仍以新聞聚合為輔，實際交易判斷要回到指數、期貨與台股籌碼。';
-        }
-
-        return array_slice($points, 0, 5);
-    }
-
-    private function windTitle(int $score): string
-    {
-        return match (true) {
-            $score >= 70 => '全球順風',
-            $score >= 55 => '中性偏多',
-            $score >= 40 => '中性觀察',
-            default => '風險升高',
+            default => '目前訊號混合。',
         };
     }
 

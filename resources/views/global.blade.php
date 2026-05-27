@@ -3,27 +3,6 @@
 @section('content')
     <style>
         .global-head { display: grid; gap: 12px; }
-        .global-score { display: grid; gap: 10px; }
-        .global-score-row {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            gap: 12px;
-        }
-        .global-score-meter {
-            height: 12px;
-            border-radius: 999px;
-            background: linear-gradient(90deg, #d7e6f8 0%, #f3d9a6 52%, #efb0ac 100%);
-            overflow: hidden;
-            position: relative;
-        }
-        .global-score-meter::after {
-            content: "";
-            position: absolute;
-            inset: 0 0 0 var(--score);
-            background: rgba(241, 243, 245, .86);
-            border-radius: 0 999px 999px 0;
-        }
         .market-section { margin-top: 16px; }
         .market-section-head {
             display: flex;
@@ -84,25 +63,12 @@
             line-height: 1.6;
             font-size: 14px;
         }
-        @media (min-width: 900px) {
-            .global-head { grid-template-columns: minmax(0, 1fr) 360px; align-items: stretch; }
-        }
     </style>
 
     <section class="page-head global-head">
         <div>
             <h1>全球雷達</h1>
             <p class="lead">用主要國際指數看全球資金風向：美股、費半、VIX、日本、香港、韓國、匯率、利率、商品與台股關聯指標。</p>
-        </div>
-        <div class="panel global-score">
-            <div class="global-score-row">
-                <span class="badge {{ $radar['wind']['tone'] }}">{{ $radar['wind']['title'] }}</span>
-                <strong>{{ $radar['wind']['score'] }}%</strong>
-            </div>
-            <div class="global-score-meter" style="--score: {{ $radar['wind']['score'] }}%"></div>
-            <p class="lead">支撐：{{ $radar['wind']['support'] }}</p>
-            <p class="lead">壓力：{{ $radar['wind']['pressure'] }}</p>
-            <p class="market-date">資料更新：{{ $radar['asOf'] ? \Carbon\CarbonImmutable::parse($radar['asOf'])->timezone('Asia/Taipei')->format('m/d H:i') : '待更新' }}</p>
         </div>
     </section>
 
