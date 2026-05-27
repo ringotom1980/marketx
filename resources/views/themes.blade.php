@@ -143,8 +143,19 @@
                         <table class="table" style="margin-top:10px">
                             <tbody>
                             @foreach ($theme['related_stocks'] as $stock)
+                                @php
+                                    $relatedChange = $stock['change'];
+                                    $relatedTone = $relatedChange === null ? 'var(--muted)' : ($relatedChange > 0 ? 'var(--red)' : ($relatedChange < 0 ? 'var(--green)' : 'var(--muted)'));
+                                    $relatedArrow = $relatedChange === null ? '' : ($relatedChange > 0 ? '▲' : ($relatedChange < 0 ? '▼' : ''));
+                                    $relatedChangeText = $relatedChange === null ? '待更新' : $relatedArrow.rtrim(rtrim(number_format(abs($relatedChange), 2), '0'), '.');
+                                    $relatedCloseText = $stock['close'] === null ? '尚無收盤價' : rtrim(rtrim(number_format($stock['close'], 2), '0'), '.');
+                                @endphp
                                 <tr>
                                     <th><a href="/s/{{ $stock['symbol'] }}">{{ $stock['name'] }}</a></th>
+                                    <td>
+                                        {{ $relatedCloseText }}
+                                        <span style="color:{{ $relatedTone }};font-weight:900">{{ $relatedChangeText }}</span>
+                                    </td>
                                     <td>{{ $stock['state'] ?? '觀察中' }}</td>
                                     <td>信心 {{ $stock['confidence'] ?? 0 }}%</td>
                                 </tr>
