@@ -59,9 +59,44 @@
         .market-change.green { color: var(--green); }
         .market-change.amber { color: var(--amber); }
         .global-ai-report {
+            position: relative;
+        }
+        .global-ai-body {
             white-space: pre-line;
             line-height: 1.75;
             color: var(--ink);
+            max-height: 156px;
+            overflow: hidden;
+            transition: max-height .2s ease;
+        }
+        .global-ai-report.expanded .global-ai-body {
+            max-height: none;
+        }
+        .global-ai-report:not(.expanded)::after {
+            content: "";
+            position: absolute;
+            left: 0;
+            right: 0;
+            bottom: 42px;
+            height: 72px;
+            pointer-events: none;
+            background: linear-gradient(to bottom, rgba(255, 255, 255, 0), var(--panel));
+        }
+        .global-ai-toggle {
+            position: relative;
+            z-index: 1;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            border: 1px solid rgba(193, 18, 31, .22);
+            border-radius: 999px;
+            background: #fff5f5;
+            color: var(--button);
+            padding: 7px 12px;
+            margin-top: 10px;
+            font-weight: 900;
+            cursor: pointer;
+            font-size: 14px;
         }
     </style>
 
@@ -71,7 +106,10 @@
             @if ($radar['aiReport'])
                 <div class="panel">
                     <h2>{{ $radar['aiReport']['title'] }}</h2>
-                    <div class="global-ai-report">{{ $radar['aiReport']['summary'] }}</div>
+                    <div class="global-ai-report" data-global-ai-report>
+                        <div class="global-ai-body">{{ $radar['aiReport']['summary'] }}</div>
+                        <button class="global-ai-toggle" type="button" data-global-ai-toggle>點我展開</button>
+                    </div>
                     <p class="market-date" style="margin-top:10px">
                         AI 更新：{{ \Carbon\CarbonImmutable::parse($radar['aiReport']['updatedAt'])->timezone('Asia/Taipei')->format('m/d H:i') }}
                     </p>
@@ -118,4 +156,24 @@
             </div>
         </section>
     @endforeach
+
+    <script>
+        document.querySelectorAll('[data-global-ai-report]').forEach((report) => {
+            const button = report.querySelector('[data-global-ai-toggle]');
+            const body = report.querySelector('.global-ai-body');
+
+            if (!button || !body) return;
+
+            if (body.scrollHeight <= body.clientHeight + 4) {
+                button.hidden = true;
+                report.classList.add('expanded');
+                return;
+            }
+
+            button.addEventListener('click', () => {
+                const expanded = report.classList.toggle('expanded');
+                button.textContent = expanded ? '收合內容' : '點我展開';
+            });
+        });
+    </script>
 @endsection
