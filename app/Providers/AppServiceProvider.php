@@ -56,6 +56,8 @@ class AppServiceProvider extends ServiceProvider
                         ->whereNotNull('finished_at')
                         ->whereIn('job_name', [
                             'global_market',
+                            'global_market_refresh',
+                            'global_influence_refresh',
                             'taifex_night',
                             'taifex_night_refresh',
                             'global_influence_night',

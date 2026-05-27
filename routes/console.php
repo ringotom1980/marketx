@@ -13,6 +13,22 @@ Schedule::command('market:global-morning-pipeline')
     ->timezone('Asia/Taipei')
     ->withoutOverlapping();
 
+foreach ([
+    // US close first pass and delayed Yahoo Finance confirmations.
+    '04:10', '04:40', '05:10', '06:30', '07:30',
+    // Japan / Korea close first pass and backfill checks.
+    '14:15', '14:45', '15:30',
+    // Hong Kong / China close first pass and backfill checks.
+    '16:15', '16:45', '17:30',
+    // Commodity / ADR late checks while the US session is active.
+    '22:20', '23:20',
+] as $time) {
+    Schedule::command('market:global-market-refresh')
+        ->dailyAt($time)
+        ->timezone('Asia/Taipei')
+        ->withoutOverlapping();
+}
+
 Schedule::command('market:taiwan-price-pipeline')
     ->dailyAt('14:05')
     ->timezone('Asia/Taipei')
