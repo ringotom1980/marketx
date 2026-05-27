@@ -129,10 +129,51 @@
             line-height: 1.5;
         }
 
+        .stock-info-tabs {
+            display: grid;
+            grid-template-columns: repeat(5, minmax(0, 1fr));
+            gap: 8px;
+            margin-bottom: 14px;
+        }
+
+        .stock-info-tab {
+            border: 1px solid var(--line);
+            border-radius: 8px;
+            background: #fff;
+            color: var(--muted);
+            padding: 10px 8px;
+            font-weight: 900;
+            cursor: pointer;
+            white-space: nowrap;
+        }
+
+        .stock-info-tab.active {
+            border-color: var(--button);
+            background: var(--button);
+            color: #fff;
+        }
+
+        .stock-info-panel {
+            display: none;
+        }
+
+        .stock-info-panel.active {
+            display: block;
+        }
+
         @media (max-width: 520px) {
             .k-chart-wrap { height: 300px; }
             .chart-tab { padding: 9px 4px; font-size: 13px; }
             .stock-watch-button { padding: 8px 10px; }
+            .stock-info-tabs {
+                grid-template-columns: repeat(5, max-content);
+                overflow-x: auto;
+                padding-bottom: 2px;
+            }
+            .stock-info-tab {
+                padding: 9px 12px;
+                font-size: 13px;
+            }
             .stock-header-row {
                 align-items: flex-start;
             }
@@ -192,9 +233,22 @@
         <p class="chart-empty" id="stock-chart-empty">目前尚未接入個股當日分時資料，先看日 K、周 K、年 K。</p>
     </section>
 
-    <section class="grid two" style="margin-top:16px">
-        <div class="panel">
-            <h2>K 線與技術分析</h2>
+    <section class="panel" style="margin-top:16px">
+        <div class="stock-info-tabs" data-stock-info-tabs>
+            <button class="stock-info-tab active" type="button" data-stock-tab="evaluation">評價</button>
+            <button class="stock-info-tab" type="button" data-stock-tab="technical">技術</button>
+            <button class="stock-info-tab" type="button" data-stock-tab="chip">籌碼</button>
+            <button class="stock-info-tab" type="button" data-stock-tab="fundamental">財務</button>
+            <button class="stock-info-tab" type="button" data-stock-tab="ai">AI 報告</button>
+        </div>
+
+        <div class="stock-info-panel active" data-stock-panel="evaluation">
+            <h2>評價</h2>
+            <p class="lead">{!! nl2br(e($summary)) !!}</p>
+        </div>
+
+        <div class="stock-info-panel" data-stock-panel="technical">
+            <h2>技術分析</h2>
             @if ($technical && ! empty($technical['signals']))
                 <div class="signal-list">
                     @foreach ($technical['signals'] as $signal)
@@ -209,7 +263,7 @@
             @endif
         </div>
 
-        <div class="panel">
+        <div class="stock-info-panel" data-stock-panel="chip">
             <h2>籌碼分析</h2>
             @if (! empty($chipSignals))
                 <div class="signal-list">
@@ -224,10 +278,8 @@
                 <p class="lead">目前籌碼資料不足，等待三大法人、融資融券、借券與外資持股資料後會產生分析。</p>
             @endif
         </div>
-    </section>
 
-    <section class="grid two" style="margin-top:16px">
-        <div class="panel">
+        <div class="stock-info-panel" data-stock-panel="fundamental">
             <h2>財務營收分析</h2>
             @if (! empty($fundamentalSignals))
                 <div class="signal-list">
@@ -243,13 +295,30 @@
             @endif
         </div>
 
-        <div class="panel">
-            <h2>評價</h2>
-            <p class="lead">{!! nl2br(e($summary)) !!}</p>
+        <div class="stock-info-panel" data-stock-panel="ai">
+            <h2>AI 報告</h2>
+            @if ($latestReport)
+                <p class="lead" style="white-space:pre-line">{{ $latestReport->summary }}</p>
+            @else
+                <p class="lead">目前尚未產生此股票的 AI 報告。若已加入追蹤清單，管理者可在追蹤清單產生報告。</p>
+            @endif
         </div>
     </section>
 
     <script>
+        (() => {
+            const tabs = Array.from(document.querySelectorAll('[data-stock-info-tabs] .stock-info-tab'));
+            const panels = Array.from(document.querySelectorAll('[data-stock-panel]'));
+
+            tabs.forEach((tab) => {
+                tab.addEventListener('click', () => {
+                    const target = tab.dataset.stockTab;
+                    tabs.forEach((item) => item.classList.toggle('active', item === tab));
+                    panels.forEach((panel) => panel.classList.toggle('active', panel.dataset.stockPanel === target));
+                });
+            });
+        })();
+
         (() => {
             const chartData = @json($chartData);
             const canvas = document.getElementById('stock-k-chart');

@@ -978,6 +978,7 @@ Route::get('/s/{symbol}', function (string $symbol, StockEventChainBuilder $even
         'stockThemes' => $stockThemes,
         'fundamentalSignals' => $fundamentalSignals,
         'eventChains' => $eventChains,
+        'latestReport' => $latestReport,
         'summary' => $stockEvaluationSummary,
     ]);
 });
