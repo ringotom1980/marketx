@@ -28,6 +28,7 @@ class GlobalRadarBuilder
 
         return [
             'asOf' => $this->latestUpdatedAt($markets),
+            'aiReport' => $this->latestAiReport(),
             'groups' => collect(self::GROUPS)->map(function (array $group) use ($markets) {
                 return [
                     'title' => $group['title'],
@@ -38,6 +39,25 @@ class GlobalRadarBuilder
                         ->all(),
                 ];
             })->all(),
+        ];
+    }
+
+    private function latestAiReport(): ?array
+    {
+        $row = DB::table('global_ai_reports')
+            ->orderByDesc('report_date')
+            ->first(['report_date', 'title', 'summary', 'model', 'updated_at']);
+
+        if (! $row) {
+            return null;
+        }
+
+        return [
+            'reportDate' => (string) $row->report_date,
+            'title' => $row->title ?: '今日全球盤前觀察',
+            'summary' => (string) $row->summary,
+            'model' => $row->model,
+            'updatedAt' => $row->updated_at,
         ];
     }
 

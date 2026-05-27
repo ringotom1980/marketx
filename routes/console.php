@@ -29,6 +29,11 @@ foreach ([
         ->withoutOverlapping();
 }
 
+Schedule::command('market:ai-generate-global-premarket --live')
+    ->dailyAt('08:00')
+    ->timezone('Asia/Taipei')
+    ->withoutOverlapping();
+
 Schedule::command('market:taiwan-price-pipeline')
     ->dailyAt('14:05')
     ->timezone('Asia/Taipei')

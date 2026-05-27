@@ -50,6 +50,7 @@ return [
         'max_stock_ai_per_day' => env('MAX_STOCK_AI_PER_DAY', 10),
         'max_theme_ai_per_day' => env('MAX_THEME_AI_PER_DAY', 40),
         'max_dynamic_ai_per_day' => env('MAX_DYNAMIC_AI_PER_DAY', 5),
+        'max_global_ai_per_day' => env('MAX_GLOBAL_AI_PER_DAY', 1),
     ],
 
 ];

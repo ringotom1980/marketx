@@ -58,12 +58,30 @@
         .market-change.red { color: var(--red); }
         .market-change.green { color: var(--green); }
         .market-change.amber { color: var(--amber); }
+        .global-ai-report {
+            white-space: pre-line;
+            line-height: 1.75;
+            color: var(--ink);
+        }
     </style>
 
     <section class="page-head global-head">
         <div>
             <h1>全球雷達</h1>
-            <p class="lead">主要國際指數與台股相關 ADR 觀察。</p>
+            @if ($radar['aiReport'])
+                <div class="panel">
+                    <h2>{{ $radar['aiReport']['title'] }}</h2>
+                    <div class="global-ai-report">{{ $radar['aiReport']['summary'] }}</div>
+                    <p class="market-date" style="margin-top:10px">
+                        AI 更新：{{ \Carbon\CarbonImmutable::parse($radar['aiReport']['updatedAt'])->timezone('Asia/Taipei')->format('m/d H:i') }}
+                    </p>
+                </div>
+            @else
+                <div class="panel">
+                    <h2>今日全球盤前觀察</h2>
+                    <p class="lead">今日 Gemini 全球盤前觀察產生中。</p>
+                </div>
+            @endif
             <p class="market-date">資料更新：{{ $radar['asOf'] ? \Carbon\CarbonImmutable::parse($radar['asOf'])->timezone('Asia/Taipei')->format('m/d H:i') : '待更新' }}</p>
         </div>
     </section>
