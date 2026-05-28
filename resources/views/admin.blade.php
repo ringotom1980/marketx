@@ -10,6 +10,7 @@
             <h1>後台</h1>
             <p class="lead">資料狀態、AI 額度與手動任務控制。AI 預設保持關閉，只在按下手動任務時執行少量追蹤清單報告。</p>
         </div>
+        <a class="button ghost" href="/admin/agents">AI 代理人</a>
     </section>
 
     @if (session('status') || session('error'))

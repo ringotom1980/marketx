@@ -557,7 +557,7 @@
                 </a>
                 <div class="account-actions" aria-label="帳號功能">
                     @if (session('marketx_admin') === true || session('marketx_is_admin') === true)
-                        <a class="{{ request()->is('admin') ? 'active' : '' }}" href="/admin">後台</a>
+                        <a class="{{ request()->is('admin') || request()->is('admin/*') ? 'active' : '' }}" href="/admin">後台</a>
                     @endif
                     <a href="/logout">登出</a>
                 </div>

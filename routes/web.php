@@ -2,6 +2,10 @@
 
 use App\Models\Stock;
 use App\Models\User;
+use App\Models\AgentFinding;
+use App\Models\AgentMemory;
+use App\Models\AgentRole;
+use App\Models\AgentRun;
 use App\Support\ChipSignalAnalyzer;
 use App\Support\EventClusterDisplay;
 use App\Support\FundamentalSignalAnalyzer;
@@ -1524,6 +1528,67 @@ Route::get('/admin', function (AiPipelineService $aiPipeline) {
         'authLogs' => $authLogs,
         'members' => $members,
         'onlineMembers' => $onlineMembers,
+    ]);
+});
+
+Route::get('/admin/agents', function () {
+    MarketxAuth::requireAdmin();
+
+    $roles = AgentRole::query()
+        ->withCount([
+            'runs',
+            'findings',
+            'findings as pending_findings_count' => fn ($query) => $query->whereIn('status', ['pending', 'observing']),
+            'memories',
+        ])
+        ->orderBy('id')
+        ->get()
+        ->map(function (AgentRole $role) {
+            $role->latest_run = AgentRun::query()
+                ->where('agent_role_id', $role->id)
+                ->orderByDesc('started_at')
+                ->orderByDesc('id')
+                ->first();
+
+            return $role;
+        });
+
+    $latestRuns = AgentRun::query()
+        ->with('role:id,name,slug')
+        ->orderByDesc('started_at')
+        ->orderByDesc('id')
+        ->limit(12)
+        ->get();
+
+    $pendingFindings = AgentFinding::query()
+        ->with('role:id,name,slug')
+        ->whereIn('status', ['pending', 'observing'])
+        ->orderByRaw("case severity when 'critical' then 1 when 'high' then 2 when 'medium' then 3 when 'low' then 4 else 5 end")
+        ->orderByDesc('created_at')
+        ->limit(20)
+        ->get();
+
+    $latestMemories = AgentMemory::query()
+        ->with('role:id,name,slug')
+        ->where('status', 'active')
+        ->orderByDesc('updated_at')
+        ->limit(20)
+        ->get();
+
+    $summary = [
+        'roles' => $roles->count(),
+        'active_roles' => $roles->where('is_active', true)->count(),
+        'pending_findings' => AgentFinding::query()->whereIn('status', ['pending', 'observing'])->count(),
+        'active_memories' => AgentMemory::query()->where('status', 'active')->count(),
+        'today_runs' => AgentRun::query()->whereDate('created_at', now('Asia/Taipei')->toDateString())->count(),
+    ];
+
+    return view('admin_agents', [
+        'roles' => $roles,
+        'latestRuns' => $latestRuns,
+        'pendingFindings' => $pendingFindings,
+        'latestMemories' => $latestMemories,
+        'summary' => $summary,
     ]);
 });
 
