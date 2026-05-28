@@ -162,10 +162,14 @@ This log records each VPS-side AI agent step so work can continue smoothly betwe
   - `qwen2.5:1.5b` timed out after 120 seconds on two cases, so it is too slow for the VPS default.
   - `qwen2.5:0.5b` completed a one-case test in about 34 seconds.
 - Current default:
-  - `qwen2.5:0.5b`
+  - `qwen2.5:1.5b`
+- Runtime policy:
+  - Quality is more important than speed because the job runs at `01:20`.
+  - Timeout is set to 600 seconds in the schedule.
+  - The command allows up to 900 seconds for manual deep tests.
 - Current limitation:
-  - 0.5B can read and summarize, but its judgment is weak.
-  - It should be treated as a background reviewer only, not the final decision maker.
+  - 1.5B is slow on the 2 CPU / 4GB VPS.
+  - It should run only as an overnight background reviewer, not during user-facing requests.
 - Cleanup:
   - The first 0.5B test produced one weak finding without concrete `AG-` evidence.
   - It was marked rejected after the guard was added.

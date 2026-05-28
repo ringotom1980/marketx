@@ -13,7 +13,7 @@ use Illuminate\Support\Str;
 class RunLocalOllamaAgent extends Command
 {
     protected $signature = 'market:agents-run-ollama
-        {--model=qwen2.5:0.5b : Ollama model name}
+        {--model=qwen2.5:1.5b : Ollama model name}
         {--limit=5 : Number of recent findings to review}
         {--timeout=90 : Ollama request timeout seconds}
         {--dry-run : Preview prompt without calling Ollama}';
@@ -25,8 +25,8 @@ class RunLocalOllamaAgent extends Command
     public function handle(): int
     {
         $limit = max(1, min(10, (int) $this->option('limit')));
-        $timeout = max(10, min(180, (int) $this->option('timeout')));
-        $model = trim((string) $this->option('model')) ?: 'qwen2.5:0.5b';
+        $timeout = max(10, min(900, (int) $this->option('timeout')));
+        $model = trim((string) $this->option('model')) ?: 'qwen2.5:1.5b';
 
         $findings = AgentFinding::query()
             ->with('role:id,slug,name')
