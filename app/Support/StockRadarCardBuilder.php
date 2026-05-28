@@ -207,10 +207,9 @@ class StockRadarCardBuilder
         }
 
         if ($type === 'risk') {
-            return $riskConfidence >= 18
-                && $opportunity <= 80
-                && ($bear + $risk) >= max(3, $bull - 2)
-                && $this->hasAny($stock->radar_reasons, ['擃??暸?頧摹', '??頧摹', '銋?之', 'RSI ?', 'KD ?', 'MACD 甇?蝮格?', '閰??', '????', '?頧摹']);
+            return $this->isHighExpectationRisk($stock)
+                && ! $this->isLowBaseVolumeBreakout($stock)
+                && count($stock->radar_reasons) >= 2;
         }
 
         if ($type === 'weak') {
@@ -305,6 +304,15 @@ class StockRadarCardBuilder
     {
         $reasons = [];
 
+        if ($this->priceExtended($stock)) {
+            $reasons[] = $this->reason('漲幅偏高', 'warning');
+        }
+        if ($this->valuationStretched($stock)) {
+            $reasons[] = $this->reason('評價偏貴', 'warning');
+        }
+        if ($this->fundamentalsLagPrice($stock)) {
+            $reasons[] = $this->reason('營收跟不上', 'warning');
+        }
         if ($this->highVolumeWeakReversal($stock)) {
             $reasons[] = $this->reason('高檔放量轉弱', 'warning');
         }
@@ -325,6 +333,9 @@ class StockRadarCardBuilder
         }
         if ($this->marginHeavy($stock)) {
             $reasons[] = $this->reason('融資偏重', 'warning');
+        }
+        if ($this->fragileChipAtHighPrice($stock)) {
+            $reasons[] = $this->reason('高檔籌碼轉弱', 'warning');
         }
         if ($this->revenueWeak($stock)) {
             $reasons[] = $this->reason('營收轉弱', 'down');
@@ -577,6 +588,89 @@ class StockRadarCardBuilder
         return ((float) ($stock->bais20 ?? 0) >= 12)
             || ((float) ($stock->rsi14 ?? 0) > 78)
             || ((float) ($stock->return20 ?? 0) >= 18);
+    }
+
+    private function isHighExpectationRisk(object $stock): bool
+    {
+        $rsi14 = $this->num($stock->rsi14);
+        $bais20 = $this->num($stock->bais20);
+
+        $highExpectation = $this->priceExtended($stock)
+            || $this->themeOverheated($stock)
+            || ($rsi14 !== null && $rsi14 >= 74)
+            || ($bais20 !== null && $bais20 >= 10);
+
+        if (! $highExpectation) {
+            return false;
+        }
+
+        $riskEvidence = 0;
+
+        foreach ([
+            $this->valuationStretched($stock),
+            $this->fundamentalsLagPrice($stock),
+            $this->fragileChipAtHighPrice($stock),
+            $this->highVolumeWeakReversal($stock),
+            $this->macdPositiveShrinking($stock),
+            $this->marginHeavy($stock),
+            $this->institutionalSelling($stock),
+            $this->revenueWeak($stock),
+        ] as $flag) {
+            if ($flag) {
+                $riskEvidence++;
+            }
+        }
+
+        return $riskEvidence >= 1;
+    }
+
+    private function priceExtended(object $stock): bool
+    {
+        return (float) ($stock->return20 ?? 0) >= 12
+            || (float) ($stock->return60 ?? 0) >= 25
+            || (float) ($stock->bais20 ?? 0) >= 10
+            || (
+                $this->num($stock->close) !== null
+                && $this->num($stock->bollinger_upper20) !== null
+                && $this->num($stock->close) >= $this->num($stock->bollinger_upper20) * 0.99
+            );
+    }
+
+    private function themeOverheated(object $stock): bool
+    {
+        return (int) ($stock->theme_score ?? 0) >= 75
+            && ((float) ($stock->return20 ?? 0) >= 8 || (float) ($stock->bais20 ?? 0) >= 8);
+    }
+
+    private function valuationStretched(object $stock): bool
+    {
+        $per = $this->num($stock->per);
+        $pb = $this->num($stock->pb_ratio);
+
+        return ($per !== null && $per >= 35)
+            || ($per !== null && $per >= 25 && $this->fundamentalsLagPrice($stock))
+            || ($pb !== null && $pb >= 4.5 && ! $this->revenueStrong($stock));
+    }
+
+    private function fundamentalsLagPrice(object $stock): bool
+    {
+        $return20 = (float) ($stock->return20 ?? 0);
+        $return60 = (float) ($stock->return60 ?? 0);
+        $mom = $this->num($stock->mom_pct);
+        $yoy = $this->num($stock->yoy_pct);
+
+        if ($mom === null && $yoy === null) {
+            return false;
+        }
+
+        return ($return20 >= 12 || $return60 >= 25)
+            && (($mom !== null && $mom <= 0) || ($yoy !== null && $yoy <= 3));
+    }
+
+    private function fragileChipAtHighPrice(object $stock): bool
+    {
+        return ($this->priceExtended($stock) || $this->themeOverheated($stock))
+            && ($this->institutionalSelling($stock) || $this->marginHeavy($stock));
     }
 
     private function movingAverageBull(object $stock): bool
