@@ -117,6 +117,27 @@
             text-decoration: none;
             min-width: 0;
         }
+        .stock-signal-identity {
+            display: flex;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 6px;
+            min-width: 0;
+        }
+        .stock-theme-pill {
+            display: inline-flex;
+            align-items: center;
+            min-height: 22px;
+            padding: 2px 8px;
+            border: 1px solid #f3b8b8;
+            border-radius: 999px;
+            background: #fff6f6;
+            color: var(--button);
+            font-size: 12px;
+            font-weight: 800;
+            line-height: 1.2;
+            white-space: nowrap;
+        }
         .stock-signal-confidence {
             color: var(--ink);
             font-size: inherit;
@@ -311,7 +332,12 @@
                     @forelse ($card['items'] as $stock)
                         <div class="stock-signal-item">
                             <div class="stock-signal-top">
-                                <a class="stock-signal-name" href="/s/{{ $stock['symbol'] }}">{{ $stock['name'] }}</a>
+                                <div class="stock-signal-identity">
+                                    <a class="stock-signal-name" href="/s/{{ $stock['symbol'] }}">{{ $stock['name'] }}</a>
+                                    @foreach (array_slice($stock['themes'] ?? [], 0, 2) as $theme)
+                                        <span class="stock-theme-pill">{{ $theme['name'] }}</span>
+                                    @endforeach
+                                </div>
                                 <div class="stock-signal-confidence">信心指數{{ $stock['confidence'] }}%</div>
                             </div>
                             <div class="reason-pills">

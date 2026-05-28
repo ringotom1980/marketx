@@ -549,6 +549,7 @@ class StockRadarCardBuilder
     private function metrics(object $stock): array
     {
         return [
+            'themes' => $this->stockThemes((int) $stock->stock_id),
             'total_score' => (int) ($stock->total_score ?? 0),
             'theme_score' => (int) ($stock->theme_score ?? 0),
             'technical_score' => (int) ($stock->technical_score ?? 0),
@@ -569,6 +570,36 @@ class StockRadarCardBuilder
             'bear_reason_count' => (int) ($stock->bear_reason_count ?? 0),
             'risk_reason_count' => (int) ($stock->risk_reason_count ?? 0),
         ];
+    }
+
+    /**
+     * @return array<int, array{name:string,slug:string,heat_score:int|null}>
+     */
+    private function stockThemes(int $stockId): array
+    {
+        return DB::table('stock_theme_map')
+            ->join('themes', 'themes.id', '=', 'stock_theme_map.theme_id')
+            ->leftJoin('theme_scores', function ($join) {
+                $join->on('themes.id', '=', 'theme_scores.theme_id')
+                    ->whereRaw('theme_scores.score_date = (select max(ts.score_date) from theme_scores ts where ts.theme_id = themes.id)');
+            })
+            ->where('stock_theme_map.stock_id', $stockId)
+            ->where('themes.is_active', true)
+            ->where(function ($query) {
+                $query->whereNull('theme_scores.heat_score')
+                    ->orWhere('theme_scores.heat_score', '>', 0);
+            })
+            ->orderByDesc('theme_scores.heat_score')
+            ->orderByDesc('stock_theme_map.weight')
+            ->limit(2)
+            ->get(['themes.name', 'themes.slug', 'theme_scores.heat_score'])
+            ->map(fn (object $theme) => [
+                'name' => (string) $theme->name,
+                'slug' => (string) $theme->slug,
+                'heat_score' => $theme->heat_score === null ? null : (int) $theme->heat_score,
+            ])
+            ->values()
+            ->all();
     }
 
     private function reason(string $label, string $tone): array

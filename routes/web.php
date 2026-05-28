@@ -622,6 +622,7 @@ Route::get('/', function () {
                 'stock_radar_cards.rank',
                 'stock_radar_cards.confidence_score',
                 'stock_radar_cards.reasons',
+                'stock_radar_cards.metrics_payload',
                 'stocks.symbol',
                 'stocks.name',
             ])
@@ -631,12 +632,17 @@ Route::get('/', function () {
         $items = $stockRadarRows
             ->where('card_type', $type)
             ->sortBy('rank')
-            ->map(fn ($row) => [
-                'symbol' => $row->symbol,
-                'name' => $row->name,
-                'confidence' => (int) $row->confidence_score,
-                'reasons' => json_decode((string) $row->reasons, true) ?: [],
-            ])
+            ->map(function ($row) {
+                $metrics = json_decode((string) $row->metrics_payload, true) ?: [];
+
+                return [
+                    'symbol' => $row->symbol,
+                    'name' => $row->name,
+                    'confidence' => (int) $row->confidence_score,
+                    'reasons' => json_decode((string) $row->reasons, true) ?: [],
+                    'themes' => is_array($metrics['themes'] ?? null) ? $metrics['themes'] : [],
+                ];
+            })
             ->values();
 
         return ['title' => $config['title'], 'empty' => $config['empty'], 'items' => $items];
