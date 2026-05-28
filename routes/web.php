@@ -759,6 +759,32 @@ Route::get('/search', function (Request $request) {
     ]);
 });
 
+Route::get('/api/stocks/search', function (Request $request) {
+    $query = trim((string) $request->query('q', ''));
+
+    if ($query === '') {
+        return response()->json([]);
+    }
+
+    $stocks = Stock::query()
+        ->where(function ($builder) use ($query) {
+            $builder
+                ->where('symbol', 'like', $query.'%')
+                ->orWhere('name', 'like', '%'.$query.'%')
+                ->orWhere('industry', 'like', '%'.$query.'%');
+        })
+        ->orderByRaw('CASE WHEN symbol = ? THEN 0 WHEN symbol LIKE ? THEN 1 WHEN name LIKE ? THEN 2 ELSE 3 END', [
+            $query,
+            $query.'%',
+            $query.'%',
+        ])
+        ->orderBy('symbol')
+        ->limit(12)
+        ->get(['symbol', 'name', 'market', 'industry']);
+
+    return response()->json($stocks);
+});
+
 Route::get('/s/{symbol}', function (string $symbol, StockEventChainBuilder $eventChainBuilder) {
     $stockRecord = Stock::query()
         ->with([

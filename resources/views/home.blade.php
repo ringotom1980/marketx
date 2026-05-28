@@ -236,10 +236,10 @@
             <h1>今日全球 × 台股狀態中心</h1>
             <p class="lead">整合全球市場、重大事件、題材熱度與台股個股狀態，先用免費官方資料與規則式引擎建立決策雷達。</p>
         </div>
-        <form class="search" action="/search" method="get">
-            <input name="q" value="{{ request('q') }}" placeholder="搜尋股票代號、名稱、產業">
-            <button type="submit">搜尋</button>
-        </form>
+        @include('partials.stock_search', [
+            'value' => request('q'),
+            'placeholder' => '搜尋股票代號、名稱、產業',
+        ])
     </section>
 
     <section class="panel" style="margin-bottom:16px;border-color:#fcd34d;background:#fffbeb">

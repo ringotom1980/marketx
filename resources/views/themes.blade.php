@@ -82,6 +82,9 @@
             <h1>題材雷達</h1>
             <p class="lead">追蹤題材熱度、代表股票與資金輪動，早上 08:00 產生題材盤前觀察。</p>
         </div>
+        @include('partials.stock_search', [
+            'placeholder' => '搜尋股票代號、名稱、產業',
+        ])
     </section>
 
     @if ($aiReport)

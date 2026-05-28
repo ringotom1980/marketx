@@ -147,6 +147,9 @@
             @endif
             <p class="market-date">資料更新：{{ $radar['asOf'] ? \Carbon\CarbonImmutable::parse($radar['asOf'])->timezone('Asia/Taipei')->format('m/d H:i') : '待更新' }}</p>
         </div>
+        @include('partials.stock_search', [
+            'placeholder' => '搜尋股票代號、名稱、產業',
+        ])
     </section>
 
     @foreach ($radar['groups'] as $group)
