@@ -20,6 +20,7 @@
     ];
     $badgeClass = fn (?string $value) => in_array($value, ['critical', 'high', 'failed'], true) ? 'red' : 'amber';
     $formatTime = fn ($time) => $time ? \Carbon\CarbonImmutable::parse($time)->timezone('Asia/Taipei')->format('m/d H:i') : '尚未執行';
+    $caseNo = fn ($finding) => 'AG-'.\Carbon\CarbonImmutable::parse($finding->created_at)->timezone('Asia/Taipei')->format('Ymd').'-'.str_pad((string) $finding->id, 5, '0', STR_PAD_LEFT);
 @endphp
 
 @section('content')
@@ -98,6 +99,7 @@
                         @endphp
                         <tr>
                             <th>
+                                <span class="lead" style="font-size:12px">{{ $caseNo($finding) }}</span><br>
                                 {{ $finding->title }}<br>
                                 <span class="badge {{ $badgeClass($finding->severity) }}">{{ $severityLabel[$finding->severity] ?? $finding->severity }}</span>
                             </th>
@@ -114,20 +116,7 @@
                                         @endforeach
                                     </div>
                                 @endif
-                                <span class="lead" style="font-size:12px">{{ $formatTime($finding->created_at) }}</span>
-                                <form method="post" action="/admin/agents/findings/{{ $finding->id }}/review" style="margin-top:10px;display:grid;gap:8px">
-                                    @csrf
-                                    <select name="status" style="width:100%;border:1px solid var(--line);border-radius:8px;padding:10px;font-size:14px;background:#fff">
-                                        <option value="accepted">採納</option>
-                                        <option value="resolved">已處理</option>
-                                        <option value="observing">觀察中</option>
-                                        <option value="rejected">拒絕</option>
-                                    </select>
-                                    <textarea name="codex_feedback" rows="3" placeholder="寫下處理原因，這會成為我回饋給代理人的紀錄。" required style="width:100%;border:1px solid var(--line);border-radius:8px;padding:10px;font-size:14px"></textarea>
-                                    <input name="memory_title" type="text" placeholder="記憶標題，留空會自動使用案例標題" style="width:100%;border:1px solid var(--line);border-radius:8px;padding:10px;font-size:14px">
-                                    <p class="lead" style="font-size:12px;margin:0">送出後會自動寫入學習記憶庫，作為代理人下次判斷依據。</p>
-                                    <button class="button" type="submit" style="width:100%">送出回饋</button>
-                                </form>
+                                <span class="lead" style="font-size:12px">建立 {{ $formatTime($finding->created_at) }}</span>
                             </td>
                         </tr>
                     @endforeach
@@ -172,6 +161,7 @@
                 @foreach ($reviewedFindings as $finding)
                     <tr>
                         <th>
+                            <span class="lead" style="font-size:12px">{{ $caseNo($finding) }}</span><br>
                             {{ $finding->title }}<br>
                             <span class="badge {{ $finding->status === 'accepted' || $finding->status === 'resolved' ? 'red' : 'amber' }}">{{ $statusLabel[$finding->status] ?? $finding->status }}</span>
                         </th>
