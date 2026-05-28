@@ -124,3 +124,8 @@ Schedule::command('market:build-daily-context --session=daily')
     ->dailyAt('03:20')
     ->timezone('Asia/Taipei')
     ->withoutOverlapping();
+
+Schedule::command('market:export-agent-knowledge-pack')
+    ->dailyAt('03:30')
+    ->timezone('Asia/Taipei')
+    ->withoutOverlapping();
