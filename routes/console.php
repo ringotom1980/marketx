@@ -108,24 +108,22 @@ Schedule::command('market:taifex-night-pipeline')
     ->timezone('Asia/Taipei')
     ->withoutOverlapping();
 
-foreach (['17:10', '22:10', '03:10'] as $time) {
-    Schedule::command('market:agents-run')
-        ->dailyAt($time)
-        ->timezone('Asia/Taipei')
-        ->withoutOverlapping();
-}
-
-Schedule::command('market:agents-review-cases')
-    ->dailyAt('02:50')
-    ->timezone('Asia/Taipei')
-    ->withoutOverlapping();
-
 Schedule::command('market:build-daily-context --session=daily')
-    ->dailyAt('03:20')
+    ->dailyAt('00:50')
     ->timezone('Asia/Taipei')
     ->withoutOverlapping();
 
 Schedule::command('market:export-agent-knowledge-pack')
-    ->dailyAt('03:30')
+    ->dailyAt('00:55')
+    ->timezone('Asia/Taipei')
+    ->withoutOverlapping();
+
+Schedule::command('market:agents-run')
+    ->dailyAt('01:00')
+    ->timezone('Asia/Taipei')
+    ->withoutOverlapping();
+
+Schedule::command('market:agents-review-cases')
+    ->dailyAt('01:40')
     ->timezone('Asia/Taipei')
     ->withoutOverlapping();

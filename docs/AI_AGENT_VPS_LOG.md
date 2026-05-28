@@ -100,3 +100,23 @@ This log records each VPS-side AI agent step so work can continue smoothly betwe
     - read Knowledge Pack,
     - ask the local model only for very small tasks,
     - fall back to rule-based findings if Ollama times out.
+
+### Step 5 - Nightly agent schedule decision
+
+- Goal: keep AI agents away from normal browsing/data-refresh hours.
+- Decision:
+  - VPS agents start at `01:00` Asia/Taipei.
+  - Codex review/fix window starts at `04:00` Asia/Taipei.
+- Laravel schedule design:
+  - `00:50` build daily market context:
+    `market:build-daily-context --session=daily`
+  - `00:55` export Knowledge Pack:
+    `market:export-agent-knowledge-pack`
+  - `01:00` run rule-based agents:
+    `market:agents-run`
+  - `01:40` review/triage pending agent cases:
+    `market:agents-review-cases`
+- Reason:
+  - 01:00 gives agents a clean overnight window.
+  - 04:00 leaves time for agent findings to be created before Codex review.
+  - This avoids competing with Taiwan market, US market, and user browsing peak periods.
