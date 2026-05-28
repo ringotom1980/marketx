@@ -123,6 +123,11 @@ Schedule::command('market:agents-run')
     ->timezone('Asia/Taipei')
     ->withoutOverlapping();
 
+Schedule::command('market:agents-run-ollama --model=qwen2.5:0.5b --limit=5 --timeout=90')
+    ->dailyAt('01:20')
+    ->timezone('Asia/Taipei')
+    ->withoutOverlapping();
+
 Schedule::command('market:agents-review-cases')
     ->dailyAt('01:40')
     ->timezone('Asia/Taipei')

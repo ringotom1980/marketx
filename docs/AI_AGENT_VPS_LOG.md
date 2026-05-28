@@ -120,3 +120,52 @@ This log records each VPS-side AI agent step so work can continue smoothly betwe
   - 01:00 gives agents a clean overnight window.
   - 04:00 leaves time for agent findings to be created before Codex review.
   - This avoids competing with Taiwan market, US market, and user browsing peak periods.
+
+### Step 6 - Stable agent case query command
+
+- Problem found:
+  - Manual DB queries through nested PowerShell, SSH and shell quoting are fragile.
+  - This is unsafe for the future Ollama runner because the local model also needs reliable case/context lookup.
+- Fix:
+  - Added Laravel command:
+    `market:agents-latest-findings`
+  - Human-readable mode shows recent cases with case number, time, agent, status, severity, type, page/symbol and details.
+  - Machine-readable mode supports:
+    `market:agents-latest-findings --json`
+  - Future Ollama integration must query agent findings through Laravel services/commands, not shell SQL.
+- VPS verification:
+  ```bash
+  cd /home/ringo/apps/marketx
+  php artisan market:agents-latest-findings --limit=5
+  ```
+- Verification result:
+  - Command returned the latest 5 agent cases successfully.
+  - Latest cases included `AG-20260529-00050` and `AG-20260529-00049` for missing daily AI reports.
+
+### Step 7 - Connect Ollama as a conservative nightly reviewer
+
+- Goal:
+  - Let the VPS local model review recent agent cases without affecting website requests.
+- Added command:
+  - `market:agents-run-ollama`
+  - `market:agents-mark-finding` for safe single-case status updates without shell SQL.
+- Schedule:
+  - `01:20` Asia/Taipei, after rule-based agents at `01:00` and before case review at `01:40`.
+- Safety design:
+  - Reads recent `pending` / `observing` cases through Laravel Eloquent.
+  - Calls Ollama only from a background Artisan command.
+  - Writes output to `agent_runs`.
+  - Creates new findings only when the model cites an `AG-` case number as concrete evidence.
+  - Invalid page values are ignored instead of written into the database.
+  - Timeout is capped so the model cannot block normal site usage.
+- Model test:
+  - `qwen2.5:1.5b` timed out after 120 seconds on two cases, so it is too slow for the VPS default.
+  - `qwen2.5:0.5b` completed a one-case test in about 34 seconds.
+- Current default:
+  - `qwen2.5:0.5b`
+- Current limitation:
+  - 0.5B can read and summarize, but its judgment is weak.
+  - It should be treated as a background reviewer only, not the final decision maker.
+- Cleanup:
+  - The first 0.5B test produced one weak finding without concrete `AG-` evidence.
+  - It was marked rejected after the guard was added.
