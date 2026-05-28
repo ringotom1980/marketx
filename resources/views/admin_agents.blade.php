@@ -92,6 +92,10 @@
                 <table class="table">
                     <tbody>
                     @foreach ($pendingFindings as $finding)
+                        @php
+                            $payload = is_array($finding->payload) ? $finding->payload : (is_string($finding->payload) ? json_decode($finding->payload, true) : []);
+                            $relatedMemories = is_array($payload) ? ($payload['related_memories'] ?? []) : [];
+                        @endphp
                         <tr>
                             <th>
                                 {{ $finding->title }}<br>
@@ -100,6 +104,16 @@
                             <td>
                                 {{ $finding->role?->name ?? '未指定代理人' }}｜{{ $finding->page ?? '全站' }}<br>
                                 <span class="lead" style="font-size:13px">{{ \Illuminate\Support\Str::limit($finding->description, 120) }}</span><br>
+                                @if (! empty($relatedMemories))
+                                    <div style="margin-top:8px;display:grid;gap:6px">
+                                        @foreach (array_slice($relatedMemories, 0, 2) as $memory)
+                                            <div style="border-left:3px solid #fecaca;padding-left:8px">
+                                                <strong style="font-size:12px">引用記憶：{{ $memory['title'] ?? '未命名記憶' }}</strong><br>
+                                                <span class="lead" style="font-size:12px">{{ \Illuminate\Support\Str::limit($memory['rule_summary'] ?? '', 90) }}</span>
+                                            </div>
+                                        @endforeach
+                                    </div>
+                                @endif
                                 <span class="lead" style="font-size:12px">{{ $formatTime($finding->created_at) }}</span>
                             </td>
                         </tr>

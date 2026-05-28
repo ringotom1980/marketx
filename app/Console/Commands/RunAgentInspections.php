@@ -540,6 +540,10 @@ class RunAgentInspections extends Command
             ->whereDate('created_at', $this->inspectionDate)
             ->first();
 
+        $payload = $data['payload'] ?? [];
+        $payload = is_array($payload) ? $payload : ['raw' => $payload];
+        $payload['related_memories'] = $this->relatedMemories($role, $data);
+
         $values = [
             'agent_run_id' => $run->id,
             'severity' => $data['severity'] ?? 'info',
@@ -547,7 +551,7 @@ class RunAgentInspections extends Command
             'description' => $data['description'],
             'evidence' => $data['evidence'] ?? null,
             'recommendation' => $data['recommendation'] ?? null,
-            'payload' => $data['payload'] ?? null,
+            'payload' => $payload,
             'updated_at' => now(),
         ];
 
@@ -562,6 +566,105 @@ class RunAgentInspections extends Command
         ]));
 
         return 1;
+    }
+
+    /**
+     * @param array<string,mixed> $data
+     * @return array<int,array<string,mixed>>
+     */
+    private function relatedMemories(AgentRole $role, array $data): array
+    {
+        $text = implode(' ', array_filter([
+            $role->slug,
+            $data['finding_type'] ?? '',
+            $data['page'] ?? '',
+            $data['title'] ?? '',
+            $data['description'] ?? '',
+            $data['evidence'] ?? '',
+            $data['recommendation'] ?? '',
+        ]));
+
+        $memories = AgentMemory::query()
+            ->leftJoin('agent_roles', 'agent_roles.id', '=', 'agent_memories.agent_role_id')
+            ->where('agent_memories.status', 'active')
+            ->where(function ($query) use ($role) {
+                $query->whereNull('agent_memories.agent_role_id')
+                    ->orWhere('agent_roles.slug', $role->slug)
+                    ->orWhere('agent_roles.slug', 'learning-recorder');
+            })
+            ->orderByDesc('agent_memories.confidence')
+            ->get([
+                'agent_memories.id',
+                'agent_memories.title',
+                'agent_memories.memory_type',
+                'agent_memories.rule_summary',
+                'agent_memories.correct_pattern',
+                'agent_memories.wrong_pattern',
+                'agent_memories.confidence',
+                'agent_memories.payload',
+                'agent_roles.name as role_name',
+                'agent_roles.slug as role_slug',
+            ]);
+
+        return $memories
+            ->map(function ($memory) use ($text) {
+                $payload = $this->json($memory->payload);
+                $terms = array_values(array_unique(array_filter(array_merge(
+                    [$memory->title, $memory->memory_type, data_get($payload, 'category')],
+                    (array) data_get($payload, 'signals', []),
+                    $this->keywordsForMemory((string) $memory->title),
+                ))));
+                $score = collect($terms)->sum(function (string $term) use ($text) {
+                    if ($term === '') {
+                        return 0;
+                    }
+
+                    return Str::contains($text, $term) ? (mb_strlen($term) >= 4 ? 3 : 1) : 0;
+                });
+
+                if ($score === 0) {
+                    return null;
+                }
+
+                return [
+                    'id' => (int) $memory->id,
+                    'title' => $memory->title,
+                    'memory_type' => $memory->memory_type,
+                    'role' => $memory->role_name,
+                    'score' => $score,
+                    'confidence' => (int) $memory->confidence,
+                    'rule_summary' => $memory->rule_summary,
+                    'correct_pattern' => $memory->correct_pattern,
+                    'wrong_pattern' => $memory->wrong_pattern,
+                ];
+            })
+            ->filter()
+            ->sortByDesc(fn (array $memory) => sprintf('%03d-%03d', $memory['score'], $memory['confidence']))
+            ->take(3)
+            ->values()
+            ->all();
+    }
+
+    /**
+     * @return array<int,string>
+     */
+    private function keywordsForMemory(string $title): array
+    {
+        return match (true) {
+            Str::contains($title, '低檔爆量') => ['低檔爆量', '低檔', '爆量', '量能放大', '股價轉強', 'classification_mismatch', 'low_volume'],
+            Str::contains($title, '高檔放量') => ['高檔放量', '放量轉弱', '上影線', '風險升高', 'risk'],
+            Str::contains($title, '風險與弱勢') => ['風險升高', '持續弱勢', '理由不足', 'classification_mismatch', 'confidence_mismatch', 'weak', 'risk'],
+            Str::contains($title, '多方技術') => ['優先觀察', '潛力觀察', '多方', '技術', '黃金交叉', 'priority', 'potential'],
+            Str::contains($title, '漲多風險') => ['風險升高', '乖離', '過熱', '量價', 'risk'],
+            Str::contains($title, '法人買超') => ['法人', '籌碼', '買超', '賣超', 'institutional', 'chip'],
+            Str::contains($title, '融資快速') => ['融資', '籌碼', '風險', 'margin'],
+            Str::contains($title, '營收') => ['營收', '財報', 'fundamental', 'confidence_mismatch'],
+            Str::contains($title, '本益比') => ['本益比', 'PER', '評價', '高估值'],
+            Str::contains($title, '題材') => ['題材', 'theme', 'theme_score'],
+            Str::contains($title, '全球') => ['全球', 'global', 'ADR', '匯率', '利率'],
+            Str::contains($title, '資料更新') => ['資料', '更新', '過期', '覆蓋', 'data_coverage', 'data_staleness', 'ai_report_missing'],
+            default => [],
+        };
     }
 
     /**
