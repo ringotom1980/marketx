@@ -5,6 +5,7 @@
 !.env.example
 
 /.composer
+/.ssh
 /composer.phar
 /composer-setup.php
 /certs
