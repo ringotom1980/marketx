@@ -11,6 +11,7 @@ use Carbon\CarbonImmutable;
 use Illuminate\Console\Command;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
 
 class RunAgentInspections extends Command
@@ -249,6 +250,8 @@ class RunAgentInspections extends Command
                     ]);
                 }
             }
+
+            $findings += $this->inspectRadarPerformance($role, $run);
 
             foreach ($cards as $card) {
                 $metrics = $this->json($card->metrics_payload);
@@ -682,6 +685,187 @@ class RunAgentInspections extends Command
         }
     }
 
+    private function inspectRadarPerformance(AgentRole $role, AgentRun $run): int
+    {
+        if (! $this->hasTable('stock_radar_observations') || ! $this->hasTable('stock_radar_observation_checks')) {
+            return 0;
+        }
+
+        $findings = 0;
+        $performanceRows = DB::table('stock_radar_observation_checks as c')
+            ->join('stock_radar_observations as o', 'o.id', '=', 'c.stock_radar_observation_id')
+            ->where('c.days_since_selected', 1)
+            ->where('o.selected_date', '>=', CarbonImmutable::parse($this->inspectionDate)->subDays(45)->toDateString())
+            ->groupBy('o.card_type')
+            ->get([
+                'o.card_type',
+                DB::raw('count(*) as total'),
+                DB::raw('count(c.change_pct) as valid_count'),
+                DB::raw('round(avg(c.change_pct), 2) as avg_change_pct'),
+                DB::raw('sum(case when c.change_pct > 0 then 1 else 0 end) as up_count'),
+                DB::raw('sum(case when c.change_pct < 0 then 1 else 0 end) as down_count'),
+            ]);
+
+        foreach ($performanceRows as $row) {
+            $valid = (int) $row->valid_count;
+            if ($valid < 6) {
+                continue;
+            }
+
+            $avg = (float) $row->avg_change_pct;
+            $upRate = $valid > 0 ? round(((int) $row->up_count / $valid) * 100, 1) : 0.0;
+            $typeName = $this->cardTypeName((string) $row->card_type);
+
+            if (in_array($row->card_type, ['priority', 'potential'], true) && ($avg < -0.5 || $upRate < 45)) {
+                $findings += $this->finding($role, $run, [
+                    'severity' => 'high',
+                    'finding_type' => 'radar_rule_underperforming',
+                    'page' => 'home',
+                    'title' => $typeName.'隔日表現不如預期',
+                    'description' => $typeName.'本來應該偏向看多觀察，但最近樣本的隔日平均漲跌與上漲率偏弱，代表篩選規則可能需要加入追高、乖離、量價鈍化或大盤風險濾網。',
+                    'evidence' => "card_type={$row->card_type}, valid={$valid}, avg={$avg}%, up_rate={$upRate}%",
+                    'recommendation' => '檢查該卡片近期入選原因，若常在前一日大漲後入選，應加入前一日漲幅過大排除或高檔爆量轉弱條件。',
+                    'payload' => [
+                        'card_type' => $row->card_type,
+                        'valid_count' => $valid,
+                        'avg_change_pct' => $avg,
+                        'up_rate' => $upRate,
+                    ],
+                ]);
+            }
+
+            if ($row->card_type === 'risk' && ($avg > 0.5 || $upRate > 55)) {
+                $findings += $this->finding($role, $run, [
+                    'severity' => 'medium',
+                    'finding_type' => 'radar_rule_underperforming',
+                    'page' => 'home',
+                    'title' => '風險升高隔日沒有明顯轉弱',
+                    'description' => '風險升高卡應該能抓到隔日容易拉回或震盪的股票。若平均仍偏漲，代表風險條件可能太寬，或把強勢續漲股誤判成過熱。',
+                    'evidence' => "valid={$valid}, avg={$avg}%, up_rate={$upRate}%",
+                    'recommendation' => '提高風險卡對高檔長上影線、爆量不漲、法人轉賣、融資急增等條件的要求，避免單純強勢股被列入風險。',
+                    'payload' => [
+                        'card_type' => $row->card_type,
+                        'valid_count' => $valid,
+                        'avg_change_pct' => $avg,
+                        'up_rate' => $upRate,
+                    ],
+                ]);
+            }
+
+            if ($row->card_type === 'weak' && ($avg > 0.8 || $upRate > 55)) {
+                $findings += $this->finding($role, $run, [
+                    'severity' => 'medium',
+                    'finding_type' => 'radar_rule_underperforming',
+                    'page' => 'home',
+                    'title' => '持續弱勢隔日反彈比例偏高',
+                    'description' => '持續弱勢卡如果隔日反彈比例偏高，可能混入跌深反彈或低檔轉強股票，分類條件需要更精準。',
+                    'evidence' => "valid={$valid}, avg={$avg}%, up_rate={$upRate}%",
+                    'recommendation' => '檢查弱勢股是否仍有量價轉強、KD/MACD 修復或低檔爆量訊號，若有應移到低檔爆量或潛力觀察。',
+                    'payload' => [
+                        'card_type' => $row->card_type,
+                        'valid_count' => $valid,
+                        'avg_change_pct' => $avg,
+                        'up_rate' => $upRate,
+                    ],
+                ]);
+            }
+        }
+
+        $findings += $this->inspectReasonPerformance($role, $run);
+
+        return $findings;
+    }
+
+    private function inspectReasonPerformance(AgentRole $role, AgentRun $run): int
+    {
+        $rows = DB::table('stock_radar_observations as o')
+            ->leftJoin('stock_radar_observation_checks as c', function ($join) {
+                $join->on('c.stock_radar_observation_id', '=', 'o.id')
+                    ->where('c.days_since_selected', 1);
+            })
+            ->where('o.selected_date', '>=', CarbonImmutable::parse($this->inspectionDate)->subDays(45)->toDateString())
+            ->get(['o.card_type', 'o.entry_reasons', 'c.change_pct']);
+
+        $stats = [];
+        foreach ($rows as $row) {
+            $labels = collect($this->json($row->entry_reasons))
+                ->map(fn ($reason) => is_array($reason) ? ($reason['label'] ?? null) : null)
+                ->filter()
+                ->unique();
+
+            foreach ($labels as $label) {
+                $key = $row->card_type.'|'.$label;
+                $stats[$key] ??= [
+                    'card_type' => $row->card_type,
+                    'label' => $label,
+                    'valid' => 0,
+                    'up' => 0,
+                    'sum' => 0.0,
+                ];
+
+                if ($row->change_pct !== null) {
+                    $change = (float) $row->change_pct;
+                    $stats[$key]['valid']++;
+                    $stats[$key]['sum'] += $change;
+                    if ($change > 0) {
+                        $stats[$key]['up']++;
+                    }
+                }
+            }
+        }
+
+        $findings = 0;
+        foreach ($stats as $stat) {
+            if ($stat['valid'] < 8) {
+                continue;
+            }
+
+            $avg = round($stat['sum'] / $stat['valid'], 2);
+            $winRate = round(($stat['up'] / $stat['valid']) * 100, 1);
+            $typeName = $this->cardTypeName((string) $stat['card_type']);
+
+            if (in_array($stat['card_type'], ['priority', 'potential', 'low_volume'], true) && ($avg < -0.6 || $winRate < 42)) {
+                $findings += $this->finding($role, $run, [
+                    'severity' => 'medium',
+                    'finding_type' => 'reason_signal_underperforming',
+                    'page' => 'home',
+                    'title' => $typeName.'原因「'.$stat['label'].'」近期勝率偏低',
+                    'description' => '這個原因標籤在看多或觀察卡片中近期隔日表現偏弱，代表它可能不能單獨作為加分理由，或需要搭配量能、乖離與籌碼條件。',
+                    'evidence' => "label={$stat['label']}, valid={$stat['valid']}, avg={$avg}%, win_rate={$winRate}%",
+                    'recommendation' => '降低此原因在看多卡片中的權重，或要求同時出現其他確認訊號才納入排序。',
+                    'payload' => [
+                        'card_type' => $stat['card_type'],
+                        'label' => $stat['label'],
+                        'valid_count' => $stat['valid'],
+                        'avg_change_pct' => $avg,
+                        'win_rate' => $winRate,
+                    ],
+                ]);
+            }
+
+            if ($stat['card_type'] === 'risk' && ($avg > 0.6 || $winRate > 58)) {
+                $findings += $this->finding($role, $run, [
+                    'severity' => 'medium',
+                    'finding_type' => 'reason_signal_underperforming',
+                    'page' => 'home',
+                    'title' => '風險原因「'.$stat['label'].'」近期沒有帶來回檔',
+                    'description' => '這個風險原因近期隔日仍偏漲，代表它可能只是強勢延續中的正常現象，不應單獨作為風險升高依據。',
+                    'evidence' => "label={$stat['label']}, valid={$stat['valid']}, avg={$avg}%, win_rate={$winRate}%",
+                    'recommendation' => '調低此風險原因權重，或要求搭配高檔爆量、長上影線、籌碼轉賣等條件才判定風險升高。',
+                    'payload' => [
+                        'card_type' => $stat['card_type'],
+                        'label' => $stat['label'],
+                        'valid_count' => $stat['valid'],
+                        'avg_change_pct' => $avg,
+                        'win_rate' => $winRate,
+                    ],
+                ]);
+            }
+        }
+
+        return $findings;
+    }
+
     private function latestRadarCards(?string $cardDate): Collection
     {
         if (! $cardDate) {
@@ -703,6 +887,15 @@ class RunAgentInspections extends Command
     private function role(string $slug): AgentRole
     {
         return AgentRole::query()->where('slug', $slug)->firstOrFail();
+    }
+
+    private function hasTable(string $table): bool
+    {
+        try {
+            return Schema::hasTable($table);
+        } catch (\Throwable) {
+            return false;
+        }
     }
 
     private function loadMarketContext(): ?MarketDailyContext
