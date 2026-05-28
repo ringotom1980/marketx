@@ -125,10 +125,7 @@
                                     </select>
                                     <textarea name="codex_feedback" rows="3" placeholder="寫下處理原因，這會成為我回饋給代理人的紀錄。" required style="width:100%;border:1px solid var(--line);border-radius:8px;padding:10px;font-size:14px"></textarea>
                                     <input name="memory_title" type="text" placeholder="記憶標題，留空會自動使用案例標題" style="width:100%;border:1px solid var(--line);border-radius:8px;padding:10px;font-size:14px">
-                                    <label style="display:flex;gap:8px;align-items:center;font-size:13px;color:var(--muted)">
-                                        <input type="checkbox" name="save_memory" value="1">
-                                        寫入學習記憶庫
-                                    </label>
+                                    <p class="lead" style="font-size:12px;margin:0">送出後會自動寫入學習記憶庫，作為代理人下次判斷依據。</p>
                                     <button class="button" type="submit" style="width:100%">送出回饋</button>
                                 </form>
                             </td>

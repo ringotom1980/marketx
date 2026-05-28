@@ -1608,7 +1608,6 @@ Route::post('/admin/agents/findings/{finding}/review', function (Request $reques
     $validated = $request->validate([
         'status' => ['required', 'in:accepted,rejected,resolved,observing'],
         'codex_feedback' => ['required', 'string', 'min:3', 'max:3000'],
-        'save_memory' => ['nullable', 'boolean'],
         'memory_title' => ['nullable', 'string', 'max:255'],
     ]);
 
@@ -1619,47 +1618,59 @@ Route::post('/admin/agents/findings/{finding}/review', function (Request $reques
             'reviewed_at' => now(),
         ]);
 
-        if (! empty($validated['save_memory'])) {
-            $title = trim((string) ($validated['memory_title'] ?? ''));
-            $title = $title !== '' ? $title : '案例回饋：'.$finding->title;
-            $payload = is_array($finding->payload) ? $finding->payload : [];
+        $title = trim((string) ($validated['memory_title'] ?? ''));
+        $title = $title !== '' ? $title : '處理回饋：'.$finding->title;
+        $payload = is_array($finding->payload) ? $finding->payload : [];
+        $memoryType = 'feedback:'.$validated['status'];
+        $confidence = match ($validated['status']) {
+            'accepted' => 90,
+            'resolved' => 84,
+            'observing' => 76,
+            'rejected' => 72,
+            default => 70,
+        };
+        $correctPattern = match ($validated['status']) {
+            'accepted' => $finding->recommendation ?: $validated['codex_feedback'],
+            'resolved' => '此問題已處理，未來遇到相同型態需確認修正是否仍有效。',
+            'observing' => '此案例暫不下結論，未來遇到相同型態需降低判斷強度並持續觀察。',
+            'rejected' => '此代理人判斷被拒絕，未來遇到相同型態不可直接套用此 finding。',
+            default => $validated['codex_feedback'],
+        };
 
-            AgentMemory::query()->updateOrCreate(
-                [
-                    'memory_type' => 'knowledge:codex_feedback',
-                    'title' => $title,
-                ],
-                [
-                    'agent_role_id' => $finding->agent_role_id,
-                    'agent_finding_id' => $finding->id,
-                    'status' => 'active',
-                    'rule_summary' => $finding->description,
-                    'correct_pattern' => $validated['status'] === 'accepted'
-                        ? ($finding->recommendation ?: $validated['codex_feedback'])
-                        : $validated['codex_feedback'],
-                    'wrong_pattern' => $finding->evidence,
-                    'codex_feedback' => $validated['codex_feedback'],
-                    'confidence' => $validated['status'] === 'accepted' ? 88 : 72,
-                    'examples' => [
-                        [
-                            'finding_id' => $finding->id,
-                            'symbol' => $finding->symbol,
-                            'page' => $finding->page,
-                            'finding_type' => $finding->finding_type,
-                            'status' => $validated['status'],
-                        ],
+        AgentMemory::query()->updateOrCreate(
+            [
+                'memory_type' => $memoryType,
+                'title' => $title,
+            ],
+            [
+                'agent_role_id' => $finding->agent_role_id,
+                'agent_finding_id' => $finding->id,
+                'status' => 'active',
+                'rule_summary' => $finding->description,
+                'correct_pattern' => $correctPattern,
+                'wrong_pattern' => $finding->evidence,
+                'codex_feedback' => $validated['codex_feedback'],
+                'confidence' => $confidence,
+                'examples' => [
+                    [
+                        'finding_id' => $finding->id,
+                        'symbol' => $finding->symbol,
+                        'page' => $finding->page,
+                        'finding_type' => $finding->finding_type,
+                        'status' => $validated['status'],
                     ],
-                    'payload' => [
-                        'source' => 'admin_review',
-                        'finding_payload' => $payload,
-                    ],
-                    'last_used_at' => now(),
                 ],
-            );
-        }
+                'payload' => [
+                    'source' => 'admin_review',
+                    'review_status' => $validated['status'],
+                    'finding_payload' => $payload,
+                ],
+                'last_used_at' => now(),
+            ],
+        );
     });
 
-    return back()->with('status', '代理人回饋已寫入。');
+    return back()->with('status', '代理人回饋與學習記憶已寫入。');
 });
 
 Route::post('/admin/ai/watchlist-reports', function (Request $request) {
