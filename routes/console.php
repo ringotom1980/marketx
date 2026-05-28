@@ -29,14 +29,14 @@ foreach ([
         ->withoutOverlapping();
 }
 
-foreach (['08:00', '08:30'] as $time) {
+foreach (['08:00', '08:20'] as $time) {
     Schedule::command('market:ai-generate-global-premarket --live')
         ->dailyAt($time)
         ->timezone('Asia/Taipei')
         ->withoutOverlapping();
 }
 
-foreach (['08:10', '08:40'] as $time) {
+foreach (['08:10', '08:25'] as $time) {
     Schedule::command('market:ai-generate-theme-premarket --live')
         ->dailyAt($time)
         ->timezone('Asia/Taipei')
@@ -44,17 +44,17 @@ foreach (['08:10', '08:40'] as $time) {
 }
 
 Schedule::command('market:build-stock-radar-cards')
-    ->dailyAt('08:50')
+    ->dailyAt('08:30')
     ->timezone('Asia/Taipei')
     ->withoutOverlapping();
 
 Schedule::command('market:update-stock-radar-observations')
-    ->dailyAt('08:52')
+    ->dailyAt('08:32')
     ->timezone('Asia/Taipei')
     ->withoutOverlapping();
 
 Schedule::command('market:build-daily-context --session=premarket')
-    ->dailyAt('08:55')
+    ->dailyAt('08:35')
     ->timezone('Asia/Taipei')
     ->withoutOverlapping();
 
