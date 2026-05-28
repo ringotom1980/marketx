@@ -89,3 +89,8 @@ foreach (['17:10', '22:10', '03:10'] as $time) {
         ->timezone('Asia/Taipei')
         ->withoutOverlapping();
 }
+
+Schedule::command('market:agents-review-cases')
+    ->dailyAt('02:50')
+    ->timezone('Asia/Taipei')
+    ->withoutOverlapping();
