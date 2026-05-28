@@ -1538,7 +1538,7 @@ Route::get('/admin/agents', function () {
         ->withCount([
             'runs',
             'findings',
-            'findings as pending_findings_count' => fn ($query) => $query->whereIn('status', ['pending', 'observing']),
+            'findings as pending_findings_count' => fn ($query) => $query->where('status', 'pending'),
             'memories',
         ])
         ->orderBy('id')
@@ -1562,9 +1562,17 @@ Route::get('/admin/agents', function () {
 
     $pendingFindings = AgentFinding::query()
         ->with('role:id,name,slug')
-        ->whereIn('status', ['pending', 'observing'])
+        ->where('status', 'pending')
         ->orderByRaw("case severity when 'critical' then 1 when 'high' then 2 when 'medium' then 3 when 'low' then 4 else 5 end")
         ->orderByDesc('created_at')
+        ->limit(20)
+        ->get();
+
+    $reviewedFindings = AgentFinding::query()
+        ->with('role:id,name,slug')
+        ->whereIn('status', ['accepted', 'rejected', 'resolved', 'observing'])
+        ->orderByDesc('reviewed_at')
+        ->orderByDesc('updated_at')
         ->limit(20)
         ->get();
 
@@ -1578,7 +1586,8 @@ Route::get('/admin/agents', function () {
     $summary = [
         'roles' => $roles->count(),
         'active_roles' => $roles->where('is_active', true)->count(),
-        'pending_findings' => AgentFinding::query()->whereIn('status', ['pending', 'observing'])->count(),
+        'pending_findings' => AgentFinding::query()->where('status', 'pending')->count(),
+        'reviewed_findings' => AgentFinding::query()->whereIn('status', ['accepted', 'rejected', 'resolved', 'observing'])->count(),
         'active_memories' => AgentMemory::query()->where('status', 'active')->count(),
         'today_runs' => AgentRun::query()->whereDate('created_at', now('Asia/Taipei')->toDateString())->count(),
     ];
@@ -1587,9 +1596,70 @@ Route::get('/admin/agents', function () {
         'roles' => $roles,
         'latestRuns' => $latestRuns,
         'pendingFindings' => $pendingFindings,
+        'reviewedFindings' => $reviewedFindings,
         'latestMemories' => $latestMemories,
         'summary' => $summary,
     ]);
+});
+
+Route::post('/admin/agents/findings/{finding}/review', function (Request $request, AgentFinding $finding) {
+    MarketxAuth::requireAdmin();
+
+    $validated = $request->validate([
+        'status' => ['required', 'in:accepted,rejected,resolved,observing'],
+        'codex_feedback' => ['required', 'string', 'min:3', 'max:3000'],
+        'save_memory' => ['nullable', 'boolean'],
+        'memory_title' => ['nullable', 'string', 'max:255'],
+    ]);
+
+    DB::transaction(function () use ($finding, $validated) {
+        $finding->update([
+            'status' => $validated['status'],
+            'codex_feedback' => $validated['codex_feedback'],
+            'reviewed_at' => now(),
+        ]);
+
+        if (! empty($validated['save_memory'])) {
+            $title = trim((string) ($validated['memory_title'] ?? ''));
+            $title = $title !== '' ? $title : '案例回饋：'.$finding->title;
+            $payload = is_array($finding->payload) ? $finding->payload : [];
+
+            AgentMemory::query()->updateOrCreate(
+                [
+                    'memory_type' => 'knowledge:codex_feedback',
+                    'title' => $title,
+                ],
+                [
+                    'agent_role_id' => $finding->agent_role_id,
+                    'agent_finding_id' => $finding->id,
+                    'status' => 'active',
+                    'rule_summary' => $finding->description,
+                    'correct_pattern' => $validated['status'] === 'accepted'
+                        ? ($finding->recommendation ?: $validated['codex_feedback'])
+                        : $validated['codex_feedback'],
+                    'wrong_pattern' => $finding->evidence,
+                    'codex_feedback' => $validated['codex_feedback'],
+                    'confidence' => $validated['status'] === 'accepted' ? 88 : 72,
+                    'examples' => [
+                        [
+                            'finding_id' => $finding->id,
+                            'symbol' => $finding->symbol,
+                            'page' => $finding->page,
+                            'finding_type' => $finding->finding_type,
+                            'status' => $validated['status'],
+                        ],
+                    ],
+                    'payload' => [
+                        'source' => 'admin_review',
+                        'finding_payload' => $payload,
+                    ],
+                    'last_used_at' => now(),
+                ],
+            );
+        }
+    });
+
+    return back()->with('status', '代理人回饋已寫入。');
 });
 
 Route::post('/admin/ai/watchlist-reports', function (Request $request) {

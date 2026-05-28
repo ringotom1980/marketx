@@ -45,8 +45,8 @@
             <p class="lead">啟用記憶</p>
         </div>
         <div class="panel">
-            <h2>{{ $summary['today_runs'] }}</h2>
-            <p class="lead">今日執行次數</p>
+            <h2>{{ $summary['reviewed_findings'] }}</h2>
+            <p class="lead">處理紀錄</p>
         </div>
     </section>
 
@@ -115,6 +115,22 @@
                                     </div>
                                 @endif
                                 <span class="lead" style="font-size:12px">{{ $formatTime($finding->created_at) }}</span>
+                                <form method="post" action="/admin/agents/findings/{{ $finding->id }}/review" style="margin-top:10px;display:grid;gap:8px">
+                                    @csrf
+                                    <select name="status" style="width:100%;border:1px solid var(--line);border-radius:8px;padding:10px;font-size:14px;background:#fff">
+                                        <option value="accepted">採納</option>
+                                        <option value="resolved">已處理</option>
+                                        <option value="observing">觀察中</option>
+                                        <option value="rejected">拒絕</option>
+                                    </select>
+                                    <textarea name="codex_feedback" rows="3" placeholder="寫下處理原因，這會成為我回饋給代理人的紀錄。" required style="width:100%;border:1px solid var(--line);border-radius:8px;padding:10px;font-size:14px"></textarea>
+                                    <input name="memory_title" type="text" placeholder="記憶標題，留空會自動使用案例標題" style="width:100%;border:1px solid var(--line);border-radius:8px;padding:10px;font-size:14px">
+                                    <label style="display:flex;gap:8px;align-items:center;font-size:13px;color:var(--muted)">
+                                        <input type="checkbox" name="save_memory" value="1">
+                                        寫入學習記憶庫
+                                    </label>
+                                    <button class="button" type="submit" style="width:100%">送出回饋</button>
+                                </form>
                             </td>
                         </tr>
                     @endforeach
@@ -147,6 +163,31 @@
                 </table>
             @endif
         </div>
+    </section>
+
+    <section class="panel" style="margin-top:16px">
+        <h2>最近處理紀錄</h2>
+        @if ($reviewedFindings->isEmpty())
+            <p class="lead">尚無處理紀錄。待處理發現送出回饋後，會保留在這裡。</p>
+        @else
+            <table class="table">
+                <tbody>
+                @foreach ($reviewedFindings as $finding)
+                    <tr>
+                        <th>
+                            {{ $finding->title }}<br>
+                            <span class="badge {{ $finding->status === 'accepted' || $finding->status === 'resolved' ? 'red' : 'amber' }}">{{ $statusLabel[$finding->status] ?? $finding->status }}</span>
+                        </th>
+                        <td>
+                            {{ $finding->role?->name ?? '未指定代理人' }}｜{{ $finding->page ?? '全站' }}{{ $finding->symbol ? '｜'.$finding->symbol : '' }}<br>
+                            <span class="lead" style="font-size:13px;white-space:pre-line">{{ \Illuminate\Support\Str::limit($finding->codex_feedback ?? '尚無回饋', 220) }}</span><br>
+                            <span class="lead" style="font-size:12px">處理 {{ $formatTime($finding->reviewed_at ?? $finding->updated_at) }}</span>
+                        </td>
+                    </tr>
+                @endforeach
+                </tbody>
+            </table>
+        @endif
     </section>
 
     <section class="panel" style="margin-top:16px">
