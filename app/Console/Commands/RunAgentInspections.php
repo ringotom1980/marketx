@@ -17,7 +17,7 @@ class RunAgentInspections extends Command
 {
     protected $signature = 'market:agents-run
         {--date= : Inspection date, default today in Asia/Taipei}
-        {--agent=* : Limit to agent slugs: data-quality, home-radar, stock-consistency}';
+        {--agent=* : Limit to agent slugs: data-quality, home-radar, stock-consistency, theme-radar, global-radar}';
 
     protected $description = 'Run rule-based MarketX agent inspections and write findings to the agent communication tables.';
 
@@ -41,6 +41,8 @@ class RunAgentInspections extends Command
             'data-quality' => fn () => $this->runDataQualityAgent(),
             'home-radar' => fn () => $this->runHomeRadarAgent(),
             'stock-consistency' => fn () => $this->runStockConsistencyAgent(),
+            'theme-radar' => fn () => $this->runThemeRadarAgent(),
+            'global-radar' => fn () => $this->runGlobalRadarAgent(),
         ];
 
         foreach ($available as $slug => $runner) {
@@ -418,6 +420,217 @@ class RunAgentInspections extends Command
             $this->finishRun($run, 'success', $findings, "個股一致性員完成巡檢，發現 {$findings} 件問題。", [
                 'card_date' => $cardDate,
                 'checked_cards' => $cards->count(),
+            ]);
+        } catch (\Throwable $e) {
+            $this->failRun($run, $e);
+        }
+    }
+
+    private function runThemeRadarAgent(): void
+    {
+        $role = $this->role('theme-radar');
+        $run = $this->startRun($role);
+        $findings = 0;
+
+        try {
+            $themes = collect($this->marketContext?->theme_snapshot ?? []);
+            $freshness = $this->marketContext?->freshness ?? [];
+            $themeFreshness = $freshness['theme_scores'] ?? [];
+            $aiReport = data_get($this->marketContext?->ai_reports ?? [], 'theme');
+
+            if (! $this->marketContext) {
+                $findings += $this->finding($role, $run, [
+                    'severity' => 'high',
+                    'finding_type' => 'market_context_missing',
+                    'page' => 'themes',
+                    'title' => '題材雷達缺少每日市場背景包',
+                    'description' => '題材雷達員無法讀取 Market Daily Context，因此不能判斷題材熱度、代表股與 AI 盤前觀察是否一致。',
+                    'evidence' => "inspection_date={$this->inspectionDate}",
+                    'recommendation' => '先確認 market:build-daily-context 是否已成功執行，再重新跑題材雷達員。',
+                    'payload' => ['inspection_date' => $this->inspectionDate],
+                ]);
+            }
+
+            if ($themes->count() < 10) {
+                $findings += $this->finding($role, $run, [
+                    'severity' => 'medium',
+                    'finding_type' => 'theme_context_too_thin',
+                    'page' => 'themes',
+                    'title' => '題材背景資料不足',
+                    'description' => 'Market Daily Context 內的題材快照少於 10 個，題材雷達可能只看見少數固定題材，無法完整反映市場輪動。',
+                    'evidence' => 'theme_count='.$themes->count().', latest='.($themeFreshness['latest'] ?? 'null'),
+                    'recommendation' => '檢查 theme_scores、題材關鍵字庫與動態題材偵測流程，確認 0 分題材沒有被帶入首頁，但題材雷達仍能保留完整題材庫。',
+                    'payload' => [
+                        'theme_count' => $themes->count(),
+                        'theme_freshness' => $themeFreshness,
+                    ],
+                ]);
+            }
+
+            $zeroOrColdTopThemes = $themes
+                ->take(10)
+                ->filter(fn (array $theme) => (int) ($theme['heat_score'] ?? 0) <= 0)
+                ->values();
+
+            if ($zeroOrColdTopThemes->isNotEmpty()) {
+                $findings += $this->finding($role, $run, [
+                    'severity' => 'medium',
+                    'finding_type' => 'theme_ranking_invalid',
+                    'page' => 'themes',
+                    'title' => '題材熱度排行含 0 分題材',
+                    'description' => '題材熱度前段不應該出現 0 分題材。若出現，使用者會誤以為冷門題材也是市場焦點。',
+                    'evidence' => 'themes='.$zeroOrColdTopThemes->pluck('name')->implode('、'),
+                    'recommendation' => '首頁題材只顯示 heat_score > 0 的前 10 名；題材雷達可列全題材，但必須明確區分觀察中與真正升溫。',
+                    'payload' => ['themes' => $zeroOrColdTopThemes->all()],
+                ]);
+            }
+
+            if (! $aiReport) {
+                $findings += $this->finding($role, $run, [
+                    'severity' => 'medium',
+                    'finding_type' => 'ai_report_missing',
+                    'page' => 'themes',
+                    'title' => '今日題材盤前觀察尚未產生',
+                    'description' => '題材雷達缺少今天或最新的 AI 盤前觀察，使用者只能看到機械分數，較難理解題材資金輪動。',
+                    'evidence' => 'theme_ai_report=null',
+                    'recommendation' => '檢查 market:ai-generate-theme-premarket --live 是否成功，若 Gemini 忙碌需靠 08:40 備援排程補齊。',
+                    'payload' => ['ai_report' => null],
+                ]);
+            } elseif (($themeFreshness['updated_at'] ?? null) && ($aiReport['updated_at'] ?? null)
+                && CarbonImmutable::parse($aiReport['updated_at'])->lt(CarbonImmutable::parse($themeFreshness['updated_at']))) {
+                $findings += $this->finding($role, $run, [
+                    'severity' => 'low',
+                    'finding_type' => 'ai_report_stale',
+                    'page' => 'themes',
+                    'title' => '題材 AI 盤前觀察早於題材資料更新',
+                    'description' => '題材分數更新時間晚於 AI 報告，代表 AI 報告可能不是根據最新題材熱度生成。',
+                    'evidence' => 'theme_updated_at='.$themeFreshness['updated_at'].', ai_updated_at='.$aiReport['updated_at'],
+                    'recommendation' => '若題材資料在 08:10 後補更新，應重新產生 theme premarket report 或至少標示報告時間。',
+                    'payload' => [
+                        'theme_freshness' => $themeFreshness,
+                        'ai_report' => $aiReport,
+                    ],
+                ]);
+            }
+
+            $this->finishRun($run, 'success', $findings, "題材雷達員完成巡檢，發現 {$findings} 件問題。", [
+                'theme_count' => $themes->count(),
+                'top_themes' => $themes->take(5)->pluck('name')->values()->all(),
+                'theme_freshness' => $themeFreshness,
+            ]);
+        } catch (\Throwable $e) {
+            $this->failRun($run, $e);
+        }
+    }
+
+    private function runGlobalRadarAgent(): void
+    {
+        $role = $this->role('global-radar');
+        $run = $this->startRun($role);
+        $findings = 0;
+
+        try {
+            $markets = collect($this->marketContext?->global_markets ?? []);
+            $freshness = $this->marketContext?->freshness ?? [];
+            $globalFreshness = $freshness['global_market_data'] ?? [];
+            $eventFreshness = $freshness['global_event_clusters'] ?? [];
+            $aiReport = data_get($this->marketContext?->ai_reports ?? [], 'global');
+            $events = collect(data_get($this->marketContext?->event_snapshot ?? [], 'clusters', []));
+
+            if (! $this->marketContext) {
+                $findings += $this->finding($role, $run, [
+                    'severity' => 'high',
+                    'finding_type' => 'market_context_missing',
+                    'page' => 'global',
+                    'title' => '全球雷達缺少每日市場背景包',
+                    'description' => '全球雷達員無法讀取 Market Daily Context，因此不能檢查國際指數、ADR、商品、匯率與 AI 盤前觀察是否完整。',
+                    'evidence' => "inspection_date={$this->inspectionDate}",
+                    'recommendation' => '先確認 market:build-daily-context 是否已成功執行，再重新跑全球雷達員。',
+                    'payload' => ['inspection_date' => $this->inspectionDate],
+                ]);
+            }
+
+            $required = ['Dow Jones', 'S&P 500', 'NASDAQ', 'SOX', 'VIX', 'TSM ADR', 'UMC ADR', 'Nikkei 225', 'Hang Seng', 'KOSPI', 'DXY', 'US10Y', 'Crude Oil', 'Gold'];
+            $available = $markets->pluck('indicator')->filter()->values();
+            $missing = collect($required)->diff($available)->values();
+
+            if ($missing->isNotEmpty()) {
+                $findings += $this->finding($role, $run, [
+                    'severity' => 'high',
+                    'finding_type' => 'global_markets_missing',
+                    'page' => 'global',
+                    'title' => '全球雷達指標缺漏',
+                    'description' => '全球雷達需要同時包含美股、亞洲市場、台積/聯電 ADR、匯率、利率與商品。缺漏指標會讓盤前觀察失去完整性。',
+                    'evidence' => 'missing='.$missing->implode('、'),
+                    'recommendation' => '檢查 global market refresh 的 Yahoo/資料來源抓取狀態，並確認 market_daily_contexts 有重新建立。',
+                    'payload' => [
+                        'missing' => $missing->all(),
+                        'available' => $available->all(),
+                    ],
+                ]);
+            }
+
+            if (($globalFreshness['latest'] ?? null) && CarbonImmutable::parse($globalFreshness['latest'])->lt(CarbonImmutable::now('Asia/Taipei')->subDays(3))) {
+                $findings += $this->finding($role, $run, [
+                    'severity' => 'high',
+                    'finding_type' => 'global_markets_stale',
+                    'page' => 'global',
+                    'title' => '全球市場資料過舊',
+                    'description' => '全球市場資料超過 3 天沒有有效更新，全球雷達與盤前 AI 分析可能引用舊行情。',
+                    'evidence' => 'latest='.$globalFreshness['latest'].', updated_at='.($globalFreshness['updated_at'] ?? 'null'),
+                    'recommendation' => '檢查 market:global-market-refresh 排程與外部資料來源，必要時手動補跑。',
+                    'payload' => ['global_freshness' => $globalFreshness],
+                ]);
+            }
+
+            if ($events->count() < 3) {
+                $findings += $this->finding($role, $run, [
+                    'severity' => 'medium',
+                    'finding_type' => 'global_events_too_thin',
+                    'page' => 'global',
+                    'title' => '全球事件聚合資料不足',
+                    'description' => '全球雷達盤前觀察需要重大事件支撐。事件聚合少於 3 筆時，AI 分析容易只依靠行情數字而缺少人事時地物。',
+                    'evidence' => 'event_cluster_count='.$events->count().', latest='.($eventFreshness['latest'] ?? 'null'),
+                    'recommendation' => '確認新聞抓取與 event clustering 是否正常，重大事件應包含標題、摘要、重要度、地區與相關題材。',
+                    'payload' => [
+                        'event_count' => $events->count(),
+                        'event_freshness' => $eventFreshness,
+                    ],
+                ]);
+            }
+
+            if (! $aiReport) {
+                $findings += $this->finding($role, $run, [
+                    'severity' => 'medium',
+                    'finding_type' => 'ai_report_missing',
+                    'page' => 'global',
+                    'title' => '今日全球盤前觀察尚未產生',
+                    'description' => '全球雷達缺少最新 AI 盤前觀察，使用者無法從全球股市、匯率利率、商品與重大事件理解對台股的可能影響。',
+                    'evidence' => 'global_ai_report=null',
+                    'recommendation' => '檢查 market:ai-generate-global-premarket --live 是否成功，若 Gemini 忙碌需靠 08:30 備援排程補齊。',
+                    'payload' => ['ai_report' => null],
+                ]);
+            } elseif (($globalFreshness['updated_at'] ?? null) && ($aiReport['updated_at'] ?? null)
+                && CarbonImmutable::parse($aiReport['updated_at'])->lt(CarbonImmutable::parse($globalFreshness['updated_at']))) {
+                $findings += $this->finding($role, $run, [
+                    'severity' => 'low',
+                    'finding_type' => 'ai_report_stale',
+                    'page' => 'global',
+                    'title' => '全球 AI 盤前觀察早於全球資料更新',
+                    'description' => '全球行情資料更新時間晚於 AI 報告，代表盤前觀察可能沒有吃到最新 ADR、亞洲市場或商品資料。',
+                    'evidence' => 'global_updated_at='.$globalFreshness['updated_at'].', ai_updated_at='.$aiReport['updated_at'],
+                    'recommendation' => '若全球資料在 AI 報告後補齊，應重新產生 global premarket report 或至少標示報告時間。',
+                    'payload' => [
+                        'global_freshness' => $globalFreshness,
+                        'ai_report' => $aiReport,
+                    ],
+                ]);
+            }
+
+            $this->finishRun($run, 'success', $findings, "全球雷達員完成巡檢，發現 {$findings} 件問題。", [
+                'market_count' => $markets->count(),
+                'event_count' => $events->count(),
+                'global_freshness' => $globalFreshness,
             ]);
         } catch (\Throwable $e) {
             $this->failRun($run, $e);
