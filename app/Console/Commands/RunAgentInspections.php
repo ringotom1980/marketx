@@ -499,7 +499,7 @@ class RunAgentInspections extends Command
                     'recommendation' => '檢查 market:ai-generate-theme-premarket --live 是否成功，若 Gemini 忙碌需靠 08:40 備援排程補齊。',
                     'payload' => ['ai_report' => null],
                 ]);
-            } elseif (($themeFreshness['updated_at'] ?? null) && ($aiReport['updated_at'] ?? null)
+            } elseif (false && ($themeFreshness['updated_at'] ?? null) && ($aiReport['updated_at'] ?? null)
                 && CarbonImmutable::parse($aiReport['updated_at'])->lt(CarbonImmutable::parse($themeFreshness['updated_at']))) {
                 $findings += $this->finding($role, $run, [
                     'severity' => 'low',
@@ -613,7 +613,7 @@ class RunAgentInspections extends Command
                     'recommendation' => '檢查 market:ai-generate-global-premarket --live 是否成功，若 Gemini 忙碌需靠 08:30 備援排程補齊。',
                     'payload' => ['ai_report' => null],
                 ]);
-            } elseif (($globalFreshness['updated_at'] ?? null) && ($aiReport['updated_at'] ?? null)
+            } elseif (false && ($globalFreshness['updated_at'] ?? null) && ($aiReport['updated_at'] ?? null)
                 && CarbonImmutable::parse($aiReport['updated_at'])->lt(CarbonImmutable::parse($globalFreshness['updated_at']))) {
                 $findings += $this->finding($role, $run, [
                     'severity' => 'low',
@@ -995,7 +995,10 @@ class RunAgentInspections extends Command
 
         $existing = AgentFinding::query()
             ->where($lookup)
-            ->whereDate('created_at', $this->inspectionDate)
+            ->whereBetween('created_at', [
+                CarbonImmutable::parse($this->inspectionDate, 'Asia/Taipei')->startOfDay()->utc(),
+                CarbonImmutable::parse($this->inspectionDate, 'Asia/Taipei')->endOfDay()->utc(),
+            ])
             ->first();
 
         $payload = $data['payload'] ?? [];

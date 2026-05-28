@@ -135,7 +135,15 @@ class StockRadarCardBuilder
             ->orderBy('stocks.symbol')
             ->get()
             ->map(function (object $stock) {
+                $payload = $this->confidencePayload($stock);
+                $reasonCounts = $this->payloadReasonCounts($payload);
+
                 $stock->confidence = $this->opportunityConfidence($stock);
+                $stock->risk_confidence = (int) ($payload['risk_confidence'] ?? 0);
+                $stock->weak_confidence = (int) ($payload['weak_confidence'] ?? 0);
+                $stock->bull_reason_count = $reasonCounts['bull'];
+                $stock->bear_reason_count = $reasonCounts['bear'];
+                $stock->risk_reason_count = $reasonCounts['risk'];
                 $stock->volume_multiple = $this->volumeMultiple($stock);
 
                 return $stock;
@@ -159,7 +167,7 @@ class StockRadarCardBuilder
             ->filter(fn (object $stock) => $this->matches($stock, $type) && count($stock->radar_reasons) >= $this->minReasonCount($type))
             ->sortByDesc(fn (object $stock) => sprintf(
                 '%03d-%03d-%06.2f-%06.2f-%s',
-                (int) $stock->confidence,
+                $this->rankConfidence($stock, $type),
                 (int) ($stock->theme_score ?? 0),
                 (float) ($stock->volume_multiple ?? 0),
                 (float) ($stock->return20 ?? 0),
@@ -171,7 +179,7 @@ class StockRadarCardBuilder
                 'stock_id' => (int) $stock->stock_id,
                 'symbol' => $stock->symbol,
                 'name' => $stock->name,
-                'confidence' => (int) $stock->confidence,
+                'confidence' => $this->displayConfidence($stock),
                 'reasons' => $stock->radar_reasons,
                 'metrics' => $this->metrics($stock),
             ]);
@@ -183,6 +191,35 @@ class StockRadarCardBuilder
         $bais20 = $this->num($stock->bais20);
         $technicalScore = (int) ($stock->technical_score ?? 0);
         $themeScore = (int) ($stock->theme_score ?? 0);
+        $opportunity = (int) ($stock->confidence ?? 0);
+        $riskConfidence = (int) ($stock->risk_confidence ?? 0);
+        $weakConfidence = (int) ($stock->weak_confidence ?? 0);
+        $bull = (int) ($stock->bull_reason_count ?? 0);
+        $bear = (int) ($stock->bear_reason_count ?? 0);
+        $risk = (int) ($stock->risk_reason_count ?? 0);
+
+        if (in_array($type, ['priority', 'potential'], true) && ($riskConfidence >= 35 || $weakConfidence >= 45)) {
+            return false;
+        }
+
+        if ($type === 'priority' && $themeScore < 30) {
+            return false;
+        }
+
+        if ($type === 'risk') {
+            return $riskConfidence >= 18
+                && $opportunity <= 80
+                && ($bear + $risk) >= max(3, $bull - 2)
+                && $this->hasAny($stock->radar_reasons, ['擃??暸?頧摹', '??頧摹', '銋?之', 'RSI ?', 'KD ?', 'MACD 甇?蝮格?', '閰??', '????', '?頧摹']);
+        }
+
+        if ($type === 'weak') {
+            return $weakConfidence >= 28
+                && $opportunity <= 62
+                && ($bear + $risk) >= max(3, $bull)
+                && ! $this->isLowBaseVolumeBreakout($stock)
+                && ($technicalScore < 48 || $return20 <= -8 || $this->hasAny($stock->radar_reasons, ['??蝛粹??', '頝??', 'MACD 甇颱滿鈭文?']));
+        }
 
         return match ($type) {
             'priority' => (int) ($stock->total_score ?? 0) >= 58
@@ -446,17 +483,56 @@ class StockRadarCardBuilder
 
     private function opportunityConfidence(object $stock): int
     {
-        $payload = $stock->confidence_payload;
-
-        if (is_string($payload)) {
-            $payload = json_decode($payload, true);
-        }
+        $payload = $this->confidencePayload($stock);
 
         if (is_array($payload) && isset($payload['opportunity_confidence'])) {
             return max(5, min(95, (int) $payload['opportunity_confidence']));
         }
 
         return max(5, min(95, (int) ($stock->confidence_score ?? 0)));
+    }
+
+    private function rankConfidence(object $stock, string $type): int
+    {
+        return match ($type) {
+            'risk' => (int) ($stock->risk_confidence ?? 0),
+            'weak' => (int) ($stock->weak_confidence ?? 0),
+            default => (int) ($stock->confidence ?? 0),
+        };
+    }
+
+    private function displayConfidence(object $stock): int
+    {
+        return max(5, min(95, (int) ($stock->confidence ?? 0)));
+    }
+
+    /**
+     * @return array<string,mixed>
+     */
+    private function confidencePayload(object $stock): array
+    {
+        $payload = $stock->confidence_payload;
+
+        if (is_string($payload)) {
+            $payload = json_decode($payload, true);
+        }
+
+        return is_array($payload) ? $payload : [];
+    }
+
+    /**
+     * @param array<string,mixed> $payload
+     * @return array{bull:int,bear:int,risk:int}
+     */
+    private function payloadReasonCounts(array $payload): array
+    {
+        $reasons = is_array($payload['reasons'] ?? null) ? $payload['reasons'] : [];
+
+        return [
+            'bull' => count(is_array($reasons['bull'] ?? null) ? $reasons['bull'] : []),
+            'bear' => count(is_array($reasons['bear'] ?? null) ? $reasons['bear'] : []),
+            'risk' => count(is_array($reasons['risk'] ?? null) ? $reasons['risk'] : []),
+        ];
     }
 
     private function metrics(object $stock): array
@@ -475,6 +551,12 @@ class StockRadarCardBuilder
             'per' => $this->num($stock->per),
             'mom_pct' => $this->num($stock->mom_pct),
             'yoy_pct' => $this->num($stock->yoy_pct),
+            'opportunity_confidence' => (int) ($stock->confidence ?? 0),
+            'risk_confidence' => (int) ($stock->risk_confidence ?? 0),
+            'weak_confidence' => (int) ($stock->weak_confidence ?? 0),
+            'bull_reason_count' => (int) ($stock->bull_reason_count ?? 0),
+            'bear_reason_count' => (int) ($stock->bear_reason_count ?? 0),
+            'risk_reason_count' => (int) ($stock->risk_reason_count ?? 0),
         ];
     }
 

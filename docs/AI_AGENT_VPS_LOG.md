@@ -179,3 +179,19 @@ This log records each VPS-side AI agent step so work can continue smoothly betwe
   - The model returned, but one response field was an array, causing `Array to string conversion` during write.
   - Added array/object guards for nullable string fields and wrapped response processing so failures update `agent_runs`.
   - Manual retry with `qwen2.5:1.5b --limit=1 --timeout=600` succeeded in about 63 seconds.
+
+### Step 8 - 04:00 Codex review fixes
+
+- Review result:
+  - Rule-based agents completed at `01:00`.
+  - Ollama `qwen2.5:1.5b` completed successfully after the runtime guard fix.
+  - Main actionable issue was homepage card classification conflicting with individual stock confidence payloads.
+- Fixes:
+  - Tightened `StockRadarCardBuilder` so risk/weak cards require actual risk or bearish pressure and cannot include strongly bullish stocks.
+  - Priority/potential cards now reject stocks with high risk/weak pressure.
+  - Priority cards require at least basic theme support so theme score `0` does not enter the top observation card.
+  - Disabled false-positive AI report stale findings for premarket reports, because reports are point-in-time snapshots and later intraday data updates do not automatically invalidate them.
+  - Fixed same-day duplicate agent findings by querying `created_at` using an Asia/Taipei day range instead of database `whereDate`.
+- Verification:
+  - `stock-consistency`, `theme-radar`, and `global-radar` reruns produced `0` new findings.
+  - `home-radar` findings are now limited to rule-performance learning and an empty risk-card signal.
