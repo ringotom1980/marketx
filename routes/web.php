@@ -1602,6 +1602,164 @@ Route::get('/admin/agents', function () {
     ]);
 });
 
+Route::get('/admin/radar-performance', function () {
+    MarketxAuth::requireAdmin();
+
+    $cardLabels = [
+        'priority' => '優先觀察',
+        'risk' => '風險升高',
+        'potential' => '潛力觀察',
+        'low_volume' => '低檔爆量',
+        'weak' => '持續弱勢',
+    ];
+
+    $horizonRows = DB::table('stock_radar_observation_checks as c')
+        ->join('stock_radar_observations as o', 'o.id', '=', 'c.stock_radar_observation_id')
+        ->whereIn('c.days_since_selected', [1, 3, 5])
+        ->groupBy('o.card_type', 'c.days_since_selected')
+        ->orderBy('o.card_type')
+        ->orderBy('c.days_since_selected')
+        ->get([
+            'o.card_type',
+            'c.days_since_selected',
+            DB::raw('count(*) as total'),
+            DB::raw('count(c.change_pct) as valid_count'),
+            DB::raw('round(avg(c.change_pct), 2) as avg_change_pct'),
+            DB::raw('sum(case when c.change_pct > 0 then 1 else 0 end) as up_count'),
+            DB::raw('sum(case when c.change_pct < 0 then 1 else 0 end) as down_count'),
+            DB::raw('sum(case when c.change_pct = 0 then 1 else 0 end) as flat_count'),
+            DB::raw('round(max(c.change_pct), 2) as max_change_pct'),
+            DB::raw('round(min(c.change_pct), 2) as min_change_pct'),
+        ]);
+
+    $horizonStats = collect($cardLabels)->mapWithKeys(function (string $label, string $type) use ($horizonRows) {
+        $rows = $horizonRows->where('card_type', $type)->keyBy('days_since_selected');
+
+        return [$type => [
+            'label' => $label,
+            'horizons' => collect([1, 3, 5])->mapWithKeys(fn (int $day) => [$day => $rows->get($day)]),
+        ]];
+    });
+
+    $conditionStats = DB::table('stock_radar_observations')
+        ->groupBy('card_type')
+        ->get([
+            'card_type',
+            DB::raw('count(*) as total'),
+            DB::raw("sum(case when status = 'active' then 1 else 0 end) as active_count"),
+            DB::raw('round(avg((performance_payload->>\'avg_change_pct\')::numeric), 2) as tracked_avg_change_pct'),
+        ])
+        ->keyBy('card_type');
+
+    $observationsForReasons = DB::table('stock_radar_observations as o')
+        ->leftJoin('stock_radar_observation_checks as c', function ($join) {
+            $join->on('c.stock_radar_observation_id', '=', 'o.id')
+                ->where('c.days_since_selected', 1);
+        })
+        ->where('o.selected_date', '>=', now('Asia/Taipei')->subDays(45)->toDateString())
+        ->get(['o.card_type', 'o.entry_reasons', 'c.change_pct']);
+
+    $reasonStats = [];
+    foreach ($observationsForReasons as $row) {
+        $reasons = is_string($row->entry_reasons) ? json_decode($row->entry_reasons, true) : [];
+        $labels = collect(is_array($reasons) ? $reasons : [])
+            ->map(fn ($reason) => is_array($reason) ? ($reason['label'] ?? null) : null)
+            ->filter()
+            ->unique()
+            ->values();
+
+        foreach ($labels as $label) {
+            $key = $row->card_type.'|'.$label;
+            $reasonStats[$key] ??= [
+                'card_type' => $row->card_type,
+                'label' => $label,
+                'total' => 0,
+                'valid' => 0,
+                'up' => 0,
+                'down' => 0,
+                'sum' => 0.0,
+            ];
+            $reasonStats[$key]['total']++;
+
+            if ($row->change_pct !== null) {
+                $change = (float) $row->change_pct;
+                $reasonStats[$key]['valid']++;
+                $reasonStats[$key]['sum'] += $change;
+                $reasonStats[$key][$change > 0 ? 'up' : ($change < 0 ? 'down' : 'flat')] =
+                    ($reasonStats[$key][$change > 0 ? 'up' : ($change < 0 ? 'down' : 'flat')] ?? 0) + 1;
+            }
+        }
+    }
+
+    $reasonStats = collect($reasonStats)
+        ->map(function (array $row) {
+            $row['avg_change_pct'] = $row['valid'] > 0 ? round($row['sum'] / $row['valid'], 2) : null;
+            $row['win_rate'] = $row['valid'] > 0 ? round(($row['up'] / $row['valid']) * 100, 1) : null;
+
+            return $row;
+        })
+        ->sortByDesc(fn (array $row) => sprintf('%04d-%08.2f', $row['valid'], $row['avg_change_pct'] ?? -999))
+        ->take(30)
+        ->values();
+
+    $observations = DB::table('stock_radar_observations as o')
+        ->join('stocks as s', 's.id', '=', 'o.stock_id')
+        ->orderByDesc('o.selected_date')
+        ->orderBy('o.card_type')
+        ->orderBy('o.entry_rank')
+        ->limit(120)
+        ->get([
+            'o.id',
+            'o.selected_date',
+            'o.card_type',
+            'o.entry_rank',
+            'o.entry_confidence',
+            'o.entry_reasons',
+            'o.status',
+            'o.last_checked_date',
+            'o.performance_payload',
+            's.symbol',
+            's.name',
+            's.market',
+        ]);
+
+    $latestChecks = DB::table('stock_radar_observation_checks as c')
+        ->joinSub(
+            DB::table('stock_radar_observation_checks')
+                ->selectRaw('stock_radar_observation_id, max(check_date) as latest_date')
+                ->groupBy('stock_radar_observation_id'),
+            'latest',
+            function ($join) {
+                $join->on('c.stock_radar_observation_id', '=', 'latest.stock_radar_observation_id')
+                    ->on('c.check_date', '=', 'latest.latest_date');
+            }
+        )
+        ->whereIn('c.stock_radar_observation_id', $observations->pluck('id'))
+        ->get(['c.stock_radar_observation_id', 'c.check_date', 'c.days_since_selected', 'c.close', 'c.change', 'c.change_pct', 'c.condition_still_present'])
+        ->keyBy('stock_radar_observation_id');
+
+    $observations = $observations->map(function ($row) use ($latestChecks) {
+        $row->latest_check = $latestChecks->get($row->id);
+        $reasons = is_string($row->entry_reasons) ? json_decode($row->entry_reasons, true) : [];
+        $row->reason_labels = collect(is_array($reasons) ? $reasons : [])
+            ->map(fn ($reason) => is_array($reason) ? ($reason['label'] ?? null) : null)
+            ->filter()
+            ->take(4)
+            ->values();
+        $row->performance = is_string($row->performance_payload) ? json_decode($row->performance_payload, true) : [];
+
+        return $row;
+    });
+
+    return view('admin_radar_performance', [
+        'cardLabels' => $cardLabels,
+        'horizonStats' => $horizonStats,
+        'conditionStats' => $conditionStats,
+        'reasonStats' => $reasonStats,
+        'observations' => $observations,
+    ]);
+});
+
 Route::post('/admin/ai/watchlist-reports', function (Request $request) {
     MarketxAuth::requireAdmin();
 
