@@ -6,6 +6,7 @@ use App\Models\AgentFinding;
 use App\Models\AgentMemory;
 use App\Models\AgentRole;
 use App\Models\AgentRun;
+use App\Models\MarketDailyContext;
 use Carbon\CarbonImmutable;
 use Illuminate\Console\Command;
 use Illuminate\Support\Collection;
@@ -21,12 +22,14 @@ class RunAgentInspections extends Command
     protected $description = 'Run rule-based MarketX agent inspections and write findings to the agent communication tables.';
 
     private string $inspectionDate;
+    private ?MarketDailyContext $marketContext = null;
 
     public function handle(): int
     {
         $this->inspectionDate = $this->option('date')
             ? CarbonImmutable::parse((string) $this->option('date'), 'Asia/Taipei')->toDateString()
             : CarbonImmutable::now('Asia/Taipei')->toDateString();
+        $this->marketContext = $this->loadMarketContext();
 
         $this->ensureBaseMemories();
 
@@ -66,6 +69,19 @@ class RunAgentInspections extends Command
             $latestTechnicalDate = DB::table('stock_technical_indicators_1d')->max('trade_date');
             $latestChipDate = DB::table('stock_chips_1d')->max('trade_date');
             $latestGlobalDate = DB::table('global_market_data')->max('trade_date');
+
+            if (! $this->marketContext) {
+                $findings += $this->finding($role, $run, [
+                    'severity' => 'high',
+                    'finding_type' => 'market_context_missing',
+                    'page' => 'admin',
+                    'title' => '每日市場背景包尚未建立',
+                    'description' => '代理人巡查時找不到 market_daily_contexts。這會讓各代理人缺少共同市場背景，後續案件較難追溯判斷依據。',
+                    'evidence' => "inspection_date={$this->inspectionDate}",
+                    'recommendation' => '執行 market:build-daily-context，並確認盤前、盤後、夜盤與凌晨排程都有成功建立背景包。',
+                    'payload' => ['inspection_date' => $this->inspectionDate],
+                ]);
+            }
 
             $priceCount = $latestPriceDate
                 ? (int) DB::table('stock_prices_1d')->where('trade_date', $latestPriceDate)->count()
@@ -476,6 +492,41 @@ class RunAgentInspections extends Command
         return AgentRole::query()->where('slug', $slug)->firstOrFail();
     }
 
+    private function loadMarketContext(): ?MarketDailyContext
+    {
+        return MarketDailyContext::query()
+            ->where('context_date', '<=', $this->inspectionDate)
+            ->orderByDesc('context_date')
+            ->orderByRaw("case session when 'night' then 4 when 'aftermarket' then 3 when 'premarket' then 2 when 'daily' then 1 else 0 end desc")
+            ->orderByDesc('updated_at')
+            ->first();
+    }
+
+    /**
+     * @return array<string,mixed>
+     */
+    private function marketContextReference(): array
+    {
+        if (! $this->marketContext) {
+            return [
+                'available' => false,
+                'inspection_date' => $this->inspectionDate,
+            ];
+        }
+
+        return [
+            'available' => true,
+            'id' => $this->marketContext->id,
+            'context_date' => optional($this->marketContext->context_date)->toDateString(),
+            'session' => $this->marketContext->session,
+            'market_phase' => $this->marketContext->market_phase,
+            'risk_score' => $this->marketContext->risk_score,
+            'opportunity_score' => $this->marketContext->opportunity_score,
+            'summary' => $this->marketContext->summary,
+            'updated_at' => optional($this->marketContext->updated_at)->toDateTimeString(),
+        ];
+    }
+
     private function startRun(AgentRole $role): AgentRun
     {
         return AgentRun::query()->create([
@@ -486,6 +537,7 @@ class RunAgentInspections extends Command
             'input_context' => [
                 'inspection_date' => $this->inspectionDate,
                 'agent_slug' => $role->slug,
+                'market_context' => $this->marketContextReference(),
             ],
         ]);
     }
@@ -542,6 +594,7 @@ class RunAgentInspections extends Command
 
         $payload = $data['payload'] ?? [];
         $payload = is_array($payload) ? $payload : ['raw' => $payload];
+        $payload['market_context'] = $this->marketContextReference();
         $payload['related_memories'] = $this->relatedMemories($role, $data);
 
         $values = [
