@@ -29,15 +29,19 @@ foreach ([
         ->withoutOverlapping();
 }
 
-Schedule::command('market:ai-generate-global-premarket --live')
-    ->dailyAt('08:00')
-    ->timezone('Asia/Taipei')
-    ->withoutOverlapping();
+foreach (['08:00', '08:30'] as $time) {
+    Schedule::command('market:ai-generate-global-premarket --live')
+        ->dailyAt($time)
+        ->timezone('Asia/Taipei')
+        ->withoutOverlapping();
+}
 
-Schedule::command('market:ai-generate-theme-premarket --live')
-    ->dailyAt('08:00')
-    ->timezone('Asia/Taipei')
-    ->withoutOverlapping();
+foreach (['08:10', '08:40'] as $time) {
+    Schedule::command('market:ai-generate-theme-premarket --live')
+        ->dailyAt($time)
+        ->timezone('Asia/Taipei')
+        ->withoutOverlapping();
+}
 
 Schedule::command('market:taiwan-price-pipeline')
     ->dailyAt('14:05')

@@ -4,6 +4,7 @@ namespace App\Console\Commands;
 
 use App\Support\Ai\AiPipelineService;
 use App\Support\Ai\AiUsageLimiter;
+use App\Support\Ai\AiResult;
 use App\Support\Ai\GeminiProvider;
 use Carbon\CarbonImmutable;
 use Illuminate\Console\Command;
@@ -39,13 +40,7 @@ class AiGenerateThemePremarketReport extends Command
 
         $dataPack = $this->dataPack($reportDate);
         $prompt = $this->prompt($dataPack);
-        $result = $gemini->generate($prompt, (bool) $this->option('live'));
-
-        if (! $result->ok && str_contains((string) $result->error, '"code": 503')) {
-            $this->warn('Gemini is busy, retrying once after 15 seconds...');
-            sleep(15);
-            $result = $gemini->generate($prompt, (bool) $this->option('live'));
-        }
+        $result = $this->generateWithRetry($gemini, $prompt);
 
         $pipeline->log($task, $result, $prompt);
 
@@ -79,6 +74,23 @@ class AiGenerateThemePremarketReport extends Command
         $this->info('Gemini theme premarket report generated: '.$reportDate);
 
         return self::SUCCESS;
+    }
+
+    private function generateWithRetry(GeminiProvider $gemini, string $prompt): AiResult
+    {
+        $result = $gemini->generate($prompt, (bool) $this->option('live'));
+
+        foreach ([30, 90] as $delaySeconds) {
+            if ($result->ok || ! str_contains((string) $result->error, '"code": 503')) {
+                break;
+            }
+
+            $this->warn('Gemini is busy, retrying after '.$delaySeconds.' seconds...');
+            sleep($delaySeconds);
+            $result = $gemini->generate($prompt, (bool) $this->option('live'));
+        }
+
+        return $result;
     }
 
     private function dataPack(string $reportDate): array
