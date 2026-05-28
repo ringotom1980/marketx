@@ -43,6 +43,16 @@ foreach (['08:10', '08:40'] as $time) {
         ->withoutOverlapping();
 }
 
+Schedule::command('market:build-stock-radar-cards')
+    ->dailyAt('08:50')
+    ->timezone('Asia/Taipei')
+    ->withoutOverlapping();
+
+Schedule::command('market:update-stock-radar-observations')
+    ->dailyAt('08:52')
+    ->timezone('Asia/Taipei')
+    ->withoutOverlapping();
+
 Schedule::command('market:build-daily-context --session=premarket')
     ->dailyAt('08:55')
     ->timezone('Asia/Taipei')

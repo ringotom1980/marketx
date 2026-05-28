@@ -27,7 +27,6 @@ class RunGlobalMorningPipeline extends Command
             ['dynamic_theme_mappings', 'market:map-dynamic-themes', []],
             ['theme_scores', 'market:calculate-theme-scores', []],
             ['decision_scores_global', 'market:calculate-decision-scores', []],
-            ['stock_radar_cards_global', 'market:build-stock-radar-cards', []],
         ];
 
         if (! $this->option('skip-ai')) {

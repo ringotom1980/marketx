@@ -26,7 +26,6 @@ class RunTaiwanAfterMarketPipeline extends Command
             ['dynamic_theme_mappings_aftermarket', 'market:map-dynamic-themes', []],
             ['theme_scores_aftermarket', 'market:calculate-theme-scores', []],
             ['decision_scores_aftermarket', 'market:calculate-decision-scores', []],
-            ['stock_radar_cards_aftermarket', 'market:build-stock-radar-cards', []],
         ] as [$name, $command, $parameters]) {
             $result = $this->runStep($name, $command, $parameters);
 

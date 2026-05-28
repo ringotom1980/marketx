@@ -19,7 +19,6 @@ class RunTaifexNightPipeline extends Command
             ['taifex_night_refresh', 'market:backfill-taifex-night', ['--days' => 7]],
             ['global_influence_night', 'market:calculate-global-influence', []],
             ['decision_scores_night', 'market:calculate-decision-scores', []],
-            ['stock_radar_cards_night', 'market:build-stock-radar-cards', []],
         ] as [$name, $command, $parameters]) {
             $result = $this->runStep($name, $command, $parameters);
 
