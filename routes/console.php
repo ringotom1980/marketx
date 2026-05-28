@@ -43,6 +43,11 @@ foreach (['08:10', '08:40'] as $time) {
         ->withoutOverlapping();
 }
 
+Schedule::command('market:build-daily-context --session=premarket')
+    ->dailyAt('08:55')
+    ->timezone('Asia/Taipei')
+    ->withoutOverlapping();
+
 Schedule::command('market:taiwan-price-pipeline')
     ->dailyAt('14:05')
     ->timezone('Asia/Taipei')
@@ -58,8 +63,18 @@ Schedule::command('market:taiwan-aftermarket-pipeline')
     ->timezone('Asia/Taipei')
     ->withoutOverlapping();
 
+Schedule::command('market:build-daily-context --session=aftermarket')
+    ->dailyAt('17:25')
+    ->timezone('Asia/Taipei')
+    ->withoutOverlapping();
+
 Schedule::command('market:daily-pipeline')
     ->dailyAt('21:30')
+    ->timezone('Asia/Taipei')
+    ->withoutOverlapping();
+
+Schedule::command('market:build-daily-context --session=night')
+    ->dailyAt('22:35')
     ->timezone('Asia/Taipei')
     ->withoutOverlapping();
 
@@ -92,5 +107,10 @@ foreach (['17:10', '22:10', '03:10'] as $time) {
 
 Schedule::command('market:agents-review-cases')
     ->dailyAt('02:50')
+    ->timezone('Asia/Taipei')
+    ->withoutOverlapping();
+
+Schedule::command('market:build-daily-context --session=daily')
+    ->dailyAt('03:20')
     ->timezone('Asia/Taipei')
     ->withoutOverlapping();
