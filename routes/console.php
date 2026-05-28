@@ -82,3 +82,10 @@ Schedule::command('market:taifex-night-pipeline')
     ->dailyAt('05:20')
     ->timezone('Asia/Taipei')
     ->withoutOverlapping();
+
+foreach (['17:10', '22:10', '03:10'] as $time) {
+    Schedule::command('market:agents-run')
+        ->dailyAt($time)
+        ->timezone('Asia/Taipei')
+        ->withoutOverlapping();
+}
