@@ -49,3 +49,54 @@ This log records each VPS-side AI agent step so work can continue smoothly betwe
     curl -fsSL https://ollama.com/install.sh | sh
     ```
   - Enter ringo's sudo password when prompted.
+- Manual install result:
+  - Ollama installed to `/usr/local`.
+  - System user `ollama` created.
+  - `ollama.service` created, enabled and started.
+  - API is available at `127.0.0.1:11434`.
+  - Warning: no NVIDIA/AMD GPU detected; Ollama will run CPU-only.
+- Verification:
+  ```bash
+  ollama --version
+  systemctl is-active ollama
+  systemctl is-enabled ollama
+  curl -s http://127.0.0.1:11434/api/tags
+  ```
+- Verification result:
+  - Ollama version: `0.24.0`
+  - Service: `active`
+  - Enabled on boot: `enabled`
+  - Installed models: none yet.
+
+### Step 3 - Pull small CPU-friendly model
+
+- Goal: install the first lightweight model for local agent reports.
+- Candidate model: `qwen2.5:1.5b`
+- Reason:
+  - Better Chinese capability than many tiny English-first models.
+  - Small enough for 2 CPU / 4GB RAM VPS testing.
+- Result:
+  - `qwen2.5:1.5b` pulled successfully.
+  - Size: about `986 MB`.
+  - A short Chinese generation test did not complete within about 3 minutes.
+  - Conclusion: too slow for this VPS as the default agent model.
+
+### Step 4 - Pull smaller fallback model
+
+- Goal: test a smaller model because 1.5B was too slow.
+- Candidate model: `qwen2.5:0.5b`
+- Result:
+  - `qwen2.5:0.5b` pulled successfully.
+  - Size: about `397 MB`.
+  - A very short API generation test still did not return within the command timeout.
+- Current installed models:
+  - `qwen2.5:0.5b`
+  - `qwen2.5:1.5b`
+- Current decision:
+  - Ollama installation is successful.
+  - Model inference on this 2 CPU / 4GB VPS is much slower than desired.
+  - Any VPS local-agent runner must enforce strict timeout and never block website jobs.
+  - First production runner should be conservative:
+    - read Knowledge Pack,
+    - ask the local model only for very small tasks,
+    - fall back to rule-based findings if Ollama times out.
