@@ -28,6 +28,18 @@ class RunLocalOllamaAgent extends Command
         $timeout = max(10, min(900, (int) $this->option('timeout')));
         $model = trim((string) $this->option('model')) ?: 'qwen2.5:1.5b';
 
+        $agent = AgentRole::query()->firstOrCreate(
+            ['slug' => 'local-ollama'],
+            [
+                'name' => 'VPS 本機 Ollama 代理人',
+                'scope' => '凌晨背景檢查代理人案件與規則合理性',
+                'mission' => '讀取 MarketX 代理人案件，提出可驗證、可追蹤、保守的修正建議。',
+                'is_active' => true,
+                'settings' => ['runtime' => 'ollama', 'default_model' => $model],
+            ]
+        );
+        $this->markStaleRuns($agent);
+
         $findings = AgentFinding::query()
             ->with('role:id,slug,name')
             ->whereIn('status', ['pending', 'observing'])
@@ -49,17 +61,6 @@ class RunLocalOllamaAgent extends Command
 
             return self::SUCCESS;
         }
-
-        $agent = AgentRole::query()->firstOrCreate(
-            ['slug' => 'local-ollama'],
-            [
-                'name' => 'VPS 本機 Ollama 代理人',
-                'scope' => '凌晨背景檢查代理人案件與規則合理性',
-                'mission' => '讀取 MarketX 代理人案件，提出可驗證、可追蹤、保守的修正建議。',
-                'is_active' => true,
-                'settings' => ['runtime' => 'ollama', 'default_model' => $model],
-            ]
-        );
 
         $run = AgentRun::query()->create([
             'agent_role_id' => $agent->id,
@@ -94,29 +95,33 @@ class RunLocalOllamaAgent extends Command
             return $this->failRun($run, 'Ollama HTTP '.$response->status().'：'.Str::limit($response->body(), 500));
         }
 
-        $raw = (string) $response->json('response', '');
-        $report = $this->extractJson($raw);
+        try {
+            $raw = (string) $response->json('response', '');
+            $report = $this->extractJson($raw);
 
-        if (! is_array($report)) {
-            return $this->failRun($run, 'Ollama 回覆不是可解析 JSON：'.Str::limit($raw, 500));
+            if (! is_array($report)) {
+                return $this->failRun($run, 'Ollama 回覆不是可解析 JSON：'.Str::limit($raw, 500));
+            }
+
+            $createdFindings = $this->writeFindings($agent, $run, $report);
+            $summary = Str::limit((string) ($report['summary'] ?? 'Ollama review completed.'), 1000, '');
+            $started = CarbonImmutable::parse($run->started_at);
+
+            $run->update([
+                'status' => 'success',
+                'finished_at' => now(),
+                'duration_ms' => (int) round($started->diffInMilliseconds(now())),
+                'findings_count' => $createdFindings,
+                'summary' => $summary,
+                'output_context' => [
+                    'raw_response' => $raw,
+                    'parsed_report' => $report,
+                    'findings_imported' => $createdFindings,
+                ],
+            ]);
+        } catch (\Throwable $exception) {
+            return $this->failRun($run, 'Ollama 回覆處理失敗：'.$exception->getMessage());
         }
-
-        $createdFindings = $this->writeFindings($agent, $run, $report);
-        $summary = Str::limit((string) ($report['summary'] ?? 'Ollama review completed.'), 1000, '');
-        $started = CarbonImmutable::parse($run->started_at);
-
-        $run->update([
-            'status' => 'success',
-            'finished_at' => now(),
-            'duration_ms' => (int) round($started->diffInMilliseconds(now())),
-            'findings_count' => $createdFindings,
-            'summary' => $summary,
-            'output_context' => [
-                'raw_response' => $raw,
-                'parsed_report' => $report,
-                'findings_imported' => $createdFindings,
-            ],
-        ]);
 
         $this->info('Ollama 代理人檢查完成。');
         $this->line('Model: '.$model);
@@ -291,6 +296,19 @@ PROMPT;
         return self::FAILURE;
     }
 
+    private function markStaleRuns(AgentRole $agent): void
+    {
+        AgentRun::query()
+            ->where('agent_role_id', $agent->id)
+            ->where('status', 'running')
+            ->where('started_at', '<', now()->subMinutes(12))
+            ->update([
+                'status' => 'failed',
+                'finished_at' => now(),
+                'error_message' => 'Stale Ollama run recovered before next execution.',
+            ]);
+    }
+
     private function caseNo(AgentFinding $finding): string
     {
         return 'AG-'.CarbonImmutable::parse($finding->created_at)
@@ -309,6 +327,10 @@ PROMPT;
 
     private function nullableString(mixed $value): ?string
     {
+        if (is_array($value) || is_object($value)) {
+            return null;
+        }
+
         if ($value === null || $value === 'null') {
             return null;
         }

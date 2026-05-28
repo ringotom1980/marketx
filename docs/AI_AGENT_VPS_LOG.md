@@ -158,6 +158,7 @@ This log records each VPS-side AI agent step so work can continue smoothly betwe
   - Creates new findings only when the model cites an `AG-` case number as concrete evidence.
   - Invalid page values are ignored instead of written into the database.
   - Timeout is capped so the model cannot block normal site usage.
+  - Running Ollama runs older than 12 minutes are marked failed before the next execution.
 - Model test:
   - `qwen2.5:1.5b` timed out after 120 seconds on two cases, so it is too slow for the VPS default.
   - `qwen2.5:0.5b` completed a one-case test in about 34 seconds.
@@ -173,3 +174,8 @@ This log records each VPS-side AI agent step so work can continue smoothly betwe
 - Cleanup:
   - The first 0.5B test produced one weak finding without concrete `AG-` evidence.
   - It was marked rejected after the guard was added.
+- 2026-05-29 01:20 verification:
+  - Schedule did start `qwen2.5:1.5b`.
+  - The model returned, but one response field was an array, causing `Array to string conversion` during write.
+  - Added array/object guards for nullable string fields and wrapped response processing so failures update `agent_runs`.
+  - Manual retry with `qwen2.5:1.5b --limit=1 --timeout=600` succeeded in about 63 seconds.
