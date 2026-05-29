@@ -965,13 +965,14 @@
                 const pack = stockCharts.support?.[supportPeriod] || stockCharts.support?.month || stockCharts.support?.week || {};
                 const rows = Array.isArray(pack) ? pack : (pack.rows || []);
                 if (!rows.length) return null;
+                const periodText = pack.period || '';
                 const currentText = pack.current === null || pack.current === undefined ? '-' : comma(pack.current, 2);
                 const supportText = pack.support || '-';
                 const pressureText = pack.pressure || (pack.note || '-');
 
                 return baseOption({
                     title: {
-                        text: `目前價 ${currentText}｜支撐 ${supportText}｜壓力/目標 ${pressureText}`,
+                        text: `${periodText}｜目前價 ${currentText}｜支撐 ${supportText}｜壓力 ${pressureText}`,
                         left: 0,
                         top: 0,
                         textStyle: { color: palette.gray, fontSize: 12, fontWeight: 900 },

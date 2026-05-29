@@ -865,16 +865,25 @@ Route::get('/s/{symbol}', function (string $symbol, StockEventChainBuilder $even
         $priceRows,
         fn ($row) => $row->trade_date->format('Y')
     );
+    $monthlySupportRows = array_slice($aggregateK(
+        $priceRows,
+        fn ($row) => $row->trade_date->format('Y-m')
+    ), -36);
+    $quarterlySupportRows = array_slice($aggregateK(
+        $priceRows,
+        fn ($row) => $row->trade_date->format('Y').'-Q'.(int) ceil(((int) $row->trade_date->format('n')) / 3)
+    ), -20);
     $supportLatestClose = $latestPrice?->close === null ? null : (float) $latestPrice->close;
-    $buildSupportChart = function (int $days) use ($priceRows, $supportLatestClose): array {
-        $supportRows = $priceRows->slice(-$days)->values();
+    $buildSupportChart = function (array $sourceRows, string $label) use ($supportLatestClose): array {
+        $supportRows = collect($sourceRows)->values();
+        $value = fn ($row, string $key) => is_array($row) ? data_get($row, $key) : $row->{$key};
 
-        if ($supportRows->count() < 20 || $supportLatestClose === null) {
-            return ['rows' => [], 'current' => $supportLatestClose, 'support' => null, 'pressure' => null, 'note' => '資料不足'];
+        if ($supportRows->count() < 4 || $supportLatestClose === null) {
+            return ['rows' => [], 'current' => $supportLatestClose, 'support' => null, 'pressure' => null, 'note' => '資料不足', 'period' => $label];
         }
 
-        $low = (float) $supportRows->min('low');
-        $high = (float) $supportRows->max('high');
+        $low = (float) $supportRows->min(fn ($row) => $value($row, 'low'));
+        $high = (float) $supportRows->max(fn ($row) => $value($row, 'high'));
         $step = max(0.01, ($high - $low) / 12);
         $bins = collect(range(0, 11))->map(function (int $index) use ($low, $step) {
             $from = $low + ($step * $index);
@@ -892,10 +901,10 @@ Route::get('/s/{symbol}', function (string $symbol, StockEventChainBuilder $even
         })->all();
 
         foreach ($supportRows as $row) {
-            $close = (float) $row->close;
+            $close = (float) $value($row, 'close');
             $index = (int) floor(($close - $low) / $step);
             $index = max(0, min(count($bins) - 1, $index));
-            $bins[$index]['volume'] += max(0, (int) ($row->volume ?? 0));
+            $bins[$index]['volume'] += max(0, (int) ($value($row, 'volume') ?? 0));
         }
 
         $activeBins = collect($bins)->filter(fn (array $bin) => (int) $bin['volume'] > 0)->values();
@@ -907,7 +916,7 @@ Route::get('/s/{symbol}', function (string $symbol, StockEventChainBuilder $even
             ->filter(fn (array $bin) => $bin['from'] > $supportLatestClose)
             ->sortByDesc('volume')
             ->first();
-        $isNewHigh = $pressureBin === null && $supportLatestClose >= (float) $supportRows->max('high');
+        $isNewHigh = $pressureBin === null && $supportLatestClose >= (float) $supportRows->max(fn ($row) => $value($row, 'high'));
 
         $rows = collect($bins)
             ->reverse()
@@ -937,12 +946,13 @@ Route::get('/s/{symbol}', function (string $symbol, StockEventChainBuilder $even
             'support' => $supportBin ? number_format($supportBin['from'], 2).'~'.number_format($supportBin['to'], 2) : null,
             'pressure' => $pressureBin ? number_format($pressureBin['from'], 2).'~'.number_format($pressureBin['to'], 2) : null,
             'note' => $isNewHigh ? '創新高，暫無明確上方壓力' : null,
+            'period' => $label,
         ];
     };
     $supportChart = [
-        'week' => $buildSupportChart(130),
-        'month' => $buildSupportChart(260),
-        'quarter' => $buildSupportChart(780),
+        'week' => $buildSupportChart(array_slice($weeklyK, -52), '周統計'),
+        'month' => $buildSupportChart($monthlySupportRows, '月統計'),
+        'quarter' => $buildSupportChart($quarterlySupportRows, '季統計'),
     ];
 
     $chipRowsForChart = $stockRecord->chips()
