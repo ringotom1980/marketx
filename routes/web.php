@@ -1427,13 +1427,21 @@ Route::get('/watchlist', function (AiUsageLimiter $aiLimiter) {
                 $weakModules[] = '籌碼不足';
             }
 
+            $close = $item->close === null ? null : (float) $item->close;
+            $change = $item->change === null ? null : (float) $item->change;
+            $previousClose = $close !== null && $change !== null ? $close - $change : null;
+            $changePercent = $previousClose !== null && $previousClose > 0
+                ? ($change / $previousClose) * 100
+                : null;
+
             return [
                 'symbol' => $item->symbol,
                 'name' => $item->name,
                 'market' => $item->market,
                 'industry' => $item->industry ?: '未分類',
-                'close' => $item->close,
-                'change' => $item->change,
+                'close' => $close,
+                'change' => $change,
+                'change_percent' => $changePercent,
                 'trade_date' => $item->trade_date,
                 'decision' => $item->decision ?: '尚未評分',
                 'score' => $item->total_score,

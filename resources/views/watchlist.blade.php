@@ -152,6 +152,112 @@
             padding: 12px;
         }
 
+        .watch-card {
+            cursor: pointer;
+            position: relative;
+            transition: border-color .15s ease, box-shadow .15s ease, transform .15s ease;
+        }
+
+        .watch-card:hover {
+            border-color: #f7b5b8;
+            box-shadow: 0 12px 34px rgba(15, 23, 42, .08);
+            transform: translateY(-1px);
+        }
+
+        .watch-remove {
+            position: absolute;
+            right: 12px;
+            top: 12px;
+            z-index: 2;
+        }
+
+        .watch-remove button {
+            align-items: center;
+            background: #fff;
+            border: 1px solid var(--line);
+            border-radius: 999px;
+            color: var(--muted);
+            cursor: pointer;
+            display: inline-flex;
+            font-size: 18px;
+            font-weight: 900;
+            height: 34px;
+            justify-content: center;
+            line-height: 1;
+            padding: 0;
+            width: 34px;
+        }
+
+        .watch-remove button:hover {
+            border-color: #fecaca;
+            color: var(--button);
+        }
+
+        .watch-card-head {
+            display: flex;
+            gap: 12px;
+            justify-content: space-between;
+            padding-right: 42px;
+        }
+
+        .watch-card-title {
+            margin: 0 0 4px;
+        }
+
+        .watch-card-symbol {
+            color: var(--muted);
+            font-size: 15px;
+            font-weight: 900;
+        }
+
+        .watch-card-price {
+            align-items: baseline;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin-top: 16px;
+        }
+
+        .watch-card-price strong {
+            color: var(--ink);
+            font-size: 30px;
+            line-height: 1;
+        }
+
+        .watch-card-change {
+            font-size: 18px;
+            font-weight: 900;
+            white-space: nowrap;
+        }
+
+        .watch-card-change.red {
+            color: var(--red);
+        }
+
+        .watch-card-change.green {
+            color: var(--green);
+        }
+
+        .watch-card-change.amber {
+            color: var(--muted);
+        }
+
+        .watch-confidence {
+            margin-top: 14px;
+            color: var(--muted);
+            font-weight: 900;
+        }
+
+        .watch-confidence strong {
+            color: var(--ink);
+            font-size: 22px;
+        }
+
+        .watch-card .ai-report-form {
+            position: relative;
+            z-index: 2;
+        }
+
         @keyframes ai-spin {
             to { transform: rotate(360deg); }
         }
@@ -163,6 +269,14 @@
 
             .watchlist-add-search .search {
                 grid-template-columns: minmax(0, 1fr) auto;
+            }
+
+            .watch-card-price strong {
+                font-size: 26px;
+            }
+
+            .watch-card-change {
+                font-size: 16px;
             }
         }
     </style>
@@ -218,69 +332,41 @@
     @else
         <section class="grid two">
             @foreach ($items as $item)
-                <article class="panel">
-                    <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px">
+                @php
+                    $closeText = $item['close'] === null ? '無資料' : rtrim(rtrim(number_format($item['close'], 2), '0'), '.');
+                    $change = $item['change'];
+                    $changePercent = $item['change_percent'];
+                    $arrow = $change === null ? '' : ($change > 0 ? '▲' : ($change < 0 ? '▼' : ''));
+                    $changeClass = $change === null ? 'amber' : ($change > 0 ? 'red' : ($change < 0 ? 'green' : 'amber'));
+                    $changeText = $change === null
+                        ? '無資料'
+                        : $arrow.rtrim(rtrim(number_format(abs($change), 2), '0'), '.').'（'.rtrim(rtrim(number_format(abs($changePercent ?? 0), 2), '0'), '.').'%）';
+                @endphp
+                <article class="panel watch-card" data-href="/s/{{ $item['symbol'] }}">
+                    <form class="watch-remove" method="post" action="/watchlist/{{ $item['symbol'] }}" aria-label="移除 {{ $item['name'] }}">
+                        @csrf
+                        @method('DELETE')
+                        <button type="submit" title="移除">×</button>
+                    </form>
+
+                    <div class="watch-card-head">
                         <div style="min-width:0">
-                            <h2 style="margin-bottom:4px">
-                                <a href="/s/{{ $item['symbol'] }}">{{ $item['name'] }} {{ $item['symbol'] }}</a>
-                            </h2>
-                            <p class="lead">{{ $item['market'] }}｜{{ $item['industry'] }}</p>
-                        </div>
-                        <span class="badge {{ $decisionTone($item['decision']) }}">{{ $item['decision'] }}</span>
-                    </div>
-
-                    <div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin:14px 0">
-                        <div>
-                            <p class="lead" style="font-size:12px">信心指數</p>
-                            <strong style="font-size:24px">{{ $item['confidence'] === null ? '無' : $item['confidence'].'%' }}</strong>
-                        </div>
-                        <div>
-                            <p class="lead" style="font-size:12px">收盤</p>
-                            <strong style="font-size:24px">{{ $item['close'] ?? '無' }}</strong>
+                            <h2 class="watch-card-title">{{ $item['name'] }}</h2>
+                            <div class="watch-card-symbol">{{ $item['symbol'] }}</div>
                         </div>
                     </div>
 
-                    <div class="chain">
-                        <div>
-                            <span class="badge {{ $changeTone($item['change']) }}">
-                                漲跌 {{ $item['change'] === null ? '無資料' : $item['change'] }}
-                            </span>
-                            <span class="badge amber">模組 {{ $item['complete_modules'] }} / 6</span>
-                        </div>
-                        @if (! empty($item['weak_modules']))
-                            <div>
-                                @foreach ($item['weak_modules'] as $weakModule)
-                                    <span class="badge amber">{{ $weakModule }}</span>
-                                @endforeach
-                            </div>
-                        @endif
-                        <p class="lead">資料日期：{{ $item['trade_date'] ?? '無資料' }}</p>
+                    <div class="watch-card-price">
+                        <strong>{{ $closeText }}</strong>
+                        <span class="watch-card-change {{ $changeClass }}">{{ $changeText }}</span>
                     </div>
 
-                    @if (! empty($item['report_summary']))
-                        <div class="signal-item" style="margin-top:12px">
-                            <span class="badge {{ $item['report_is_ai'] ? 'red' : 'amber' }}">
-                                {{ $item['report_is_ai'] ? 'AI 報告' : '規則式評價' }} {{ $item['report_date'] }}
-                            </span>
-                            <p>{!! nl2br(e(\Illuminate\Support\Str::limit($item['report_summary'], 180))) !!}</p>
-                        </div>
-                    @else
-                        <div class="signal-item" style="margin-top:12px">
-                            <span class="badge amber">尚未產生 AI 報告</span>
-                            <p>之後執行追蹤清單 AI 任務後，這裡會顯示 Gemini 四段式研究摘要。</p>
-                        </div>
-                    @endif
-
-                    <div style="display:grid;grid-template-columns:1fr auto;gap:8px;margin-top:14px">
-                        <a class="button" href="/s/{{ $item['symbol'] }}" style="text-align:center">查看</a>
-                        <form method="post" action="/watchlist/{{ $item['symbol'] }}">
-                            @csrf
-                            @method('DELETE')
-                            <button class="button" type="submit">移除</button>
-                        </form>
+                    <div class="watch-confidence">
+                        信心指數 <strong>{{ $item['confidence'] === null ? '無' : $item['confidence'].'%' }}</strong>
                     </div>
+
                     @if ($isAdmin && ! $item['report_is_ai'])
-                        <form class="ai-report-form" method="post" action="/watchlist/{{ $item['symbol'] }}/ai-report" style="margin-top:8px">
+                        <form class="ai-report-form" method="post" action="/watchlist/{{ $item['symbol'] }}/ai-report" style="margin-top:14px">
                             @csrf
                             <button class="button" type="submit" style="width:100%" {{ $aiUsage['remaining'] <= 0 ? 'disabled' : '' }}>
                                 產生AI報告
@@ -296,6 +382,16 @@
         (() => {
             const loadingOverlay = document.getElementById('ai-loading-overlay');
             const addSearch = document.querySelector('[data-watchlist-add-search]');
+
+            document.querySelectorAll('.watch-card[data-href]').forEach((card) => {
+                card.addEventListener('click', (event) => {
+                    if (event.target.closest('a, button, form, input, select, textarea')) {
+                        return;
+                    }
+
+                    window.location.href = card.dataset.href;
+                });
+            });
 
             if (addSearch) {
                 const input = addSearch.querySelector('[data-watchlist-add-input]');
