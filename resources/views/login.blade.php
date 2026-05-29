@@ -4,7 +4,7 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>登入｜股市在幹嘛</title>
-    <meta name="description" content="股市在幹嘛：看懂市場，掌握機會。">
+    <meta name="description" content="《股市在幹嘛》整合台股、全球市場、題材熱度、技術線圖、籌碼與財務資料，幫助投資人用更清楚的脈絡觀察市場變化。">
     <meta name="theme-color" content="#c1121f">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-title" content="股市在幹嘛">
@@ -12,7 +12,7 @@
     <meta property="og:site_name" content="股市在幹嘛">
     <meta property="og:type" content="website">
     <meta property="og:title" content="股市在幹嘛">
-    <meta property="og:description" content="看懂市場，掌握機會。">
+    <meta property="og:description" content="整合台股、全球市場、題材熱度、技術線圖、籌碼與財務資料，用白話方式看懂市場正在發生什麼。">
     <meta property="og:url" content="{{ config('app.url') }}">
     <meta property="og:image" content="{{ config('app.url') }}/assets/og-marketx.png?v=20260525-pwa1">
     <meta property="og:image:width" content="1200">
@@ -20,7 +20,7 @@
     <meta property="og:image:alt" content="股市在幹嘛">
     <meta name="twitter:card" content="summary_large_image">
     <meta name="twitter:title" content="股市在幹嘛">
-    <meta name="twitter:description" content="看懂市場，掌握機會。">
+    <meta name="twitter:description" content="整合台股、全球市場、題材熱度、技術線圖、籌碼與財務資料，用白話方式看懂市場正在發生什麼。">
     <meta name="twitter:image" content="{{ config('app.url') }}/assets/og-marketx.png?v=20260525-pwa1">
     <link rel="manifest" href="/manifest.json?v=20260525-pwa1">
     <link rel="icon" type="image/png" sizes="32x32" href="/assets/favicon-32.png?v=20260524-logo2">
