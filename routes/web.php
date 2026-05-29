@@ -937,6 +937,13 @@ Route::get('/s/{symbol}', function (string $symbol, StockEventChainBuilder $even
 
     $financialRowsForChart = DB::table('stock_financials')
         ->where('stock_id', $stockRecord->id)
+        ->where(function ($query) {
+            $query->whereNotNull('eps')
+                ->orWhereNotNull('roe')
+                ->orWhereNotNull('gross_margin')
+                ->orWhereNotNull('operating_margin');
+        })
+        ->where('period', 'like', '%Q%')
         ->orderByDesc('period')
         ->limit(80)
         ->get(['period', 'eps', 'roe', 'gross_margin', 'operating_margin', 'per', 'pb_ratio'])
