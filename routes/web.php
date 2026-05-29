@@ -905,7 +905,7 @@ Route::get('/s/{symbol}', function (string $symbol, StockEventChainBuilder $even
             ->first();
         $pressureBin = $activeBins
             ->filter(fn (array $bin) => $bin['from'] > $supportLatestClose)
-            ->sortBy('from')
+            ->sortByDesc('volume')
             ->first();
         $isNewHigh = $pressureBin === null && $supportLatestClose >= (float) $supportRows->max('high');
 

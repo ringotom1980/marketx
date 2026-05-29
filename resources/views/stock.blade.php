@@ -1007,7 +1007,7 @@
                                 color: row.type === 'current'
                                     ? 'rgba(246,199,102,.78)'
                                     : (row.type === 'pressure'
-                                        ? palette.redSoft
+                                        ? palette.red
                                         : (row.type === 'support' ? 'rgba(139,92,246,.68)' : 'rgba(148,163,184,.35)')),
                             },
                         })),
