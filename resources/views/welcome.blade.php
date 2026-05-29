@@ -127,8 +127,11 @@
         }
 
         .account-actions a {
+            align-items: center;
             border: 1px solid var(--line);
             border-radius: 999px;
+            display: inline-flex;
+            justify-content: center;
             padding: 6px 8px;
             color: var(--muted);
             line-height: 1;
@@ -137,9 +140,52 @@
         }
 
         .account-actions a.active,
-        .account-actions a:hover {
+        .account-actions a:hover,
+        .share-button:hover {
             color: var(--button);
             border-color: rgba(193, 18, 31, .28);
+        }
+
+        .share-button {
+            align-items: center;
+            background: #fff;
+            border: 1px solid var(--line);
+            border-radius: 999px;
+            color: var(--muted);
+            cursor: pointer;
+            display: inline-flex;
+            height: 34px;
+            justify-content: center;
+            padding: 0;
+            width: 34px;
+        }
+
+        .share-button svg {
+            display: block;
+            height: 17px;
+            width: 17px;
+        }
+
+        .share-toast {
+            background: rgba(22, 32, 42, .92);
+            border-radius: 999px;
+            bottom: max(18px, env(safe-area-inset-bottom));
+            color: #fff;
+            font-size: 14px;
+            font-weight: 800;
+            left: 50%;
+            opacity: 0;
+            padding: 10px 14px;
+            pointer-events: none;
+            position: fixed;
+            transform: translate(-50%, 10px);
+            transition: opacity .16s ease, transform .16s ease;
+            z-index: 120;
+        }
+
+        .share-toast.show {
+            opacity: 1;
+            transform: translate(-50%, 0);
         }
 
         .site-stats {
@@ -556,6 +602,15 @@
                     </span>
                 </a>
                 <div class="account-actions" aria-label="帳號功能">
+                    <button class="share-button" type="button" data-share-page aria-label="分享此頁" title="分享此頁">
+                        <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round">
+                            <circle cx="18" cy="5" r="3"></circle>
+                            <circle cx="6" cy="12" r="3"></circle>
+                            <circle cx="18" cy="19" r="3"></circle>
+                            <path d="M8.6 10.7 15.4 6.3"></path>
+                            <path d="M8.6 13.3 15.4 17.7"></path>
+                        </svg>
+                    </button>
                     @if (session('marketx_admin') === true || session('marketx_is_admin') === true)
                         <a class="{{ request()->is('admin') || request()->is('admin/*') ? 'active' : '' }}" href="/admin">後台</a>
                     @endif
@@ -584,6 +639,7 @@
         @yield('content')
     </main>
 </div>
+<div class="share-toast" id="share-toast" role="status" aria-live="polite">已複製分享連結</div>
 @if (session('show_home_screen_tip'))
     <div class="install-tip-backdrop" id="install-tip" role="dialog" aria-modal="true" aria-labelledby="install-tip-title">
         <div class="install-tip-modal">
@@ -627,6 +683,49 @@
 @endif
 <script>
     (() => {
+        const shareButton = document.querySelector('[data-share-page]');
+        const shareToast = document.getElementById('share-toast');
+        const showShareToast = (message = '已複製分享連結') => {
+            if (!shareToast) {
+                return;
+            }
+
+            shareToast.textContent = message;
+            shareToast.classList.add('show');
+            window.clearTimeout(window.marketxShareToastTimer);
+            window.marketxShareToastTimer = window.setTimeout(() => {
+                shareToast.classList.remove('show');
+            }, 1800);
+        };
+
+        if (shareButton) {
+            shareButton.addEventListener('click', async () => {
+                const title = document.title || '股市在幹嘛';
+                const description = document.querySelector('meta[property="og:description"]')?.content
+                    || document.querySelector('meta[name="description"]')?.content
+                    || '整合台股、全球市場、題材熱度、技術線圖、籌碼與財務資料，用白話方式看懂市場正在發生什麼。';
+                const url = window.location.href;
+
+                if (navigator.share) {
+                    try {
+                        await navigator.share({ title, text: description, url });
+                        return;
+                    } catch (error) {
+                        if (error?.name === 'AbortError') {
+                            return;
+                        }
+                    }
+                }
+
+                try {
+                    await navigator.clipboard.writeText(url);
+                    showShareToast();
+                } catch (error) {
+                    showShareToast('請複製網址列連結');
+                }
+            });
+        }
+
         const tip = document.getElementById('install-tip');
         const close = document.getElementById('install-tip-close');
         const done = document.getElementById('install-tip-done');
