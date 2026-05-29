@@ -65,11 +65,11 @@ class StockReportPhraseComposer
         $signals = $this->alignSignalsWithRadarCard($signals, $radarCardType);
 
         $parts = [
-            $this->renderSection('price_theme', $signals['price_theme'], $vars, 1, false),
-            $this->renderSection('technical', $signals['technical'], $vars, 1, false),
-            $this->renderSection('chip', $signals['chip'], $vars, 1, false),
-            $this->renderSection('fundamental', $signals['fundamental'], $vars, 1, false),
-            $this->renderSection('summary', $signals['summary'], $vars, 1, false),
+            $this->renderSection('price_theme', $signals['price_theme'], $vars, 1, false, true),
+            $this->renderSection('technical', $signals['technical'], $vars, 1, false, true),
+            $this->renderSection('chip', $signals['chip'], $vars, 1, false, true),
+            $this->renderSection('fundamental', $signals['fundamental'], $vars, 1, false, true),
+            $this->renderSection('summary', $signals['summary'], $vars, 1, false, true),
         ];
 
         return [
@@ -82,7 +82,7 @@ class StockReportPhraseComposer
     /**
      * @param array<int, string> $conditionKeys
      */
-    private function renderSection(string $section, array $conditionKeys, array $vars, int $limit, bool $trackUsage = true): string
+    private function renderSection(string $section, array $conditionKeys, array $vars, int $limit, bool $trackUsage = true, bool $diversify = false): string
     {
         $conditionKeys = array_values(array_unique(array_filter($conditionKeys)));
 
@@ -94,10 +94,18 @@ class StockReportPhraseComposer
             ->where('section', $section)
             ->where('status', 'active')
             ->whereIn('condition_key', $conditionKeys)
-            ->orderByDesc('weight')
-            ->orderBy('usage_count')
             ->limit(max($limit * 3, $limit))
-            ->get(['id', 'template']);
+            ->get(['id', 'condition_key', 'template', 'weight', 'usage_count'])
+            ->sort(function (object $a, object $b) use ($conditionKeys) {
+                $rankA = array_search($a->condition_key, $conditionKeys, true);
+                $rankB = array_search($b->condition_key, $conditionKeys, true);
+                $rankA = $rankA === false ? 999 : $rankA;
+                $rankB = $rankB === false ? 999 : $rankB;
+
+                return [$rankA, -((int) $a->weight), (int) $a->usage_count]
+                    <=> [$rankB, -((int) $b->weight), (int) $b->usage_count];
+            })
+            ->values();
 
         if ($phrases->isEmpty()) {
             $phrases = DB::table('report_phrases')
@@ -106,10 +114,10 @@ class StockReportPhraseComposer
                 ->where('condition_key', $this->fallbackCondition($section))
                 ->orderByDesc('weight')
                 ->limit($limit)
-                ->get(['id', 'template']);
+                ->get(['id', 'condition_key', 'template', 'weight', 'usage_count']);
         }
 
-        $selected = $phrases->take($limit);
+        $selected = $this->selectPhrases($phrases, $limit, $diversify ? (string) ($vars['_seed'] ?? '') : '');
 
         if ($trackUsage && $selected->isNotEmpty()) {
             DB::table('report_phrases')
@@ -120,6 +128,31 @@ class StockReportPhraseComposer
         return $selected
             ->map(fn (object $phrase) => $this->replaceVars((string) $phrase->template, $vars))
             ->implode('');
+    }
+
+    private function selectPhrases(Collection $phrases, int $limit, string $seed): Collection
+    {
+        if ($phrases->isEmpty() || $limit <= 0) {
+            return collect();
+        }
+
+        if ($seed === '') {
+            return $phrases->take($limit);
+        }
+
+        $groups = $phrases->groupBy('condition_key')->values();
+        $selected = collect();
+
+        foreach ($groups as $index => $group) {
+            if ($selected->count() >= $limit) {
+                break;
+            }
+
+            $offset = crc32($seed.'|'.$index) % max(1, $group->count());
+            $selected->push($group->values()->get($offset));
+        }
+
+        return $selected->filter()->take($limit)->values();
     }
 
     private function fallbackCondition(string $section): string
@@ -200,6 +233,7 @@ class StockReportPhraseComposer
         $d9 = $this->num($technical?->d9);
         $k9Prev = $this->num($technical?->k9_previous);
         $d9Prev = $this->num($technical?->d9_previous);
+        $return5 = $this->num($technical?->return5) ?? 0.0;
         $return20 = $this->num($technical?->return20) ?? 0.0;
         $return60 = $this->num($technical?->return60) ?? 0.0;
         $per = $this->num($financial?->per);
@@ -209,6 +243,18 @@ class StockReportPhraseComposer
         $themeScore = (int) ($score?->theme_score ?? 0);
 
         $priceTheme = [];
+        if (($changePct ?? 0) > 0 && $return20 <= -6 && ($volumeRatio20 ?? 0) >= 1.2) {
+            $priceTheme[] = 'today_rebound_after_drop';
+        }
+        if (($changePct ?? 0) < 0 && $return20 >= 10) {
+            $priceTheme[] = 'today_pullback_after_run';
+        }
+        if ($return20 <= -8 || $return60 <= -15) {
+            $priceTheme[] = 'recent_downtrend';
+        }
+        if ($return5 >= 4 && $return20 >= 8) {
+            $priceTheme[] = 'recent_momentum';
+        }
         if ($themeScore >= 60 && ($changePct ?? 0) > 0) {
             $priceTheme[] = 'theme_hot_price_up';
         } elseif ($themes === []) {
@@ -388,8 +434,14 @@ class StockReportPhraseComposer
             'stock_name' => $stock->name,
             'symbol' => $stock->symbol,
             'theme_text' => $themes === [] ? '目前未明確連動的' : implode('、', $themes),
+            '_seed' => $stock->symbol.'|'.($price?->trade_date ?? now('Asia/Taipei')->toDateString()).'|'.($score?->score_date ?? ''),
             'close' => $price?->close === null ? '無資料' : number_format((float) $price->close, 2),
             'change_pct' => $price?->change_pct === null ? '無資料' : number_format((float) $price->change_pct, 2).'%',
+            'return5' => $technical?->return5 === null ? '無資料' : number_format((float) $technical->return5, 2).'%',
+            'return20' => $technical?->return20 === null ? '無資料' : number_format((float) $technical->return20, 2).'%',
+            'return60' => $technical?->return60 === null ? '無資料' : number_format((float) $technical->return60, 2).'%',
+            'volume_ratio20' => $technical?->volume_ratio20 === null ? '無資料' : number_format((float) $technical->volume_ratio20, 2).'倍',
+            'bais20' => $technical?->bais20 === null ? '無資料' : number_format((float) $technical->bais20, 2).'%',
             'confidence' => (string) (int) ($score?->confidence_score ?? 0),
             'revenue_yoy' => $revenue?->yoy_pct === null ? '無資料' : number_format((float) $revenue->yoy_pct, 2).'%',
             'revenue_mom' => $revenue?->mom_pct === null ? '無資料' : number_format((float) $revenue->mom_pct, 2).'%',

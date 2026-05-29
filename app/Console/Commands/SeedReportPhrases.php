@@ -87,6 +87,14 @@ class SeedReportPhrases extends Command
             ['section' => 'price_theme', 'tone' => 'neutral', 'condition_key' => 'price_sideways', 'template' => '目前價格走勢沒有明顯單邊方向，若後續突破整理區且量能放大，訊號才會更清楚。'],
             ['section' => 'price_theme', 'tone' => 'bull', 'condition_key' => 'low_base_breakout', 'template' => '{stock_name}有低檔轉強跡象，若這次放量能守住收盤價位，後續有機會從整理格局轉為重新被市場關注。'],
             ['section' => 'price_theme', 'tone' => 'bull', 'condition_key' => 'low_base_breakout', 'template' => '股價從相對低位階放量上來，這種型態重點不是追高，而是觀察量能是否能連續、回檔是否守得住。'],
+            ['section' => 'price_theme', 'tone' => 'bull', 'condition_key' => 'today_rebound_after_drop', 'template' => '{stock_name}近 20 日仍是下跌或整理格局，但今天股價轉強且量能放大到約 {volume_ratio20}，比較像資金開始試探低位階反彈。'],
+            ['section' => 'price_theme', 'tone' => 'bull', 'condition_key' => 'today_rebound_after_drop', 'template' => '{stock_name}前段走勢偏弱，今天能在放量下收紅，重點會從「跌深」轉成觀察是否能連續站回短期均線。'],
+            ['section' => 'price_theme', 'tone' => 'risk', 'condition_key' => 'today_pullback_after_run', 'template' => '{stock_name}近 20 日漲幅約 {return20}，今天轉為拉回，代表前波追價買盤開始遇到壓力，短線要看回檔是否仍守住均線。'],
+            ['section' => 'price_theme', 'tone' => 'risk', 'condition_key' => 'today_pullback_after_run', 'template' => '這檔不是單純弱勢，而是前面已經漲過一段後出現降溫，若量能跟著放大，會比較像獲利了結壓力。'],
+            ['section' => 'price_theme', 'tone' => 'bear', 'condition_key' => 'recent_downtrend', 'template' => '{stock_name}近 20 日報酬約 {return20}、近 60 日約 {return60}，近期走勢仍偏弱，現在要先看止跌訊號，而不是急著用反彈解讀。'],
+            ['section' => 'price_theme', 'tone' => 'bear', 'condition_key' => 'recent_downtrend', 'template' => '近期股價重心還在往下，除非今天的轉強能延續成連續收復均線，否則仍屬於修復中的走勢。'],
+            ['section' => 'price_theme', 'tone' => 'bull', 'condition_key' => 'recent_momentum', 'template' => '{stock_name}近 5 日漲幅約 {return5}、近 20 日約 {return20}，短線動能明顯，若量能沒有快速退潮，市場關注度仍會維持。'],
+            ['section' => 'price_theme', 'tone' => 'bull', 'condition_key' => 'recent_momentum', 'template' => '最近幾個交易日股價重心明顯墊高，這種走勢通常代表資金還沒有完全退場，但也要留意乖離率約 {bais20} 帶來的震盪。'],
         ];
     }
 
