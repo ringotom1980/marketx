@@ -20,6 +20,13 @@ class SeedReportPhrases extends Command
         $now = now();
         $inserted = 0;
 
+        DB::table('report_phrases')
+            ->whereIn('template', $this->deprecatedTemplates())
+            ->update([
+                'status' => 'inactive',
+                'updated_at' => $now,
+            ]);
+
         foreach ($this->phrases() as $phrase) {
             $payload = [
                 'section' => $phrase['section'],
@@ -76,7 +83,7 @@ class SeedReportPhrases extends Command
             ['section' => 'price_theme', 'tone' => 'bull', 'condition_key' => 'price_up_volume_up', 'template' => '價量結構目前偏正向，股價推升時成交量跟上，代表市場不是只有少量資金拉抬。'],
             ['section' => 'price_theme', 'tone' => 'neutral', 'condition_key' => 'price_up_volume_flat', 'template' => '{stock_name}雖然股價有表現，但量能沒有明顯同步放大，後續要觀察追價買盤是否延續。'],
             ['section' => 'price_theme', 'tone' => 'neutral', 'condition_key' => 'price_up_volume_flat', 'template' => '目前股價偏強，但成交量配合度普通，走勢比較像溫和墊高，還不到資金全面進攻的狀態。'],
-            ['section' => 'price_theme', 'tone' => 'risk', 'condition_key' => 'price_extended', 'template' => '{stock_name}短線漲幅已經拉開，若後續題材或營收沒有新的支撐，容易出現漲多整理。'],
+            ['section' => 'price_theme', 'tone' => 'risk', 'condition_key' => 'price_extended', 'template' => '{stock_name}近 20 日漲幅與乖離率都偏高，現在不是單純看強不強，而是要看成交量、法人買盤與營收能不能接住已反映的期待。'],
             ['section' => 'price_theme', 'tone' => 'risk', 'condition_key' => 'price_extended', 'template' => '股價目前離短期均線偏遠，市場期待已經反映不少，追高時要留意震盪放大的可能。'],
             ['section' => 'price_theme', 'tone' => 'risk', 'condition_key' => 'price_extended', 'template' => '這類走勢最怕題材熱度降溫後買盤縮手，若量能退潮，股價容易先回測支撐。'],
             ['section' => 'price_theme', 'tone' => 'bear', 'condition_key' => 'price_down_volume_up', 'template' => '{stock_name}下跌時量能放大，代表賣壓不是零星出現，短線需要先觀察是否止跌。'],
@@ -104,7 +111,7 @@ class SeedReportPhrases extends Command
             ['section' => 'technical', 'tone' => 'bull', 'condition_key' => 'ma_bull', 'template' => '均線結構偏多，股價位在短中期均線之上，代表市場平均成本正在往上墊高。'],
             ['section' => 'technical', 'tone' => 'bull', 'condition_key' => 'ma_bull', 'template' => '短期均線逐步走揚，若股價回測不跌破關鍵均線，多方結構仍可維持。'],
             ['section' => 'technical', 'tone' => 'bull', 'condition_key' => 'macd_bull', 'template' => 'MACD 動能偏多，若柱狀體持續擴大，代表上攻力道仍在增加。'],
-            ['section' => 'technical', 'tone' => 'bull', 'condition_key' => 'macd_bull', 'template' => 'MACD 目前站在相對有利的位置，短線只要不快速翻弱，趨勢仍有延續空間。'],
+            ['section' => 'technical', 'tone' => 'bull', 'condition_key' => 'macd_bull', 'template' => 'MACD 仍在多方排列時，要搭配柱狀體是否續增判斷；若價漲但柱狀體縮小，就要小心動能開始鈍化。'],
             ['section' => 'technical', 'tone' => 'bull', 'condition_key' => 'kd_golden', 'template' => 'KD 出現偏多交叉，短線買盤有重新轉強跡象，但仍需搭配成交量確認。'],
             ['section' => 'technical', 'tone' => 'bull', 'condition_key' => 'rsi_strong', 'template' => 'RSI 位在強勢區，代表買盤動能不弱，但若快速接近過熱區，追價風險也會提高。'],
             ['section' => 'technical', 'tone' => 'bull', 'condition_key' => 'breakout20', 'template' => '股價有突破近期壓力的訊號，若突破後沒有快速跌回，技術面會比整理期更有利。'],
@@ -169,7 +176,7 @@ class SeedReportPhrases extends Command
     private function summaryPhrases(): array
     {
         return [
-            ['section' => 'summary', 'tone' => 'bull', 'condition_key' => 'overall_bull', 'template' => '整體來看，{stock_name}目前偏向多方觀察，支撐來自技術、籌碼或題材至少兩項同向。不過仍要避免在短線急漲後追價過深。'],
+            ['section' => 'summary', 'tone' => 'bull', 'condition_key' => 'overall_bull', 'template' => '整體來看，{stock_name}偏向多方觀察，但重點要分清楚是剛轉強、延續強勢，還是已經漲多；不同位階的風險完全不同。'],
             ['section' => 'summary', 'tone' => 'bull', 'condition_key' => 'overall_bull', 'template' => '{stock_name}目前條件相對完整，若量能與法人買盤延續，股價較有機會維持強勢整理或續攻。'],
             ['section' => 'summary', 'tone' => 'bull', 'condition_key' => 'overall_bull', 'template' => '總評偏正向，但操作上仍應以關鍵均線與量能是否延續作為風險控管依據。'],
             ['section' => 'summary', 'tone' => 'neutral', 'condition_key' => 'overall_watch', 'template' => '整體來看，{stock_name}屬於觀察名單，不是明顯弱勢，但也還沒到所有條件都同步轉強。'],
@@ -184,6 +191,18 @@ class SeedReportPhrases extends Command
             ['section' => 'summary', 'tone' => 'risk', 'condition_key' => 'data_limited', 'template' => '由於部分資料仍不完整，本次評價以既有官方資料與技術籌碼訊號為主，結論需保留彈性。'],
             ['section' => 'summary', 'tone' => 'neutral', 'condition_key' => 'wait_for_confirmation', 'template' => '後續觀察重點是成交量能否延續、法人是否站在買方，以及營收是否能跟上股價期待。'],
             ['section' => 'summary', 'tone' => 'risk', 'condition_key' => 'invalid_condition', 'template' => '若股價跌破關鍵均線、量能退潮或法人連續轉賣，原本偏多條件就需要重新評估。'],
+        ];
+    }
+
+    /**
+     * @return array<int, string>
+     */
+    private function deprecatedTemplates(): array
+    {
+        return [
+            '{stock_name}短線漲幅已經拉開，若後續題材或營收沒有新的支撐，容易出現漲多整理。',
+            'MACD 目前站在相對有利的位置，短線只要不快速翻弱，趨勢仍有延續空間。',
+            '整體來看，{stock_name}目前偏向多方觀察，支撐來自技術、籌碼或題材至少兩項同向。不過仍要避免在短線急漲後追價過深。',
         ];
     }
 }

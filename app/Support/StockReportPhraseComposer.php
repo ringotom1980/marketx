@@ -64,19 +64,122 @@ class StockReportPhraseComposer
         $vars = $this->variables($stock, $score, $chip, $price, $revenue, $technical, $financial, $themes);
         $signals = $this->alignSignalsWithRadarCard($signals, $radarCardType);
 
-        $parts = [
-            $this->renderSection('price_theme', $signals['price_theme'], $vars, 1, false, true),
-            $this->renderSection('technical', $signals['technical'], $vars, 1, false, true),
-            $this->renderSection('chip', $signals['chip'], $vars, 1, false, true),
-            $this->renderSection('fundamental', $signals['fundamental'], $vars, 1, false, true),
-            $this->renderSection('summary', $signals['summary'], $vars, 1, false, true),
-        ];
-
         return [
-            'one_liner' => trim(implode('', array_filter($parts))),
+            'one_liner' => $this->composeContextualQuickText($stock, $score, $chip, $price, $revenue, $technical, $financial, $themes, $radarCardType),
             'condition_keys' => $signals,
-            'engine' => 'phrase_library_v1',
+            'engine' => 'contextual_phrase_v2',
         ];
+    }
+
+    private function composeContextualQuickText(Stock $stock, mixed $score, mixed $chip, mixed $price, mixed $revenue, mixed $technical, mixed $financial, array $themes, ?string $radarCardType): string
+    {
+        $sentences = array_filter([
+            $this->priceActionSentence($stock, $price, $technical, $themes, $radarCardType),
+            $this->technicalSentence($price, $technical),
+            $this->moneyOrFundamentalSentence($chip, $price, $revenue, $financial),
+        ]);
+
+        return implode('', array_slice($sentences, 0, 3));
+    }
+
+    private function priceActionSentence(Stock $stock, mixed $price, mixed $technical, array $themes, ?string $radarCardType): string
+    {
+        $close = $this->num($price?->close);
+        $changePct = $this->num($price?->change_pct);
+        $return5 = $this->num($technical?->return5);
+        $return20 = $this->num($technical?->return20);
+        $return60 = $this->num($technical?->return60);
+        $volumeRatio20 = $this->num($technical?->volume_ratio20);
+        $bais20 = $this->num($technical?->bais20);
+        $themeText = $themes === [] ? '題材面暫時沒有明確主軸' : '目前連動題材是'.implode('、', array_slice($themes, 0, 2));
+
+        $prefix = $stock->name.'今天收在 '.$this->formatNumber($close).'，漲跌幅 '.$this->formatPercent($changePct).'；';
+
+        if (($changePct ?? 0) > 0 && ($return20 ?? 0) <= -6) {
+            return $prefix.'近 20 日仍下跌 '.$this->formatAbsPercent($return20).'，今天轉強比較像低位階反彈剛出現，重點是量能 '.$this->formatMultiple($volumeRatio20).' 能不能延續。';
+        }
+
+        if (($changePct ?? 0) < 0 && ($return20 ?? 0) >= 8) {
+            return $prefix.'近 20 日仍上漲 '.$this->formatPercent($return20).'，今天拉回比較像前波強勢後的降溫，不能只用單日下跌就判成弱勢。';
+        }
+
+        if (($return20 ?? 0) >= 12 || ($bais20 ?? 0) >= 10 || $radarCardType === 'risk') {
+            return $prefix.'近 20 日報酬 '.$this->formatPercent($return20).'、20 日乖離 '.$this->formatPercent($bais20).'，股價已反映不少期待，現在更需要確認營收或籌碼能不能跟上。';
+        }
+
+        if (($return20 ?? 0) <= -8 || ($return60 ?? 0) <= -15 || $radarCardType === 'weak') {
+            return $prefix.'近 20 日報酬 '.$this->formatPercent($return20).'、近 60 日 '.$this->formatPercent($return60).'，走勢還在修復期，評價重點會放在止跌與量能是否回來。';
+        }
+
+        if (($return5 ?? 0) >= 3 && ($return20 ?? 0) >= 6) {
+            return $prefix.'近 5 日 '.$this->formatPercent($return5).'、近 20 日 '.$this->formatPercent($return20).'，短線動能明確轉強，'.$themeText.'。';
+        }
+
+        return $prefix.'近 5 日 '.$this->formatPercent($return5).'、近 20 日 '.$this->formatPercent($return20).'，目前比較像等待方向確認，'.$themeText.'。';
+    }
+
+    private function technicalSentence(mixed $price, mixed $technical): string
+    {
+        $close = $this->num($price?->close);
+        $sma20 = $this->num($technical?->sma20);
+        $sma60 = $this->num($technical?->sma60);
+        $rsi14 = $this->num($technical?->rsi14);
+        $macdHist = $this->num($technical?->macd_histogram);
+        $macdHistPrev = $this->num($technical?->macd_histogram_previous);
+        $volumeRatio20 = $this->num($technical?->volume_ratio20);
+
+        $notes = [];
+        if ($close !== null && $sma20 !== null) {
+            $notes[] = $close >= $sma20 ? '收盤站在月線上方' : '收盤還在月線下方';
+        }
+        if ($sma20 !== null && $sma60 !== null) {
+            $notes[] = $sma20 >= $sma60 ? '月線仍高於季線' : '月線仍低於季線';
+        }
+        if ($macdHist !== null && $macdHistPrev !== null) {
+            $notes[] = $macdHist >= $macdHistPrev ? 'MACD 柱狀體擴大' : 'MACD 柱狀體縮小';
+        }
+        if ($rsi14 !== null) {
+            $notes[] = match (true) {
+                $rsi14 >= 75 => 'RSI 已偏熱',
+                $rsi14 >= 55 => 'RSI 維持強勢區',
+                $rsi14 <= 40 => 'RSI 仍偏弱',
+                default => 'RSI 位在中性區',
+            };
+        }
+        if ($volumeRatio20 !== null) {
+            $notes[] = '量能約為 20 日均量的 '.$this->formatMultiple($volumeRatio20);
+        }
+
+        return $notes === [] ? '' : '技術面看，'.implode('、', array_slice($notes, 0, 4)).'。';
+    }
+
+    private function moneyOrFundamentalSentence(mixed $chip, mixed $price, mixed $revenue, mixed $financial): string
+    {
+        $institutional = $this->num($chip?->institutional_net_buy);
+        $foreign = $this->num($chip?->foreign_net_buy);
+        $trust = $this->num($chip?->investment_trust_net_buy);
+        $yoy = $this->num($revenue?->yoy_pct);
+        $mom = $this->num($revenue?->mom_pct);
+        $per = $this->num($financial?->per);
+
+        if ($institutional !== null && abs($institutional) > 0) {
+            $direction = $institutional > 0 ? '買超' : '賣超';
+            $detail = [];
+            if ($foreign !== null) {
+                $detail[] = '外資'.($foreign >= 0 ? '買' : '賣');
+            }
+            if ($trust !== null) {
+                $detail[] = '投信'.($trust >= 0 ? '買' : '賣');
+            }
+
+            return '資金面三大法人合計偏'.$direction.'，'.($detail === [] ? '後續要看是否連續。' : implode('、', $detail).'的方向會影響隔日承接力道。');
+        }
+
+        if ($yoy !== null || $mom !== null || $per !== null) {
+            return '基本面最新月營收年增 '.$this->formatPercent($yoy).'、月增 '.$this->formatPercent($mom).'，本益比 '.$this->formatNumber($per).'，股價能否續強要看成長是否配得上評價。';
+        }
+
+        return '';
     }
 
     /**
@@ -452,5 +555,41 @@ class StockReportPhraseComposer
     private function num(mixed $value): ?float
     {
         return $value === null ? null : (float) $value;
+    }
+
+    private function formatNumber(?float $value): string
+    {
+        if ($value === null) {
+            return '無資料';
+        }
+
+        return rtrim(rtrim(number_format($value, 2), '0'), '.');
+    }
+
+    private function formatPercent(?float $value): string
+    {
+        if ($value === null) {
+            return '無資料';
+        }
+
+        return ($value > 0 ? '+' : '').number_format($value, 2).'%';
+    }
+
+    private function formatAbsPercent(?float $value): string
+    {
+        if ($value === null) {
+            return '無資料';
+        }
+
+        return number_format(abs($value), 2).'%';
+    }
+
+    private function formatMultiple(?float $value): string
+    {
+        if ($value === null) {
+            return '無資料';
+        }
+
+        return number_format($value, 2).'倍';
     }
 }
