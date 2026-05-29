@@ -80,8 +80,90 @@
             margin-top: 18px;
         }
 
+        .watchlist-add-search {
+            min-width: 0;
+            position: relative;
+        }
+
+        .watchlist-add-search .search {
+            width: 100%;
+        }
+
+        .watchlist-add-results {
+            background: #fff;
+            border: 1px solid var(--line);
+            border-radius: 8px;
+            box-shadow: 0 18px 40px rgba(15, 23, 42, .12);
+            display: none;
+            left: 0;
+            max-height: 320px;
+            overflow-y: auto;
+            position: absolute;
+            right: 0;
+            top: calc(100% + 6px);
+            z-index: 35;
+        }
+
+        .watchlist-add-results.open {
+            display: block;
+        }
+
+        .watchlist-add-item {
+            background: #fff;
+            border: 0;
+            border-bottom: 1px solid #edf0f3;
+            color: var(--ink);
+            cursor: pointer;
+            display: grid;
+            gap: 4px 8px;
+            grid-template-columns: auto 1fr;
+            padding: 10px 12px;
+            text-align: left;
+            width: 100%;
+        }
+
+        .watchlist-add-item:last-child {
+            border-bottom: 0;
+        }
+
+        .watchlist-add-item:hover,
+        .watchlist-add-item.active {
+            background: #fff7f7;
+        }
+
+        .watchlist-add-symbol {
+            color: var(--button);
+            font-weight: 900;
+        }
+
+        .watchlist-add-name {
+            font-weight: 800;
+        }
+
+        .watchlist-add-meta {
+            color: var(--muted);
+            font-size: 12px;
+            grid-column: 2;
+        }
+
+        .watchlist-add-empty {
+            color: var(--muted);
+            font-size: 14px;
+            padding: 12px;
+        }
+
         @keyframes ai-spin {
             to { transform: rotate(360deg); }
+        }
+
+        @media (max-width: 640px) {
+            .watchlist-add-search {
+                width: 100%;
+            }
+
+            .watchlist-add-search .search {
+                grid-template-columns: minmax(0, 1fr) auto;
+            }
         }
     </style>
 
@@ -106,11 +188,14 @@
         <div>
             <h1>追蹤清單</h1>
         </div>
-        <form class="search" action="/watchlist" method="post">
-            @csrf
-            <input name="symbol" value="{{ old('symbol') }}" placeholder="輸入股票代號，例如 2330">
-            <button type="submit">加入</button>
-        </form>
+        <div class="watchlist-add-search" data-watchlist-add-search>
+            <form class="search" action="/watchlist" method="post" autocomplete="off">
+                @csrf
+                <input name="symbol" value="{{ old('symbol') }}" placeholder="輸入代號或名稱，例如 2330、台積電" data-watchlist-add-input aria-label="加入追蹤股票">
+                <button type="submit">加入</button>
+            </form>
+            <div class="watchlist-add-results" data-watchlist-add-results></div>
+        </div>
     </section>
 
     @if (session('status') || session('error'))
@@ -210,6 +295,139 @@
     <script>
         (() => {
             const loadingOverlay = document.getElementById('ai-loading-overlay');
+            const addSearch = document.querySelector('[data-watchlist-add-search]');
+
+            if (addSearch) {
+                const input = addSearch.querySelector('[data-watchlist-add-input]');
+                const form = addSearch.querySelector('form');
+                const results = addSearch.querySelector('[data-watchlist-add-results]');
+                let timer = null;
+                let items = [];
+                let activeIndex = -1;
+
+                const closeResults = () => {
+                    results.classList.remove('open');
+                    results.innerHTML = '';
+                    items = [];
+                    activeIndex = -1;
+                };
+
+                const escapeHtml = (value) => String(value ?? '')
+                    .replaceAll('&', '&amp;')
+                    .replaceAll('<', '&lt;')
+                    .replaceAll('>', '&gt;')
+                    .replaceAll('"', '&quot;')
+                    .replaceAll("'", '&#039;');
+
+                const renderResults = (stocks, query) => {
+                    items = stocks;
+                    activeIndex = -1;
+
+                    if (query.trim() === '') {
+                        closeResults();
+                        return;
+                    }
+
+                    if (stocks.length === 0) {
+                        results.innerHTML = '<div class="watchlist-add-empty">找不到符合的股票</div>';
+                        results.classList.add('open');
+                        return;
+                    }
+
+                    results.innerHTML = stocks.map((stock, index) => `
+                        <button class="watchlist-add-item" type="button" data-index="${index}">
+                            <span class="watchlist-add-symbol">${escapeHtml(stock.symbol)}</span>
+                            <span class="watchlist-add-name">${escapeHtml(stock.name)}</span>
+                            <span class="watchlist-add-meta">${escapeHtml(stock.market || '')}${stock.industry ? '｜' + escapeHtml(stock.industry) : ''}</span>
+                        </button>
+                    `).join('');
+                    results.classList.add('open');
+                };
+
+                const searchStocks = () => {
+                    const query = input.value.trim();
+                    if (query.length < 1) {
+                        closeResults();
+                        return;
+                    }
+
+                    fetch(`/api/stocks/search?q=${encodeURIComponent(query)}`, {
+                        headers: { 'Accept': 'application/json' },
+                    })
+                        .then((response) => response.ok ? response.json() : [])
+                        .then((stocks) => renderResults(Array.isArray(stocks) ? stocks : [], query))
+                        .catch(closeResults);
+                };
+
+                const chooseStock = (stock) => {
+                    if (!stock) {
+                        return;
+                    }
+
+                    input.value = stock.symbol;
+                    closeResults();
+                    form.requestSubmit();
+                };
+
+                input.addEventListener('input', () => {
+                    window.clearTimeout(timer);
+                    timer = window.setTimeout(searchStocks, 120);
+                });
+
+                input.addEventListener('focus', () => {
+                    if (input.value.trim() !== '') {
+                        searchStocks();
+                    }
+                });
+
+                input.addEventListener('keydown', (event) => {
+                    if (!results.classList.contains('open') || items.length === 0) {
+                        return;
+                    }
+
+                    if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+                        event.preventDefault();
+                        activeIndex = event.key === 'ArrowDown'
+                            ? Math.min(activeIndex + 1, items.length - 1)
+                            : Math.max(activeIndex - 1, 0);
+
+                        results.querySelectorAll('.watchlist-add-item').forEach((item, index) => {
+                            item.classList.toggle('active', index === activeIndex);
+                        });
+                    }
+
+                    if (event.key === 'Enter' && activeIndex >= 0 && items[activeIndex]) {
+                        event.preventDefault();
+                        chooseStock(items[activeIndex]);
+                    }
+
+                    if (event.key === 'Escape') {
+                        closeResults();
+                    }
+                });
+
+                results.addEventListener('click', (event) => {
+                    const button = event.target.closest('[data-index]');
+                    if (!button) {
+                        return;
+                    }
+
+                    chooseStock(items[Number(button.dataset.index)]);
+                });
+
+                form.addEventListener('submit', (event) => {
+                    if (items.length === 1 && input.value.trim() !== items[0].symbol) {
+                        event.preventDefault();
+                        chooseStock(items[0]);
+                    }
+                });
+
+                document.addEventListener('click', (event) => {
+                    if (!addSearch.contains(event.target)) {
+                        closeResults();
+                    }
+                });
+            }
 
             document.querySelectorAll('.ai-report-form').forEach((form) => {
                 form.addEventListener('submit', () => {
