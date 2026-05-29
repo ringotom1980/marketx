@@ -2,6 +2,7 @@
 
 namespace App\Providers;
 
+use App\Support\DataHealthSnapshot;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\ServiceProvider;
@@ -70,6 +71,8 @@ class AppServiceProvider extends ServiceProvider
                         ->orderByDesc('finished_at')
                         ->first(['job_name', 'finished_at']);
 
+                    $dataHealth = app(DataHealthSnapshot::class)->build();
+
                     return [
                         'siteStats' => [
                             'members' => DB::table('users')->count(),
@@ -82,11 +85,12 @@ class AppServiceProvider extends ServiceProvider
                         'dataFreshness' => [
                             'taiwan_date' => DB::table('stock_prices_1d')->max('trade_date'),
                             'global_date' => DB::table('global_market_data')->max('trade_date'),
-                            'taiwan_updated_at' => $latestTaiwanJob?->finished_at,
+                            'taiwan_updated_at' => $dataHealth['summary']['taiwan_updated_at'] ?? $latestTaiwanJob?->finished_at,
                             'taiwan_updated_job' => $latestTaiwanJob?->job_name,
-                            'global_updated_at' => $latestGlobalJob?->finished_at,
+                            'global_updated_at' => $dataHealth['summary']['global_updated_at'] ?? $latestGlobalJob?->finished_at,
                             'global_updated_job' => $latestGlobalJob?->job_name,
                         ],
+                        'dataHealth' => $dataHealth,
                     ];
                 } catch (Throwable) {
                     return [
@@ -102,12 +106,19 @@ class AppServiceProvider extends ServiceProvider
                             'global_updated_at' => null,
                             'global_updated_job' => null,
                         ],
+                        'dataHealth' => [
+                            'as_of' => null,
+                            'active_stocks' => 0,
+                            'summary' => ['ok' => 0, 'partial' => 0, 'stale' => 0, 'missing' => 0],
+                            'items' => [],
+                        ],
                     ];
                 }
             });
 
             $view->with('siteStats', $layoutState['siteStats']);
             $view->with('dataFreshness', $layoutState['dataFreshness']);
+            $view->with('dataHealth', $layoutState['dataHealth']);
         });
     }
 }

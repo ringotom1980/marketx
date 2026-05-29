@@ -267,9 +267,131 @@
         .site-notice-list strong {
             color: var(--ink);
         }
+        .data-health-panel {
+            margin-bottom: 16px;
+        }
+        .data-health-head {
+            display: grid;
+            gap: 10px;
+            margin-bottom: 12px;
+        }
+        .data-health-head h2 {
+            margin-bottom: 4px;
+        }
+        .data-health-head p {
+            margin: 0;
+            color: var(--muted);
+            font-size: 13px;
+            line-height: 1.5;
+        }
+        .data-health-summary {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+        }
+        .data-health-summary span,
+        .data-health-title span {
+            display: inline-flex;
+            align-items: center;
+            border-radius: 999px;
+            padding: 4px 8px;
+            font-size: 11px;
+            font-weight: 900;
+            white-space: nowrap;
+        }
+        .data-health-summary .ok,
+        .data-health-item.ok .data-health-title span {
+            color: var(--green);
+            background: #e8f5ee;
+        }
+        .data-health-summary .partial,
+        .data-health-item.partial .data-health-title span {
+            color: #9f5b00;
+            background: #fff7df;
+        }
+        .data-health-summary .stale,
+        .data-health-item.stale .data-health-title span,
+        .data-health-summary .missing,
+        .data-health-item.missing .data-health-title span {
+            color: var(--button);
+            background: #fff1f1;
+        }
+        .data-health-grid {
+            display: grid;
+            gap: 10px;
+        }
+        .data-health-item {
+            border: 1px solid var(--line);
+            border-radius: 8px;
+            padding: 12px;
+            background: #fff;
+        }
+        .data-health-title {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 8px;
+            margin-bottom: 8px;
+        }
+        .data-health-title strong {
+            color: var(--ink);
+            font-size: 14px;
+        }
+        .data-health-meta {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 4px 10px;
+            color: var(--muted);
+            font-size: 12px;
+            line-height: 1.45;
+        }
+        .data-health-coverage {
+            position: relative;
+            height: 18px;
+            margin-top: 8px;
+            border-radius: 999px;
+            overflow: hidden;
+            background: #eef1f5;
+        }
+        .data-health-coverage span {
+            position: absolute;
+            inset: 0 auto 0 0;
+            width: var(--coverage);
+            border-radius: 999px;
+            background: linear-gradient(90deg, #c9d8ee, #f4c8c8);
+        }
+        .data-health-coverage b {
+            position: absolute;
+            inset: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: var(--ink);
+            font-size: 11px;
+            font-weight: 900;
+        }
+        .data-health-count {
+            margin-top: 8px;
+            color: var(--muted);
+            font-size: 12px;
+            font-weight: 800;
+        }
+        .data-health-item p {
+            margin: 8px 0 0;
+            color: var(--muted);
+            font-size: 12px;
+            line-height: 1.5;
+        }
         @media (min-width: 821px) {
             .market-chart-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
             .market-chart-wrap { height: 340px; }
+            .data-health-head {
+                grid-template-columns: minmax(0, 1fr) auto;
+                align-items: start;
+            }
+            .data-health-grid {
+                grid-template-columns: repeat(3, minmax(0, 1fr));
+            }
         }
     </style>
 
@@ -296,6 +418,8 @@
             </ul>
         </div>
     </section>
+
+    @include('partials.data_health')
 
     <section class="market-chart-grid">
         @forelse ($marketCharts as $chart)
