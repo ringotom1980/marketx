@@ -864,9 +864,13 @@ Route::get('/s/{symbol}', function (string $symbol, StockEventChainBuilder $even
         fn ($row) => $row->trade_date->format('Y')
     );
     $supportLatestClose = $latestPrice?->close === null ? null : (float) $latestPrice->close;
-    $supportRows = $priceRows->slice(-260)->values();
-    $supportChart = [];
-    if ($supportRows->isNotEmpty()) {
+    $buildSupportChart = function (int $days) use ($priceRows, $supportLatestClose): array {
+        $supportRows = $priceRows->slice(-$days)->values();
+
+        if ($supportRows->isEmpty()) {
+            return ['rows' => [], 'current' => $supportLatestClose, 'support' => null, 'pressure' => null];
+        }
+
         $low = (float) $supportRows->min('low');
         $high = (float) $supportRows->max('high');
         $step = max(0.01, ($high - $low) / 10);
@@ -878,6 +882,7 @@ Route::get('/s/{symbol}', function (string $symbol, StockEventChainBuilder $even
                 'label' => number_format($from, 2).'~'.number_format($to, 2),
                 'from' => $from,
                 'to' => $to,
+                'mid' => ($from + $to) / 2,
                 'volume' => 0,
                 'type' => 'support',
             ];
@@ -890,33 +895,68 @@ Route::get('/s/{symbol}', function (string $symbol, StockEventChainBuilder $even
             $bins[$index]['volume'] += (int) ($row->volume ?? 0);
         }
 
-        $supportChart = collect($bins)
+        $supportBin = null;
+        $pressureBin = null;
+
+        foreach ($bins as $bin) {
+            if ($supportLatestClose !== null && $bin['to'] <= $supportLatestClose && ($supportBin === null || $bin['volume'] > $supportBin['volume'])) {
+                $supportBin = $bin;
+            }
+
+            if ($supportLatestClose !== null && $bin['from'] >= $supportLatestClose && ($pressureBin === null || $bin['volume'] > $pressureBin['volume'])) {
+                $pressureBin = $bin;
+            }
+        }
+
+        $rows = collect($bins)
             ->reverse()
-            ->map(function (array $bin) use ($supportLatestClose) {
-                $mid = ($bin['from'] + $bin['to']) / 2;
-                $bin['type'] = $supportLatestClose !== null && $mid > $supportLatestClose ? 'pressure' : 'support';
-                unset($bin['from'], $bin['to']);
+            ->map(function (array $bin) use ($supportLatestClose, $supportBin, $pressureBin) {
+                $bin['type'] = $supportLatestClose !== null && $bin['mid'] > $supportLatestClose ? 'pressure' : 'support';
+                $bin['role'] = null;
+
+                if ($supportLatestClose !== null && $supportLatestClose >= $bin['from'] && $supportLatestClose <= $bin['to']) {
+                    $bin['role'] = '目前價';
+                } elseif ($supportBin && abs($bin['mid'] - $supportBin['mid']) < 0.00001) {
+                    $bin['role'] = '主要支撐';
+                } elseif ($pressureBin && abs($bin['mid'] - $pressureBin['mid']) < 0.00001) {
+                    $bin['role'] = '上方壓力';
+                }
+
+                unset($bin['from'], $bin['to'], $bin['mid']);
 
                 return $bin;
             })
             ->values()
             ->all();
-    }
+
+        return [
+            'rows' => $rows,
+            'current' => $supportLatestClose,
+            'support' => $supportBin ? number_format($supportBin['from'], 2).'~'.number_format($supportBin['to'], 2) : null,
+            'pressure' => $pressureBin ? number_format($pressureBin['from'], 2).'~'.number_format($pressureBin['to'], 2) : null,
+        ];
+    };
+    $supportChart = [
+        'week' => $buildSupportChart(5),
+        'month' => $buildSupportChart(22),
+        'quarter' => $buildSupportChart(66),
+    ];
 
     $chipRowsForChart = $stockRecord->chips()
         ->latest('trade_date')
-        ->limit(120)
-        ->get(['trade_date', 'foreign_net_buy', 'investment_trust_net_buy', 'dealer_net_buy', 'institutional_net_buy', 'margin_balance', 'short_balance'])
+        ->limit(130)
+        ->get(['trade_date', 'foreign_net_buy', 'investment_trust_net_buy', 'dealer_net_buy', 'institutional_net_buy', 'margin_balance', 'short_balance', 'lending_available_volume'])
         ->sortBy('trade_date')
         ->values()
         ->map(fn ($row) => [
-            'date' => $row->trade_date->format('m/d'),
+            'date' => $row->trade_date->toDateString(),
             'foreign' => (int) ($row->foreign_net_buy ?? 0),
             'trust' => (int) ($row->investment_trust_net_buy ?? 0),
             'dealer' => (int) ($row->dealer_net_buy ?? 0),
             'institutional' => (int) ($row->institutional_net_buy ?? 0),
             'margin' => $row->margin_balance === null ? null : (int) $row->margin_balance,
             'short' => $row->short_balance === null ? null : (int) $row->short_balance,
+            'lendingAvailable' => $row->lending_available_volume === null ? null : (int) $row->lending_available_volume,
         ])
         ->all();
 

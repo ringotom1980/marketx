@@ -282,6 +282,29 @@
             white-space: nowrap;
         }
 
+        .mini-period-tabs {
+            display: inline-flex;
+            gap: 4px;
+        }
+
+        .mini-period-tab {
+            background: #f8fafc;
+            border: 1px solid #d8e1ec;
+            border-radius: 999px;
+            color: var(--muted);
+            cursor: pointer;
+            font-size: 12px;
+            font-weight: 900;
+            line-height: 1;
+            padding: 6px 9px;
+        }
+
+        .mini-period-tab.active {
+            background: var(--button);
+            border-color: var(--button);
+            color: #fff;
+        }
+
         .mini-chart-wrap {
             height: 220px;
             width: 100%;
@@ -416,7 +439,11 @@
                 <div class="mini-chart-card">
                     <div class="mini-chart-head">
                         <h3>壓力支撐</h3>
-                        <span class="mini-chart-note">近一年</span>
+                        <div class="mini-period-tabs" data-support-tabs>
+                            <button class="mini-period-tab" type="button" data-support-period="week">周</button>
+                            <button class="mini-period-tab active" type="button" data-support-period="month">月</button>
+                            <button class="mini-period-tab" type="button" data-support-period="quarter">季</button>
+                        </div>
                     </div>
                     <div class="mini-chart-wrap tall">
                         <div data-stock-echart="support"></div>
@@ -461,7 +488,7 @@
                 <div class="mini-chart-card">
                     <div class="mini-chart-head">
                         <h3>三大法人買賣超</h3>
-                        <span class="mini-chart-note">近半年</span>
+                        <span class="mini-chart-note">半年</span>
                     </div>
                     <div class="mini-chart-wrap">
                         <div data-stock-echart="institutional"></div>
@@ -475,7 +502,7 @@
                 <div class="mini-chart-card">
                     <div class="mini-chart-head">
                         <h3>融資融券變化</h3>
-                        <span class="mini-chart-note">近半年</span>
+                        <span class="mini-chart-note">半年</span>
                     </div>
                     <div class="mini-chart-wrap">
                         <div data-stock-echart="margin"></div>
@@ -483,6 +510,7 @@
                     <div class="chart-legend">
                         <span><i class="legend-dot" style="background:#38bdf8"></i>融資</span>
                         <span><i class="legend-dot" style="background:#f43f5e"></i>融券</span>
+                        <span><i class="legend-dot" style="background:#8b5cf6"></i>借券可用額度</span>
                     </div>
                 </div>
             </div>
@@ -870,18 +898,31 @@
                 node.innerHTML = `<div style="height:100%;display:grid;place-items:center;color:#64748b;font-weight:800;font-size:13px">${text}</div>`;
             };
 
+            let supportPeriod = 'month';
+
             const supportOption = () => {
-                const rows = stockCharts.support || [];
+                const pack = stockCharts.support?.[supportPeriod] || stockCharts.support?.month || stockCharts.support?.week || {};
+                const rows = Array.isArray(pack) ? pack : (pack.rows || []);
                 if (!rows.length) return null;
+                const currentText = pack.current === null || pack.current === undefined ? '-' : comma(pack.current, 2);
+                const supportText = pack.support || '-';
+                const pressureText = pack.pressure || '-';
+
                 return baseOption({
-                    grid: { left: 86, right: 42, top: 10, bottom: 8, containLabel: false },
+                    title: {
+                        text: `目前價 ${currentText}｜支撐 ${supportText}｜壓力/目標 ${pressureText}`,
+                        left: 0,
+                        top: 0,
+                        textStyle: { color: palette.gray, fontSize: 12, fontWeight: 900 },
+                    },
+                    grid: { left: 86, right: 42, top: 34, bottom: 8, containLabel: false },
                     tooltip: {
                         trigger: 'item',
                         confine: true,
                         formatter: ({ data }) => [
                             `<b>${data.name}</b>`,
                             `成交量：${comma(data.value)} 股`,
-                            `屬性：${data.kind === 'pressure' ? '壓力區' : '支撐區'}`,
+                            `位置：${data.role || (data.kind === 'pressure' ? '壓力區' : '支撐區')}`,
                         ].join('<br>'),
                     },
                     xAxis: { type: 'value', show: false },
@@ -899,9 +940,12 @@
                             name: row.label,
                             value: Number(row.volume || 0),
                             kind: row.type,
+                            role: row.role || '',
                             itemStyle: {
                                 borderRadius: [0, 8, 8, 0],
-                                color: row.type === 'pressure' ? palette.redSoft : 'rgba(139,92,246,.68)',
+                                color: row.role === '目前價'
+                                    ? 'rgba(246,199,102,.78)'
+                                    : (row.type === 'pressure' ? palette.redSoft : 'rgba(139,92,246,.68)'),
                             },
                         })),
                         label: {
@@ -910,7 +954,7 @@
                             color: palette.ink,
                             fontSize: 11,
                             fontWeight: 800,
-                            formatter: ({ value }) => short(value),
+                            formatter: ({ value, data }) => data.role ? `${data.role} ${short(value)}` : short(value),
                         },
                     }],
                 });
@@ -961,7 +1005,7 @@
                         },
                     },
                     xAxis: { type: 'category', data: rows.map((row) => String(row.date).slice(5)) },
-                    dataZoom: [{ type: 'inside', xAxisIndex: 0 }, { type: 'slider', height: 14, bottom: 6, showDetail: false, start: 70, end: 100 }],
+                    dataZoom: [{ type: 'inside', xAxisIndex: 0 }, { type: 'slider', height: 14, bottom: 6, showDetail: false, start: 0, end: 100 }],
                     yAxis: { type: 'value', axisLabel: { formatter: (v) => short(v) } },
                     series: [
                         { name: '外資', type: 'bar', data: rows.map((row) => row.foreign), itemStyle: { color: palette.teal } },
@@ -974,6 +1018,7 @@
             const marginOption = () => {
                 const rows = stockCharts.chips || [];
                 if (!rows.length) return null;
+                const hasLendingAvailable = rows.some((row) => row.lendingAvailable !== null && row.lendingAvailable !== undefined);
                 return baseOption({
                     legend: { top: 0, right: 0, itemWidth: 10, itemHeight: 10, textStyle: { color: palette.gray, fontWeight: 800 } },
                     grid: { left: 30, right: 14, top: 34, bottom: 40, containLabel: true },
@@ -981,15 +1026,18 @@
                         trigger: 'axis',
                         formatter: (items) => {
                             const row = rows[items[0].dataIndex];
-                            return [`<b>${row.date}</b>`, `融資餘額：${comma(row.margin)} 股`, `融券餘額：${comma(row.short)} 股`].join('<br>');
+                            const lines = [`<b>${row.date}</b>`, `融資餘額：${comma(row.margin)} 股`, `融券餘額：${comma(row.short)} 股`];
+                            if (hasLendingAvailable) lines.push(`借券可用額度：${comma(row.lendingAvailable)} 股`);
+                            return lines.join('<br>');
                         },
                     },
                     xAxis: { type: 'category', data: rows.map((row) => String(row.date).slice(5)) },
-                    dataZoom: [{ type: 'inside', xAxisIndex: 0 }, { type: 'slider', height: 14, bottom: 6, showDetail: false, start: 70, end: 100 }],
+                    dataZoom: [{ type: 'inside', xAxisIndex: 0 }, { type: 'slider', height: 14, bottom: 6, showDetail: false, start: 0, end: 100 }],
                     yAxis: { type: 'value', axisLabel: { formatter: (v) => short(v) } },
                     series: [
                         { name: '融資', type: 'line', smooth: true, data: rows.map((row) => row.margin), lineStyle: { color: palette.blue, width: 2 }, itemStyle: { color: palette.blue } },
                         { name: '融券', type: 'line', smooth: true, data: rows.map((row) => row.short), lineStyle: { color: palette.red, width: 2 }, itemStyle: { color: palette.red } },
+                        ...(hasLendingAvailable ? [{ name: '借券可用額度', type: 'line', smooth: true, data: rows.map((row) => row.lendingAvailable), lineStyle: { color: palette.purple, width: 2, type: 'dashed' }, itemStyle: { color: palette.purple } }] : []),
                     ],
                 });
             };
@@ -1073,6 +1121,14 @@
                     chart.resize();
                 });
             };
+
+            document.querySelectorAll('[data-support-period]').forEach((button) => {
+                button.addEventListener('click', () => {
+                    supportPeriod = button.dataset.supportPeriod || 'month';
+                    document.querySelectorAll('[data-support-period]').forEach((item) => item.classList.toggle('active', item === button));
+                    renderCharts();
+                });
+            });
 
             window.addEventListener('resize', () => charts.forEach((chart) => chart.resize()));
             window.addEventListener('stock-tab-change', () => setTimeout(renderCharts, 80));
