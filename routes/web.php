@@ -822,10 +822,10 @@ Route::get('/s/{symbol}', function (string $symbol, StockEventChainBuilder $even
         ->whereNotNull('low')
         ->whereNotNull('close')
         ->orderBy('trade_date')
-        ->limit(1400)
+        ->limit(1800)
         ->get(['trade_date', 'open', 'high', 'low', 'close', 'volume']);
     $dailyK = $priceRows
-        ->slice(-260)
+        ->slice(-520)
         ->values()
         ->map(fn ($row) => [
             'time' => $row->trade_date->toDateString(),
@@ -864,7 +864,7 @@ Route::get('/s/{symbol}', function (string $symbol, StockEventChainBuilder $even
         fn ($row) => $row->trade_date->format('Y')
     );
     $supportLatestClose = $latestPrice?->close === null ? null : (float) $latestPrice->close;
-    $supportRows = $priceRows->slice(-60)->values();
+    $supportRows = $priceRows->slice(-260)->values();
     $supportChart = [];
     if ($supportRows->isNotEmpty()) {
         $low = (float) $supportRows->min('low');
@@ -905,7 +905,7 @@ Route::get('/s/{symbol}', function (string $symbol, StockEventChainBuilder $even
 
     $chipRowsForChart = $stockRecord->chips()
         ->latest('trade_date')
-        ->limit(30)
+        ->limit(120)
         ->get(['trade_date', 'foreign_net_buy', 'investment_trust_net_buy', 'dealer_net_buy', 'institutional_net_buy', 'margin_balance', 'short_balance'])
         ->sortBy('trade_date')
         ->values()
@@ -923,7 +923,7 @@ Route::get('/s/{symbol}', function (string $symbol, StockEventChainBuilder $even
     $revenueRowsForChart = DB::table('stock_revenues')
         ->where('stock_id', $stockRecord->id)
         ->orderByDesc('year_month')
-        ->limit(36)
+        ->limit(72)
         ->get(['year_month', 'revenue', 'mom_pct', 'yoy_pct'])
         ->sortBy('year_month')
         ->values()
@@ -938,7 +938,7 @@ Route::get('/s/{symbol}', function (string $symbol, StockEventChainBuilder $even
     $financialRowsForChart = DB::table('stock_financials')
         ->where('stock_id', $stockRecord->id)
         ->orderByDesc('period')
-        ->limit(16)
+        ->limit(40)
         ->get(['period', 'eps', 'roe', 'gross_margin', 'operating_margin', 'per', 'pb_ratio'])
         ->sortBy('period')
         ->values()

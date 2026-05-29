@@ -416,7 +416,7 @@
                 <div class="mini-chart-card">
                     <div class="mini-chart-head">
                         <h3>壓力支撐</h3>
-                        <span class="mini-chart-note">近 60 日</span>
+                        <span class="mini-chart-note">近一年</span>
                     </div>
                     <div class="mini-chart-wrap tall">
                         <div data-stock-echart="support"></div>
@@ -430,7 +430,7 @@
                 <div class="mini-chart-card">
                     <div class="mini-chart-head">
                         <h3>價量走勢</h3>
-                        <span class="mini-chart-note">近 60 日</span>
+                        <span class="mini-chart-note">近兩年</span>
                     </div>
                     <div class="mini-chart-wrap tall">
                         <div data-stock-echart="priceVolume"></div>
@@ -461,7 +461,7 @@
                 <div class="mini-chart-card">
                     <div class="mini-chart-head">
                         <h3>三大法人買賣超</h3>
-                        <span class="mini-chart-note">近 30 日</span>
+                        <span class="mini-chart-note">近半年</span>
                     </div>
                     <div class="mini-chart-wrap">
                         <div data-stock-echart="institutional"></div>
@@ -475,7 +475,7 @@
                 <div class="mini-chart-card">
                     <div class="mini-chart-head">
                         <h3>融資融券變化</h3>
-                        <span class="mini-chart-note">近 30 日</span>
+                        <span class="mini-chart-note">近半年</span>
                     </div>
                     <div class="mini-chart-wrap">
                         <div data-stock-echart="margin"></div>
@@ -506,7 +506,7 @@
                 <div class="mini-chart-card">
                     <div class="mini-chart-head">
                         <h3>每月營收</h3>
-                        <span class="mini-chart-note">仟元</span>
+                        <span class="mini-chart-note">近六年</span>
                     </div>
                     <div class="mini-chart-wrap">
                         <div data-stock-echart="revenue"></div>
@@ -519,7 +519,7 @@
                 <div class="mini-chart-card">
                     <div class="mini-chart-head">
                         <h3>財報三率與 EPS</h3>
-                        <span class="mini-chart-note">季/年資料</span>
+                        <span class="mini-chart-note">長期趨勢</span>
                     </div>
                     <div class="mini-chart-wrap">
                         <div data-stock-echart="financial"></div>
@@ -917,7 +917,7 @@
             };
 
             const priceVolumeOption = () => {
-                const rows = (kData.daily || []).slice(-80).map((row) => ({
+                const rows = (kData.daily || []).map((row) => ({
                     date: row.time,
                     close: number(row.close),
                     volume: number(row.volume),
@@ -925,7 +925,7 @@
                 if (!rows.length) return null;
                 return baseOption({
                     legend: { top: 0, right: 0, itemWidth: 10, itemHeight: 10, textStyle: { color: palette.gray, fontWeight: 800 } },
-                    grid: { left: 30, right: 30, top: 34, bottom: 26, containLabel: true },
+                    grid: { left: 30, right: 30, top: 34, bottom: 42, containLabel: true },
                     tooltip: {
                         trigger: 'axis',
                         confine: true,
@@ -934,7 +934,7 @@
                             return [`<b>${row.date}</b>`, `收盤價：${comma(row.close, 2)}`, `成交量：${comma(row.volume)} 股`].join('<br>');
                         },
                     },
-                    dataZoom: [{ type: 'inside', xAxisIndex: 0 }],
+                    dataZoom: [{ type: 'inside', xAxisIndex: 0 }, { type: 'slider', height: 14, bottom: 6, showDetail: false, start: 62, end: 100 }],
                     xAxis: { type: 'category', data: rows.map((row) => row.date.slice(5)), boundaryGap: true },
                     yAxis: [
                         { type: 'value', axisLabel: { formatter: (v) => short(v) } },
@@ -952,7 +952,7 @@
                 if (!rows.length) return null;
                 return baseOption({
                     legend: { top: 0, right: 0, itemWidth: 10, itemHeight: 10, textStyle: { color: palette.gray, fontWeight: 800 } },
-                    grid: { left: 30, right: 14, top: 34, bottom: 28, containLabel: true },
+                    grid: { left: 30, right: 14, top: 34, bottom: 40, containLabel: true },
                     tooltip: {
                         trigger: 'axis',
                         formatter: (items) => {
@@ -961,6 +961,7 @@
                         },
                     },
                     xAxis: { type: 'category', data: rows.map((row) => String(row.date).slice(5)) },
+                    dataZoom: [{ type: 'inside', xAxisIndex: 0 }, { type: 'slider', height: 14, bottom: 6, showDetail: false, start: 70, end: 100 }],
                     yAxis: { type: 'value', axisLabel: { formatter: (v) => short(v) } },
                     series: [
                         { name: '外資', type: 'bar', data: rows.map((row) => row.foreign), itemStyle: { color: palette.teal } },
@@ -975,7 +976,7 @@
                 if (!rows.length) return null;
                 return baseOption({
                     legend: { top: 0, right: 0, itemWidth: 10, itemHeight: 10, textStyle: { color: palette.gray, fontWeight: 800 } },
-                    grid: { left: 30, right: 14, top: 34, bottom: 28, containLabel: true },
+                    grid: { left: 30, right: 14, top: 34, bottom: 40, containLabel: true },
                     tooltip: {
                         trigger: 'axis',
                         formatter: (items) => {
@@ -984,6 +985,7 @@
                         },
                     },
                     xAxis: { type: 'category', data: rows.map((row) => String(row.date).slice(5)) },
+                    dataZoom: [{ type: 'inside', xAxisIndex: 0 }, { type: 'slider', height: 14, bottom: 6, showDetail: false, start: 70, end: 100 }],
                     yAxis: { type: 'value', axisLabel: { formatter: (v) => short(v) } },
                     series: [
                         { name: '融資', type: 'line', smooth: true, data: rows.map((row) => row.margin), lineStyle: { color: palette.blue, width: 2 }, itemStyle: { color: palette.blue } },
@@ -997,7 +999,7 @@
                 if (!rows.length) return null;
                 return baseOption({
                     legend: { top: 0, right: 0, itemWidth: 10, itemHeight: 10, textStyle: { color: palette.gray, fontWeight: 800 } },
-                    grid: { left: 30, right: 30, top: 34, bottom: 30, containLabel: true },
+                    grid: { left: 30, right: 30, top: 34, bottom: 42, containLabel: true },
                     tooltip: {
                         trigger: 'axis',
                         formatter: (items) => {
@@ -1005,7 +1007,7 @@
                             return [`<b>${row.date}</b>`, `月營收：${comma(row.revenue)} 仟元`, `年增率：${row.yoy === null ? '-' : `${comma(row.yoy, 2)}%`}`, `月增率：${row.mom === null ? '-' : `${comma(row.mom, 2)}%`}`].join('<br>');
                         },
                     },
-                    dataZoom: [{ type: 'inside', xAxisIndex: 0 }],
+                    dataZoom: [{ type: 'inside', xAxisIndex: 0 }, { type: 'slider', height: 14, bottom: 6, showDetail: false, start: 50, end: 100 }],
                     xAxis: { type: 'category', data: rows.map((row) => String(row.date).slice(0, 7)) },
                     yAxis: [
                         { type: 'value', axisLabel: { formatter: (v) => short(v) } },
@@ -1023,7 +1025,7 @@
                 if (!rows.length) return null;
                 return baseOption({
                     legend: { top: 0, right: 0, itemWidth: 10, itemHeight: 10, textStyle: { color: palette.gray, fontWeight: 800 } },
-                    grid: { left: 28, right: 30, top: 34, bottom: 28, containLabel: true },
+                    grid: { left: 28, right: 30, top: 34, bottom: 40, containLabel: true },
                     tooltip: {
                         trigger: 'axis',
                         formatter: (items) => {
@@ -1032,6 +1034,7 @@
                         },
                     },
                     xAxis: { type: 'category', data: rows.map((row) => String(row.date).slice(0, 7)) },
+                    dataZoom: [{ type: 'inside', xAxisIndex: 0 }, { type: 'slider', height: 14, bottom: 6, showDetail: false, start: 35, end: 100 }],
                     yAxis: [
                         { type: 'value', axisLabel: { formatter: (v) => `${comma(v, 0)}%` } },
                         { type: 'value', position: 'right', axisLabel: { formatter: (v) => comma(v, 1) } },
