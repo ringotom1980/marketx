@@ -183,6 +183,10 @@ class RunAgentInspections extends Command
                 'global_ai_reports' => ['page' => 'global', 'title' => '今日全球盤前 AI 報告尚未產生'],
                 'theme_ai_reports' => ['page' => 'themes', 'title' => '今日題材盤前 AI 報告尚未產生'],
             ] as $table => $meta) {
+                if (! $this->shouldCheckMorningAiReports()) {
+                    continue;
+                }
+
                 $exists = DB::table($table)->where('report_date', $this->inspectionDate)->exists();
 
                 if (! $exists) {
@@ -210,6 +214,22 @@ class RunAgentInspections extends Command
         } catch (\Throwable $e) {
             $this->failRun($run, $e);
         }
+    }
+
+    private function shouldCheckMorningAiReports(): bool
+    {
+        $today = CarbonImmutable::now('Asia/Taipei');
+        $inspectionDate = CarbonImmutable::parse($this->inspectionDate, 'Asia/Taipei')->startOfDay();
+
+        if ($inspectionDate->isBefore($today->startOfDay())) {
+            return true;
+        }
+
+        if ($inspectionDate->isAfter($today->startOfDay())) {
+            return false;
+        }
+
+        return $today->greaterThanOrEqualTo($today->setTime(8, 30));
     }
 
     private function runHomeRadarAgent(): void
