@@ -194,10 +194,33 @@
         }
 
         .watch-card-head {
+            align-items: flex-start;
             display: flex;
-            gap: 12px;
+            gap: 10px;
             justify-content: space-between;
             padding-right: 42px;
+        }
+
+        .watch-main {
+            align-items: flex-start;
+            display: flex;
+            gap: 10px;
+            min-width: 0;
+        }
+
+        .watch-mini-candle {
+            align-items: center;
+            display: flex;
+            height: 42px;
+            justify-content: center;
+            margin-top: 2px;
+            width: 22px;
+            flex: 0 0 22px;
+        }
+
+        .watch-mini-candle svg {
+            display: block;
+            overflow: visible;
         }
 
         .watch-card-title {
@@ -210,17 +233,28 @@
             font-weight: 900;
         }
 
-        .watch-card-price {
-            align-items: baseline;
-            display: flex;
-            flex-wrap: wrap;
-            gap: 8px;
-            margin-top: 16px;
+        .watch-confidence {
+            color: var(--ink);
+            flex: 0 0 auto;
+            font-size: 16px;
+            font-weight: 900;
+            line-height: 1.4;
+            text-align: right;
+            white-space: nowrap;
         }
 
-        .watch-card-price strong {
+        .watch-card-price {
+            align-items: baseline;
+            display: grid;
+            gap: 8px 12px;
+            grid-template-columns: minmax(76px, auto) minmax(92px, auto) minmax(110px, 1fr) minmax(130px, auto);
+            margin-top: 12px;
+        }
+
+        .watch-price {
             color: var(--ink);
-            font-size: 30px;
+            font-size: 24px;
+            font-weight: 900;
             line-height: 1;
         }
 
@@ -242,15 +276,11 @@
             color: var(--muted);
         }
 
-        .watch-confidence {
-            margin-top: 14px;
+        .watch-volume {
             color: var(--muted);
+            font-size: 15px;
             font-weight: 900;
-        }
-
-        .watch-confidence strong {
-            color: var(--ink);
-            font-size: 22px;
+            white-space: nowrap;
         }
 
         .watch-card .ai-report-form {
@@ -271,12 +301,43 @@
                 grid-template-columns: minmax(0, 1fr) auto;
             }
 
-            .watch-card-price strong {
-                font-size: 26px;
+            .watch-card {
+                padding: 16px 14px;
+            }
+
+            .watch-card-head {
+                padding-right: 36px;
+            }
+
+            .watch-card-title {
+                font-size: 20px;
+            }
+
+            .watch-confidence {
+                font-size: 15px;
+            }
+
+            .watch-card-price {
+                grid-template-columns: minmax(66px, auto) minmax(72px, auto) minmax(88px, 1fr);
+                gap: 8px;
+            }
+
+            .watch-card-price .watch-volume:last-child {
+                grid-column: 1 / -1;
+                text-align: left;
+            }
+
+            .watch-price {
+                font-size: 20px;
             }
 
             .watch-card-change {
-                font-size: 16px;
+                font-size: 15px;
+            }
+
+            .watch-volume {
+                font-size: 14px;
+                text-align: right;
             }
         }
     </style>
@@ -340,7 +401,19 @@
                     $changeClass = $change === null ? 'amber' : ($change > 0 ? 'red' : ($change < 0 ? 'green' : 'amber'));
                     $changeText = $change === null
                         ? '無資料'
-                        : $arrow.rtrim(rtrim(number_format(abs($change), 2), '0'), '.').'（'.rtrim(rtrim(number_format(abs($changePercent ?? 0), 2), '0'), '.').'%）';
+                        : $arrow.rtrim(rtrim(number_format(abs($change), 2), '0'), '.');
+                    $changePercentText = $changePercent === null ? '漲跌幅無資料' : '漲跌幅'.rtrim(rtrim(number_format(abs($changePercent), 2), '0'), '.').'%';
+                    $volumeText = $item['volume_lots'] === null ? '成交量無資料' : '成交量'.number_format($item['volume_lots']).'張';
+                    $candleOpen = $item['open'];
+                    $candleHigh = $item['high'];
+                    $candleLow = $item['low'];
+                    $candleClose = $item['close'];
+                    $candleRange = ($candleHigh !== null && $candleLow !== null && $candleHigh > $candleLow) ? $candleHigh - $candleLow : null;
+                    $candleY = fn ($value) => $candleRange === null || $value === null ? 21 : 4 + (($candleHigh - $value) / $candleRange) * 34;
+                    $wickTop = $candleY($candleHigh);
+                    $wickBottom = $candleY($candleLow);
+                    $bodyTop = min($candleY($candleOpen), $candleY($candleClose));
+                    $bodyHeight = max(4, abs($candleY($candleOpen) - $candleY($candleClose)));
                 @endphp
                 <article class="panel watch-card" data-href="/s/{{ $item['symbol'] }}">
                     <form class="watch-remove" method="post" action="/watchlist/{{ $item['symbol'] }}" aria-label="移除 {{ $item['name'] }}">
@@ -350,19 +423,26 @@
                     </form>
 
                     <div class="watch-card-head">
-                        <div style="min-width:0">
-                            <h2 class="watch-card-title">{{ $item['name'] }}</h2>
-                            <div class="watch-card-symbol">{{ $item['symbol'] }}</div>
+                        <div class="watch-main">
+                            <div class="watch-mini-candle" aria-hidden="true">
+                                <svg width="20" height="42" viewBox="0 0 20 42">
+                                    <line x1="10" y1="{{ $wickTop }}" x2="10" y2="{{ $wickBottom }}" stroke="{{ $changeClass === 'green' ? 'var(--green)' : ($changeClass === 'red' ? 'var(--red)' : 'var(--muted)') }}" stroke-width="2" stroke-linecap="round" />
+                                    <rect x="5" y="{{ $bodyTop }}" width="10" height="{{ $bodyHeight }}" rx="2" fill="{{ $changeClass === 'green' ? 'var(--green)' : ($changeClass === 'red' ? 'var(--red)' : 'var(--muted)') }}" />
+                                </svg>
+                            </div>
+                            <div style="min-width:0">
+                                <h2 class="watch-card-title">{{ $item['name'] }}</h2>
+                                <div class="watch-card-symbol">{{ $item['symbol'] }}</div>
+                            </div>
                         </div>
+                        <div class="watch-confidence">信心指數{{ $item['confidence'] === null ? '無' : $item['confidence'].'%' }}</div>
                     </div>
 
                     <div class="watch-card-price">
-                        <strong>{{ $closeText }}</strong>
+                        <span class="watch-price">{{ $closeText }}</span>
                         <span class="watch-card-change {{ $changeClass }}">{{ $changeText }}</span>
-                    </div>
-
-                    <div class="watch-confidence">
-                        信心指數 <strong>{{ $item['confidence'] === null ? '無' : $item['confidence'].'%' }}</strong>
+                        <span class="watch-volume">{{ $changePercentText }}</span>
+                        <span class="watch-volume">{{ $volumeText }}</span>
                     </div>
 
                     @if ($isAdmin && ! $item['report_is_ai'])
