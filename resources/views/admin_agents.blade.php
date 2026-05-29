@@ -194,7 +194,6 @@
     <section class="page-head">
         <div>
             <h1>AI 代理人</h1>
-            <p class="lead">這裡只看三件事：今晚有沒有正常跑、現在有沒有案件、Codex 已經處理到哪裡。</p>
         </div>
         <a class="button ghost" href="/admin">回後台</a>
     </section>

@@ -9,7 +9,6 @@
     <section class="page-head">
         <div>
             <h1>五張卡片績效驗證</h1>
-            <p class="lead">追蹤每天早上固定產生的五張卡片名單，檢查 1 日、3 日、5 日後的實際表現，用來判斷篩選規則是否需要調整。</p>
         </div>
         <a class="button ghost" href="/admin">回後台</a>
     </section>

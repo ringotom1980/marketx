@@ -4,7 +4,6 @@
     <section class="page-head">
         <div>
             <h1>{{ $heading }}</h1>
-            <p class="lead">{{ $description }}</p>
         </div>
     </section>
 
@@ -17,4 +16,3 @@
         @endforeach
     </section>
 @endsection
-

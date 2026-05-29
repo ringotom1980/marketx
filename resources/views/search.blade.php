@@ -4,7 +4,6 @@
     <section class="page-head">
         <div>
             <h1>搜尋台股</h1>
-            <p class="lead">支援股票代號、股票名稱與產業搜尋。資料來自 TWSE / TPEx 官方 OpenAPI。</p>
         </div>
         <form class="search" action="/search" method="get">
             <input name="q" value="{{ $query }}" placeholder="例如 2330、台積電、半導體">
@@ -44,4 +43,3 @@
         @endif
     </section>
 @endsection
-

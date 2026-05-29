@@ -255,7 +255,6 @@
     <section class="page-head">
         <div>
             <h1>今日全球 × 台股狀態中心</h1>
-            <p class="lead">整合全球市場、重大事件、題材熱度與台股個股狀態，先用免費官方資料與規則式引擎建立決策雷達。</p>
         </div>
         @include('partials.stock_search', [
             'value' => request('q'),
