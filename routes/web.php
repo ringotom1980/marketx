@@ -875,8 +875,10 @@ Route::get('/s/{symbol}', function (string $symbol, StockEventChainBuilder $even
     ), -20);
     $supportLatestClose = $latestPrice?->close === null ? null : (float) $latestPrice->close;
     $buildSupportChart = function (array $sourceRows, string $label) use ($supportLatestClose): array {
-        $supportRows = collect($sourceRows)->values();
         $value = fn ($row, string $key) => is_array($row) ? data_get($row, $key) : $row->{$key};
+        $supportRows = collect($sourceRows)
+            ->filter(fn ($row) => (float) $value($row, 'high') > 0 && (float) $value($row, 'low') > 0 && (float) $value($row, 'close') > 0)
+            ->values();
 
         if ($supportRows->count() < 4 || $supportLatestClose === null) {
             return ['rows' => [], 'current' => $supportLatestClose, 'support' => null, 'pressure' => null, 'note' => '資料不足', 'period' => $label];
@@ -910,7 +912,7 @@ Route::get('/s/{symbol}', function (string $symbol, StockEventChainBuilder $even
         $activeBins = collect($bins)->filter(fn (array $bin) => (int) $bin['volume'] > 0)->values();
         $supportBin = $activeBins
             ->filter(fn (array $bin) => $bin['to'] < $supportLatestClose)
-            ->sortByDesc('to')
+            ->sortByDesc('volume')
             ->first();
         $pressureBin = $activeBins
             ->filter(fn (array $bin) => $bin['from'] > $supportLatestClose)

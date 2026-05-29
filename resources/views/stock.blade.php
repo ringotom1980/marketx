@@ -489,7 +489,8 @@
                     <div class="mini-chart-head">
                         <h3>三大法人買賣超</h3>
                         <div class="mini-period-tabs" data-institutional-tabs>
-                            <button class="mini-period-tab active" type="button" data-institutional-period="week">周</button>
+                            <button class="mini-period-tab active" type="button" data-institutional-period="day">日</button>
+                            <button class="mini-period-tab" type="button" data-institutional-period="week">周</button>
                             <button class="mini-period-tab" type="button" data-institutional-period="month">月</button>
                             <button class="mini-period-tab" type="button" data-institutional-period="quarter">季</button>
                         </div>
@@ -907,12 +908,16 @@
             };
 
             let supportPeriod = 'month';
-            let institutionalPeriod = 'week';
+            let institutionalPeriod = 'day';
             let marginPeriod = 'week';
 
             const periodKey = (dateText, period) => {
                 const date = new Date(`${dateText}T00:00:00+08:00`);
                 if (Number.isNaN(date.getTime())) return dateText;
+
+                if (period === 'day') {
+                    return dateText;
+                }
 
                 if (period === 'quarter') {
                     return `${date.getFullYear()} Q${Math.floor(date.getMonth() / 3) + 1}`;
@@ -1173,6 +1178,11 @@
                     if (!builder) return;
                     const option = builder();
                     if (!option) {
+                        const chart = charts.get(node);
+                        if (chart) {
+                            chart.dispose();
+                            charts.delete(node);
+                        }
                         showEmpty(node);
                         return;
                     }
@@ -1196,7 +1206,7 @@
 
             document.querySelectorAll('[data-institutional-period]').forEach((button) => {
                 button.addEventListener('click', () => {
-                    institutionalPeriod = button.dataset.institutionalPeriod || 'week';
+                    institutionalPeriod = button.dataset.institutionalPeriod || 'day';
                     document.querySelectorAll('[data-institutional-period]').forEach((item) => item.classList.toggle('active', item === button));
                     renderCharts();
                 });
