@@ -862,6 +862,41 @@ Route::get('/s/{symbol}', function (string $symbol, StockEventChainBuilder $even
         $priceRows,
         fn ($row) => $row->trade_date->format('Y')
     );
+    $latestTechnical = DB::table('stock_technical_indicators_1d')
+        ->where('stock_id', $stockRecord->id)
+        ->orderByDesc('trade_date')
+        ->first();
+    $technicalArray = is_array($technicalPayload)
+        ? $technicalPayload
+        : (is_string($technicalPayload) ? (json_decode($technicalPayload, true) ?: []) : []);
+    $num = fn ($value): ?float => $value === null || $value === '' ? null : (float) $value;
+    $closeAt = function ($rows, int $daysAgo) use ($num): ?float {
+        $index = $rows->count() - 1 - $daysAgo;
+
+        return $index >= 0 ? $num($rows->get($index)?->close) : null;
+    };
+    $pctFrom = function (?float $current, ?float $base): ?float {
+        return $current !== null && $base !== null && $base > 0 ? (($current / $base) - 1) * 100 : null;
+    };
+    $latestPriceRow = $priceRows->last();
+    $latestClose = $num($latestPriceRow?->close);
+    $latestOpen = $num($latestPriceRow?->open);
+    $latestHigh = $num($latestPriceRow?->high);
+    $latestLow = $num($latestPriceRow?->low);
+    $recentPriceStats = [
+        'change' => $num($latestPrice?->change),
+        'return5' => $pctFrom($latestClose, $closeAt($priceRows, 5)),
+        'return20' => $pctFrom($latestClose, $closeAt($priceRows, 20)),
+        'return60' => $pctFrom($latestClose, $closeAt($priceRows, 60)),
+        'bais20' => $num($latestTechnical?->bais20 ?? data_get($technicalArray, 'bais20')),
+        'rsi14' => $num($latestTechnical?->rsi14 ?? data_get($technicalArray, 'rsi14')),
+        'volumeRatio20' => $num($latestTechnical?->volume_ratio20 ?? data_get($technicalArray, 'volume_ratio20')),
+        'closeVsSma20' => $pctFrom($latestClose, $num($latestTechnical?->sma20 ?? data_get($technicalArray, 'sma20'))),
+        'upperShadowRatio' => null,
+    ];
+    if ($latestOpen !== null && $latestClose !== null && $latestHigh !== null && $latestLow !== null && $latestHigh > $latestLow) {
+        $recentPriceStats['upperShadowRatio'] = (($latestHigh - max($latestOpen, $latestClose)) / ($latestHigh - $latestLow)) * 100;
+    }
     $stockThemes = DB::table('stock_theme_map')
         ->join('themes', 'themes.id', '=', 'stock_theme_map.theme_id')
         ->leftJoin('theme_scores', function ($join) {
@@ -956,19 +991,75 @@ Route::get('/s/{symbol}', function (string $symbol, StockEventChainBuilder $even
     $riskText = array_merge($riskReasons, $bearReasons) === []
         ? '目前沒有明顯風險旗標，但仍需留意盤勢變化'
         : implode('、', array_slice(array_values(array_unique(array_merge($riskReasons, $bearReasons))), 0, 4));
-    $interpretation = match ($evaluation['label']) {
-        '優先觀察' => '此股目前列在首頁「優先觀察」，代表多項條件相對正向，但仍需看量價與籌碼是否延續。',
-        '風險升高' => '此股目前列在首頁「風險升高」，代表已有過熱、轉弱或籌碼風險，應優先控管風險。',
-        '潛力觀察' => '此股目前列在首頁「潛力觀察」，代表條件正在醞釀，但還需要更明確的轉強訊號。',
-        '低檔爆量觀察' => '此股目前列在首頁「低檔爆量」，代表低檔或整理後出現放量轉強，需觀察是否能延續。',
-        '持續弱勢' => '此股目前列在首頁「持續弱勢」，代表弱勢條件仍多，未轉強前應保守看待。',
-        '高度觀察' => '多數核心條件偏正向，但仍不代表保證上漲，適合列入優先觀察。',
-        '偏多觀察' => '整體條件偏正向，但仍要確認量價與籌碼是否延續。',
-        '偏多但風險升高' => '雖然仍有多方條件，但風險旗標已出現，追價要更保守。',
-        '中性觀察' => '多空條件尚未明顯傾斜，適合等待更清楚的量價或籌碼訊號。',
-        '保守觀察' => '看多信心偏低，除非後續出現明確轉強訊號，否則不宜積極追價。',
-        default => '目前弱勢或扣分條件較多，應優先控管風險。',
-    };
+    $interpretation = (function () use ($evaluation, $latestRadarCard, $recentPriceStats, $confidence, $supportText, $riskText) {
+        $cardType = $latestRadarCard?->card_type;
+        $return5 = $recentPriceStats['return5'];
+        $return20 = $recentPriceStats['return20'];
+        $return60 = $recentPriceStats['return60'];
+        $bais20 = $recentPriceStats['bais20'];
+        $volumeRatio20 = $recentPriceStats['volumeRatio20'];
+        $closeVsSma20 = $recentPriceStats['closeVsSma20'];
+        $upperShadowRatio = $recentPriceStats['upperShadowRatio'];
+
+        $isRecentWeak = ($return20 !== null && $return20 <= -6)
+            || ($return60 !== null && $return60 <= -12)
+            || ($closeVsSma20 !== null && $closeVsSma20 < -3);
+        $isExtended = ($return20 !== null && $return20 >= 14)
+            || ($bais20 !== null && $bais20 >= 10);
+        $isRebound = ($return5 !== null && $return5 > 3)
+            && ($return20 !== null && $return20 <= 8)
+            && ($volumeRatio20 !== null && $volumeRatio20 >= 1.4);
+        $hasUpperSellPressure = ($upperShadowRatio !== null && $upperShadowRatio >= 35)
+            && ($volumeRatio20 !== null && $volumeRatio20 >= 1.3);
+
+        if ($cardType === 'risk') {
+            if ($isRecentWeak) {
+                return "這檔被列入風險升高，不是因為漲多過熱，而是近期股價已經轉弱或跌破均線，風險重點在於「{$riskText}」。接下來要先看能不能止跌並站回月線，否則反彈容易只是短線修正。";
+            }
+
+            if ($hasUpperSellPressure) {
+                return "這檔風險來自放量後高檔賣壓變明顯，K 線上影線偏重，代表追價買盤開始遇到壓力。即使題材或部分指標仍有支撐，也要先觀察隔日能否重新站回高點附近。";
+            }
+
+            if ($isExtended) {
+                return "這檔近期漲幅或乖離已偏大，列入風險升高是提醒強勢後安全邊際變小。若量能降溫、籌碼轉弱或營收跟不上評價，短線拉回壓力會提高。";
+            }
+
+            return "這檔目前不是單純看空，而是多方條件與風險條件同時存在。主要支撐是「{$supportText}」，但「{$riskText}」也需要一起看，操作上不適合只看信心指數追價。";
+        }
+
+        if ($cardType === 'weak') {
+            return "這檔目前屬於持續弱勢，重點不是短線有沒有反彈，而是股價結構仍未轉強。除非後續出現放量站回月線、MACD/KD 修復與籌碼回補，否則仍應先以風險控管為主。";
+        }
+
+        if ($cardType === 'low_volume') {
+            if ($isRebound) {
+                return "這檔屬於低檔爆量觀察，股價先前位階不高，近期開始出現放量上攻。這種訊號有機會代表資金重新注意，但要看量能能否延續，且不能隔天快速跌回整理區。";
+            }
+
+            return "這檔被歸在低檔爆量，代表系統看到低位階或整理後的量能變化。現在重點不是急著判斷已經轉強，而是觀察爆量後能否守住關鍵均線與前一波整理區上緣。";
+        }
+
+        if ($cardType === 'priority') {
+            if ($isExtended) {
+                return "這檔雖列入優先觀察，但近期漲幅已不小，優勢在「{$supportText}」，風險則是追價成本偏高。比較健康的走法是量能延續、回檔不破短均線，而不是再用急漲拉開乖離。";
+            }
+
+            return "這檔目前列入優先觀察，代表股價、題材或籌碼有較多正向條件配合。後續重點是成交量能否維持、籌碼是否延續買盤，若只剩題材但股價不跟，信心就要下修。";
+        }
+
+        if ($cardType === 'potential') {
+            return "這檔屬於潛力觀察，代表條件正在累積但還沒有到全面轉強。若後續能補上量價突破、題材升溫或籌碼轉買，才比較有機會從觀察轉成更明確的偏多結構。";
+        }
+
+        return match ($evaluation['label']) {
+            '高度觀察', '偏多觀察' => "目前看多信心約 {$confidence}%，但仍要回到股價走勢確認；若量能、均線與籌碼不能同步，分數再高也只能當觀察名單。",
+            '偏多但風險升高' => "目前仍有多方條件，但風險旗標也出現，必須同時看支撐與扣分原因，避免只看單一分數追價。",
+            '中性觀察' => '多空條件尚未明顯傾斜，現階段比較適合等待量價、籌碼或題材出現更一致的方向。',
+            '保守觀察' => '看多信心偏低，除非後續股價先站回關鍵均線並出現量能配合，否則不宜把短線反彈直接視為轉強。',
+            default => '目前弱勢或扣分條件較多，應先確認股價是否止跌與籌碼是否改善，再評估後續機會。',
+        };
+    })();
     $cardText = $latestRadarCard
         ? "\n首頁分類：{$evaluation['label']}".($radarReasonLabels === [] ? '' : '，原因：'.implode('、', array_slice($radarReasonLabels, 0, 4)).'。')
         : '';
