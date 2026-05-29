@@ -9,6 +9,7 @@
     <section class="page-head">
         <div>
             <h1>五張卡片績效驗證</h1>
+            <p class="lead">績效以「被選入卡片當日收盤價」起算，追蹤後續 1、3、5 日累積漲跌幅，直到條件消失為止。</p>
         </div>
         <a class="button ghost" href="/admin">回後台</a>
     </section>
@@ -34,7 +35,7 @@
                         @php $row = $card['horizons']->get($day); @endphp
                         <div style="border-top:1px solid var(--line);padding-top:10px">
                             <div style="display:flex;justify-content:space-between;gap:12px">
-                                <strong>{{ $day }} 日後</strong>
+                                <strong>{{ $day }} 日後累積</strong>
                                 <strong class="{{ $tone($row->avg_change_pct ?? null) }}">{{ $fmtPct($row->avg_change_pct ?? null) }}</strong>
                             </div>
                             <p class="lead" style="font-size:12px">
@@ -65,7 +66,7 @@
                             <span class="badge amber">{{ $reason['label'] }}</span>
                         </th>
                         <td>
-                            1 日平均 <strong class="{{ $tone($reason['avg_change_pct']) }}">{{ $fmtPct($reason['avg_change_pct']) }}</strong>，
+                            選入後 1 日平均 <strong class="{{ $tone($reason['avg_change_pct']) }}">{{ $fmtPct($reason['avg_change_pct']) }}</strong>，
                             勝率 {{ $reason['win_rate'] === null ? '無資料' : $reason['win_rate'].'%' }}<br>
                             <span class="lead" style="font-size:12px">
                                 有效 {{ $reason['valid'] }} / {{ $reason['total'] }}，
@@ -107,7 +108,7 @@
                                 最新追蹤 {{ $check->check_date }}，
                                 第 {{ $check->days_since_selected }} 天，
                                 收盤 {{ $check->close ?? '無資料' }}，
-                                漲跌幅 <strong class="{{ $tone($check->change_pct) }}">{{ $fmtPct($check->change_pct) }}</strong><br>
+                                累積漲跌幅 <strong class="{{ $tone($check->change_pct) }}">{{ $fmtPct($check->change_pct) }}</strong><br>
                                 <span class="lead" style="font-size:12px">{{ $statusText }}，累積有效檢查 {{ $item->performance['valid_checks'] ?? 0 }} 次</span>
                             @else
                                 <span class="lead">尚未有追蹤價格。</span>

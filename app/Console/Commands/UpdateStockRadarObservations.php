@@ -10,7 +10,8 @@ class UpdateStockRadarObservations extends Command
 {
     protected $signature = 'market:update-stock-radar-observations
         {--card-date= : Card date to register, default latest stock_radar_cards date}
-        {--check-date= : Price date to check, default latest stock_prices_1d date}';
+        {--check-date= : Price date to check, default latest stock_prices_1d date}
+        {--recalculate : Rebuild checks for historical observations too}';
 
     protected $description = 'Register daily stock radar picks and track their later price performance.';
 
@@ -25,14 +26,29 @@ class UpdateStockRadarObservations extends Command
             return self::SUCCESS;
         }
 
-        $registered = $this->registerCardPicks((string) $cardDate);
-        $checked = $checkDate ? $this->checkActiveObservations((string) $cardDate, (string) $checkDate) : 0;
+        if ((bool) $this->option('recalculate')) {
+            $registered = $this->registerHistoricalCardPicks((string) $cardDate);
+            $checked = $checkDate ? $this->recalculateHistoricalChecks((string) $cardDate, (string) $checkDate) : 0;
+        } else {
+            $registered = $this->registerCardPicks((string) $cardDate);
+            $checked = $checkDate ? $this->checkActiveObservations((string) $cardDate, (string) $checkDate) : 0;
+        }
 
         $this->info("Stock radar observations updated. card_date={$cardDate}, check_date=".($checkDate ?: 'none'));
         $this->line("Registered picks: {$registered}");
         $this->line("Observation checks: {$checked}");
 
         return self::SUCCESS;
+    }
+
+    private function registerHistoricalCardPicks(string $maxCardDate): int
+    {
+        return DB::table('stock_radar_cards')
+            ->where('card_date', '<=', $maxCardDate)
+            ->distinct()
+            ->orderBy('card_date')
+            ->pluck('card_date')
+            ->sum(fn (string $cardDate) => $this->registerCardPicks($cardDate));
     }
 
     private function registerCardPicks(string $cardDate): int
@@ -68,12 +84,16 @@ class UpdateStockRadarObservations extends Command
         return $count;
     }
 
-    private function checkActiveObservations(string $currentCardDate, string $checkDate): int
+    private function checkActiveObservations(string $currentCardDate, string $checkDate, bool $recalculate = false): int
     {
-        $active = DB::table('stock_radar_observations')
-            ->where('selected_date', '<=', $currentCardDate)
-            ->where('status', 'active')
-            ->get();
+        $activeQuery = DB::table('stock_radar_observations')
+            ->where('selected_date', '<=', $currentCardDate);
+
+        if (! $recalculate) {
+            $activeQuery->where('status', 'active');
+        }
+
+        $active = $activeQuery->get();
 
         $currentCards = DB::table('stock_radar_cards')
             ->where('card_date', $currentCardDate)
@@ -89,8 +109,14 @@ class UpdateStockRadarObservations extends Command
                 ->where('trade_date', $checkDate)
                 ->first(['close', 'change', 'change_pct', 'volume']);
 
+            $entryPrice = DB::table('stock_prices_1d')
+                ->where('stock_id', $observation->stock_id)
+                ->where('trade_date', $observation->selected_date)
+                ->first(['close']);
+
             $conditionStillPresent = $currentCards->has($observation->card_type.':'.$observation->stock_id);
-            $changePct = $this->changePct($price);
+            $change = $this->cumulativeChange($entryPrice, $price);
+            $changePct = $this->cumulativeChangePct($entryPrice, $price);
             $days = CarbonImmutable::parse($observation->selected_date)->diffInDays(CarbonImmutable::parse($checkDate));
 
             DB::table('stock_radar_observation_checks')->updateOrInsert(
@@ -102,7 +128,7 @@ class UpdateStockRadarObservations extends Command
                     'stock_id' => $observation->stock_id,
                     'days_since_selected' => max(0, (int) $days),
                     'close' => $price?->close,
-                    'change' => $price?->change,
+                    'change' => $change,
                     'change_pct' => $changePct,
                     'volume' => $price?->volume,
                     'condition_still_present' => $conditionStillPresent,
@@ -110,6 +136,9 @@ class UpdateStockRadarObservations extends Command
                         'selected_date' => $observation->selected_date,
                         'current_card_date' => $currentCardDate,
                         'has_price' => $price !== null,
+                        'entry_close' => $entryPrice?->close,
+                        'check_close' => $price?->close,
+                        'daily_change_pct' => $this->dailyChangePct($price),
                     ], JSON_UNESCAPED_UNICODE),
                     'updated_at' => $now,
                     'created_at' => $now,
@@ -133,7 +162,55 @@ class UpdateStockRadarObservations extends Command
         return $count;
     }
 
-    private function changePct(?object $price): ?float
+    private function recalculateHistoricalChecks(string $maxCardDate, string $maxCheckDate): int
+    {
+        $firstSelectedDate = DB::table('stock_radar_observations')
+            ->where('selected_date', '<=', $maxCardDate)
+            ->min('selected_date');
+
+        if (! $firstSelectedDate) {
+            return 0;
+        }
+
+        return DB::table('stock_prices_1d')
+            ->whereBetween('trade_date', [$firstSelectedDate, $maxCheckDate])
+            ->distinct()
+            ->orderBy('trade_date')
+            ->pluck('trade_date')
+            ->sum(function (string $checkDate) use ($maxCardDate) {
+                $cardDateForCheck = DB::table('stock_radar_cards')
+                    ->where('card_date', '<=', min($checkDate, $maxCardDate))
+                    ->max('card_date') ?: $maxCardDate;
+
+                return $this->checkActiveObservations((string) $cardDateForCheck, $checkDate, true);
+            });
+    }
+
+    private function cumulativeChange(?object $entryPrice, ?object $price): ?float
+    {
+        if (! $entryPrice || ! $price || $entryPrice->close === null || $price->close === null) {
+            return null;
+        }
+
+        return round((float) $price->close - (float) $entryPrice->close, 4);
+    }
+
+    private function cumulativeChangePct(?object $entryPrice, ?object $price): ?float
+    {
+        if (! $entryPrice || ! $price || $entryPrice->close === null || $price->close === null) {
+            return null;
+        }
+
+        $entryClose = (float) $entryPrice->close;
+
+        if ($entryClose == 0.0) {
+            return null;
+        }
+
+        return round((((float) $price->close - $entryClose) / $entryClose) * 100, 4);
+    }
+
+    private function dailyChangePct(?object $price): ?float
     {
         if (! $price) {
             return null;
