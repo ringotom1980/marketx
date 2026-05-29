@@ -246,6 +246,27 @@
             font-weight: 900;
             pointer-events: none;
         }
+        .site-notice {
+            display: grid;
+            gap: 12px;
+        }
+        .site-notice p {
+            margin: 0;
+        }
+        .site-notice-list {
+            display: grid;
+            gap: 8px;
+            margin: 0;
+            padding-left: 1.25em;
+        }
+        .site-notice-list li {
+            color: var(--muted);
+            font-size: 14px;
+            line-height: 1.6;
+        }
+        .site-notice-list strong {
+            color: var(--ink);
+        }
         @media (min-width: 821px) {
             .market-chart-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
             .market-chart-wrap { height: 340px; }
@@ -264,13 +285,16 @@
 
     <section class="panel" style="margin-bottom:16px;border-color:#fcd34d;background:#fffbeb">
         <h2>使用聲明</h2>
-        <p class="lead">
-            投資有風險，本站資訊僅供研究與自我判斷參考，不構成任何買賣建議、收益保證或投資邀約。
-            本站主要依公開資料、官方資料、全球市場行情、新聞事件、題材規則、技術面、籌碼與財務營收資料整理分析；
-            系統固定每日更新兩次：台灣時間 06:10 進行美股盤後與全球雷達更新，台灣時間 21:30 進行台股盤後完整更新。
-            台股 16:30 前後會陸續出現收盤行情，但法人、融資融券與部分盤後資料通常較晚完整，因此本站以 21:30 作為完整評分更新時間。
-            AI 與規則式引擎只負責摘要、分類與白話解讀，不預測價格，也不取代個人風險控管。
-        </p>
+        <div class="site-notice">
+            <p class="lead">投資有風險，本站資訊僅供研究與自我判斷參考，不構成任何買賣建議、收益保證或投資邀約。AI 與規則式引擎只負責摘要、分類與白話解讀，不預測價格，也不取代個人風險控管。</p>
+            <ul class="site-notice-list">
+                <li><strong>06:10 全球更新：</strong>更新美股盤後、國際指數、匯率、利率、原物料與全球雷達資料。</li>
+                <li><strong>08:00 盤前分析：</strong>產生全球盤前觀察；08:25 前完成題材盤前觀察補跑。</li>
+                <li><strong>08:30 五張卡片：</strong>固定產生今日優先觀察、風險升高、潛力觀察、低檔爆量與持續弱勢名單，當日不再因盤中資料重排。</li>
+                <li><strong>16:30 台股盤後：</strong>陸續更新收盤行情與日 K 資料，部分法人、融資融券與盤後資料可能尚未完整。</li>
+                <li><strong>21:30 完整重跑：</strong>重新補齊台股日盤、籌碼、融資融券、財務營收、技術指標與分數資料。</li>
+            </ul>
+        </div>
     </section>
 
     <section class="market-chart-grid">
