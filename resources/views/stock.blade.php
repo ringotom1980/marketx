@@ -506,7 +506,7 @@
                 <div class="mini-chart-card">
                     <div class="mini-chart-head">
                         <h3>每月營收</h3>
-                        <span class="mini-chart-note">近六年</span>
+                        <span class="mini-chart-note">近十年</span>
                     </div>
                     <div class="mini-chart-wrap">
                         <div data-stock-echart="revenue"></div>

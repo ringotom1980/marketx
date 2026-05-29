@@ -10,7 +10,10 @@ use Illuminate\Support\Facades\Http;
 
 class ImportTaiwanRevenues extends Command
 {
-    protected $signature = 'market:import-revenues {--year= : Gregorian year} {--month= : Month 1-12}';
+    protected $signature = 'market:import-revenues
+        {--year= : Gregorian year}
+        {--month= : Month 1-12}
+        {--months=24 : Number of recent months to import when year/month is not specified}';
 
     protected $description = 'Import monthly Taiwan stock revenues from official MOPS monthly revenue pages.';
 
@@ -29,7 +32,10 @@ class ImportTaiwanRevenues extends Command
                 'Asia/Taipei',
             )];
         } else {
-            $months = collect(range(0, 24))->map(fn (int $offset) => $target->subMonthsNoOverflow($offset)->startOfMonth())->all();
+            $monthCount = max(1, min(240, (int) $this->option('months')));
+            $months = collect(range(0, $monthCount - 1))
+                ->map(fn (int $offset) => $target->subMonthsNoOverflow($offset)->startOfMonth())
+                ->all();
         }
 
         foreach ($months as $monthDate) {
@@ -43,14 +49,8 @@ class ImportTaiwanRevenues extends Command
                 $count += $this->importMarket($marketCode, $market, $rocYear, $month, $yearMonth);
             }
 
-            if ($count > 0 || $this->option('year') || $this->option('month')) {
-                $this->info('Revenue rows imported for '.$yearMonth.': '.$count);
-
-                return self::SUCCESS;
-            }
+            $this->info('Revenue rows imported for '.$yearMonth.': '.$count);
         }
-
-        $this->warn('No available MOPS revenue page found in the fallback window.');
 
         return self::SUCCESS;
     }
