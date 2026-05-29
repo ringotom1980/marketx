@@ -291,7 +291,7 @@
             height: 280px;
         }
 
-        .mini-chart-wrap canvas {
+        .mini-chart-wrap > div {
             display: block;
             height: 100%;
             width: 100%;
@@ -419,7 +419,7 @@
                         <span class="mini-chart-note">近 60 日</span>
                     </div>
                     <div class="mini-chart-wrap tall">
-                        <canvas data-stock-mini-chart="support"></canvas>
+                        <div data-stock-echart="support"></div>
                     </div>
                     <div class="chart-legend">
                         <span><i class="legend-dot" style="background:#ef4444"></i>壓力</span>
@@ -433,7 +433,7 @@
                         <span class="mini-chart-note">近 60 日</span>
                     </div>
                     <div class="mini-chart-wrap tall">
-                        <canvas data-stock-mini-chart="priceVolume"></canvas>
+                        <div data-stock-echart="priceVolume"></div>
                     </div>
                     <div class="chart-legend">
                         <span><i class="legend-dot" style="background:#ef4444"></i>收盤價</span>
@@ -464,7 +464,7 @@
                         <span class="mini-chart-note">近 30 日</span>
                     </div>
                     <div class="mini-chart-wrap">
-                        <canvas data-stock-mini-chart="institutional"></canvas>
+                        <div data-stock-echart="institutional"></div>
                     </div>
                     <div class="chart-legend">
                         <span><i class="legend-dot" style="background:#14b8a6"></i>外資</span>
@@ -478,7 +478,7 @@
                         <span class="mini-chart-note">近 30 日</span>
                     </div>
                     <div class="mini-chart-wrap">
-                        <canvas data-stock-mini-chart="margin"></canvas>
+                        <div data-stock-echart="margin"></div>
                     </div>
                     <div class="chart-legend">
                         <span><i class="legend-dot" style="background:#38bdf8"></i>融資</span>
@@ -509,7 +509,7 @@
                         <span class="mini-chart-note">仟元</span>
                     </div>
                     <div class="mini-chart-wrap">
-                        <canvas data-stock-mini-chart="revenue"></canvas>
+                        <div data-stock-echart="revenue"></div>
                     </div>
                     <div class="chart-legend">
                         <span><i class="legend-dot" style="background:#38bdf8"></i>月營收</span>
@@ -522,7 +522,7 @@
                         <span class="mini-chart-note">季/年資料</span>
                     </div>
                     <div class="mini-chart-wrap">
-                        <canvas data-stock-mini-chart="financial"></canvas>
+                        <div data-stock-echart="financial"></div>
                     </div>
                     <div class="chart-legend">
                         <span><i class="legend-dot" style="background:#2563eb"></i>毛利率</span>
@@ -556,6 +556,7 @@
         </div>
     </section>
 
+    <script src="https://cdn.jsdelivr.net/npm/echarts@5/dist/echarts.min.js"></script>
     <script>
         (() => {
             const tabs = Array.from(document.querySelectorAll('[data-stock-info-tabs] .stock-info-tab'));
@@ -811,6 +812,267 @@
             window.addEventListener('resize', renderMiniCharts);
             window.addEventListener('stock-tab-change', () => setTimeout(renderMiniCharts, 30));
             renderMiniCharts();
+        })();
+
+        (() => {
+            const stockCharts = @json($stockCharts);
+            const kData = @json($chartData);
+            const nodes = Array.from(document.querySelectorAll('[data-stock-echart]'));
+            const charts = new Map();
+
+            const palette = {
+                red: '#cf1428',
+                redSoft: '#f8d7dc',
+                blue: '#5b8def',
+                teal: '#18a999',
+                amber: '#f0a928',
+                pink: '#e45a92',
+                purple: '#8b5cf6',
+                gray: '#64748b',
+                grid: '#e7edf4',
+                ink: '#102033',
+            };
+
+            const number = (value) => Number.isFinite(Number(value)) ? Number(value) : null;
+            const comma = (value, digits = 0) => {
+                const numeric = number(value);
+                if (numeric === null) return '-';
+                return numeric.toLocaleString('zh-TW', { maximumFractionDigits: digits, minimumFractionDigits: digits });
+            };
+            const short = (value) => {
+                const numeric = number(value);
+                if (numeric === null) return '-';
+                const abs = Math.abs(numeric);
+                if (abs >= 100000000) return `${comma(numeric / 100000000, 1)}億`;
+                if (abs >= 10000) return `${comma(numeric / 10000, 1)}萬`;
+                return comma(numeric, 0);
+            };
+
+            const baseOption = (extra = {}) => ({
+                animationDuration: 450,
+                color: [palette.red, palette.blue, palette.teal, palette.amber, palette.pink, palette.purple],
+                grid: { left: 44, right: 42, top: 28, bottom: 34, containLabel: true },
+                tooltip: {
+                    trigger: 'axis',
+                    confine: true,
+                    backgroundColor: 'rgba(255,255,255,.96)',
+                    borderColor: '#d8e1ec',
+                    textStyle: { color: palette.ink, fontSize: 12, fontWeight: 700 },
+                    extraCssText: 'box-shadow:0 10px 30px rgba(15,23,42,.12);border-radius:10px;',
+                },
+                xAxis: { axisLine: { lineStyle: { color: '#d8e1ec' } }, axisLabel: { color: palette.gray, fontSize: 11 } },
+                yAxis: { axisLine: { show: false }, splitLine: { lineStyle: { color: palette.grid } }, axisLabel: { color: palette.gray, fontSize: 11 } },
+                ...extra,
+            });
+
+            const showEmpty = (node, text = '資料不足，暫無法繪製圖表') => {
+                node.innerHTML = `<div style="height:100%;display:grid;place-items:center;color:#64748b;font-weight:800;font-size:13px">${text}</div>`;
+            };
+
+            const supportOption = () => {
+                const rows = stockCharts.support || [];
+                if (!rows.length) return null;
+                return baseOption({
+                    grid: { left: 86, right: 54, top: 10, bottom: 16, containLabel: false },
+                    tooltip: {
+                        trigger: 'item',
+                        confine: true,
+                        formatter: ({ data }) => [
+                            `<b>${data.name}</b>`,
+                            `成交量：${comma(data.value)} 股`,
+                            `屬性：${data.kind === 'pressure' ? '壓力區' : '支撐區'}`,
+                        ].join('<br>'),
+                    },
+                    xAxis: { type: 'value', axisLabel: { formatter: (v) => short(v) } },
+                    yAxis: {
+                        type: 'category',
+                        inverse: true,
+                        data: rows.map((row) => row.label),
+                        axisLabel: { color: palette.ink, fontSize: 11, fontWeight: 700 },
+                    },
+                    series: [{
+                        name: '成交量',
+                        type: 'bar',
+                        barMaxWidth: 16,
+                        data: rows.map((row) => ({
+                            name: row.label,
+                            value: Number(row.volume || 0),
+                            kind: row.type,
+                            itemStyle: {
+                                borderRadius: [0, 8, 8, 0],
+                                color: row.type === 'pressure' ? palette.redSoft : 'rgba(139,92,246,.68)',
+                            },
+                        })),
+                        label: {
+                            show: true,
+                            position: 'right',
+                            color: palette.ink,
+                            fontSize: 11,
+                            fontWeight: 800,
+                            formatter: ({ value }) => short(value),
+                        },
+                    }],
+                });
+            };
+
+            const priceVolumeOption = () => {
+                const rows = (kData.daily || []).slice(-80).map((row) => ({
+                    date: row.time,
+                    close: number(row.close),
+                    volume: number(row.volume),
+                })).filter((row) => row.date && row.close !== null && row.volume !== null);
+                if (!rows.length) return null;
+                return baseOption({
+                    legend: { top: 0, right: 0, itemWidth: 10, itemHeight: 10, textStyle: { color: palette.gray, fontWeight: 800 } },
+                    grid: { left: 48, right: 50, top: 34, bottom: 42, containLabel: true },
+                    tooltip: {
+                        trigger: 'axis',
+                        confine: true,
+                        formatter: (items) => {
+                            const row = rows[items[0].dataIndex];
+                            return [`<b>${row.date}</b>`, `收盤價：${comma(row.close, 2)}`, `成交量：${comma(row.volume)} 股`].join('<br>');
+                        },
+                    },
+                    dataZoom: [{ type: 'inside', xAxisIndex: 0 }, { type: 'slider', height: 16, bottom: 10, showDetail: false }],
+                    xAxis: { type: 'category', data: rows.map((row) => row.date.slice(5)), boundaryGap: true },
+                    yAxis: [
+                        { type: 'value', name: '量', axisLabel: { formatter: (v) => short(v) } },
+                        { type: 'value', name: '價', position: 'right', axisLabel: { formatter: (v) => comma(v, 0) } },
+                    ],
+                    series: [
+                        { name: '成交量', type: 'bar', yAxisIndex: 0, data: rows.map((row) => row.volume), itemStyle: { color: 'rgba(91,141,239,.55)', borderRadius: [4, 4, 0, 0] } },
+                        { name: '收盤價', type: 'line', yAxisIndex: 1, data: rows.map((row) => row.close), smooth: true, symbolSize: 5, lineStyle: { width: 2, color: palette.red }, itemStyle: { color: palette.red } },
+                    ],
+                });
+            };
+
+            const institutionalOption = () => {
+                const rows = stockCharts.chips || [];
+                if (!rows.length) return null;
+                return baseOption({
+                    legend: { top: 0, right: 0, itemWidth: 10, itemHeight: 10, textStyle: { color: palette.gray, fontWeight: 800 } },
+                    grid: { left: 42, right: 16, top: 34, bottom: 30, containLabel: true },
+                    tooltip: {
+                        trigger: 'axis',
+                        formatter: (items) => {
+                            const row = rows[items[0].dataIndex];
+                            return [`<b>${row.date}</b>`, `外資：${comma(row.foreign)} 股`, `投信：${comma(row.trust)} 股`, `自營商：${comma(row.dealer)} 股`].join('<br>');
+                        },
+                    },
+                    xAxis: { type: 'category', data: rows.map((row) => String(row.date).slice(5)) },
+                    yAxis: { type: 'value', axisLabel: { formatter: (v) => short(v) } },
+                    series: [
+                        { name: '外資', type: 'bar', data: rows.map((row) => row.foreign), itemStyle: { color: palette.teal } },
+                        { name: '投信', type: 'bar', data: rows.map((row) => row.trust), itemStyle: { color: palette.amber } },
+                        { name: '自營商', type: 'bar', data: rows.map((row) => row.dealer), itemStyle: { color: palette.pink } },
+                    ],
+                });
+            };
+
+            const marginOption = () => {
+                const rows = stockCharts.chips || [];
+                if (!rows.length) return null;
+                return baseOption({
+                    legend: { top: 0, right: 0, itemWidth: 10, itemHeight: 10, textStyle: { color: palette.gray, fontWeight: 800 } },
+                    grid: { left: 42, right: 16, top: 34, bottom: 30, containLabel: true },
+                    tooltip: {
+                        trigger: 'axis',
+                        formatter: (items) => {
+                            const row = rows[items[0].dataIndex];
+                            return [`<b>${row.date}</b>`, `融資餘額：${comma(row.margin)} 股`, `融券餘額：${comma(row.short)} 股`].join('<br>');
+                        },
+                    },
+                    xAxis: { type: 'category', data: rows.map((row) => String(row.date).slice(5)) },
+                    yAxis: { type: 'value', axisLabel: { formatter: (v) => short(v) } },
+                    series: [
+                        { name: '融資', type: 'line', smooth: true, data: rows.map((row) => row.margin), lineStyle: { color: palette.blue, width: 2 }, itemStyle: { color: palette.blue } },
+                        { name: '融券', type: 'line', smooth: true, data: rows.map((row) => row.short), lineStyle: { color: palette.red, width: 2 }, itemStyle: { color: palette.red } },
+                    ],
+                });
+            };
+
+            const revenueOption = () => {
+                const rows = stockCharts.revenues || [];
+                if (!rows.length) return null;
+                return baseOption({
+                    legend: { top: 0, right: 0, itemWidth: 10, itemHeight: 10, textStyle: { color: palette.gray, fontWeight: 800 } },
+                    grid: { left: 48, right: 48, top: 34, bottom: 42, containLabel: true },
+                    tooltip: {
+                        trigger: 'axis',
+                        formatter: (items) => {
+                            const row = rows[items[0].dataIndex];
+                            return [`<b>${row.date}</b>`, `月營收：${comma(row.revenue)} 仟元`, `年增率：${row.yoy === null ? '-' : `${comma(row.yoy, 2)}%`}`, `月增率：${row.mom === null ? '-' : `${comma(row.mom, 2)}%`}`].join('<br>');
+                        },
+                    },
+                    dataZoom: [{ type: 'inside', xAxisIndex: 0 }],
+                    xAxis: { type: 'category', data: rows.map((row) => String(row.date).slice(0, 7)) },
+                    yAxis: [
+                        { type: 'value', name: '仟元', axisLabel: { formatter: (v) => short(v) } },
+                        { type: 'value', name: '%', position: 'right', axisLabel: { formatter: (v) => `${comma(v, 0)}%` } },
+                    ],
+                    series: [
+                        { name: '月營收', type: 'bar', yAxisIndex: 0, data: rows.map((row) => row.revenue), itemStyle: { color: 'rgba(91,141,239,.62)', borderRadius: [4, 4, 0, 0] } },
+                        { name: '年增率', type: 'line', yAxisIndex: 1, smooth: true, data: rows.map((row) => row.yoy), lineStyle: { color: palette.red, width: 2 }, itemStyle: { color: palette.red } },
+                    ],
+                });
+            };
+
+            const financialOption = () => {
+                const rows = stockCharts.financials || [];
+                if (!rows.length) return null;
+                return baseOption({
+                    legend: { top: 0, right: 0, itemWidth: 10, itemHeight: 10, textStyle: { color: palette.gray, fontWeight: 800 } },
+                    grid: { left: 42, right: 48, top: 34, bottom: 30, containLabel: true },
+                    tooltip: {
+                        trigger: 'axis',
+                        formatter: (items) => {
+                            const row = rows[items[0].dataIndex];
+                            return [`<b>${row.date}</b>`, `毛利率：${comma(row.grossMargin, 2)}%`, `營益率：${comma(row.operatingMargin, 2)}%`, `ROE：${comma(row.roe, 2)}%`, `EPS：${comma(row.eps, 2)} 元`].join('<br>');
+                        },
+                    },
+                    xAxis: { type: 'category', data: rows.map((row) => String(row.date).slice(0, 7)) },
+                    yAxis: [
+                        { type: 'value', name: '%', axisLabel: { formatter: (v) => `${comma(v, 0)}%` } },
+                        { type: 'value', name: '元', position: 'right', axisLabel: { formatter: (v) => comma(v, 1) } },
+                    ],
+                    series: [
+                        { name: '毛利率', type: 'line', yAxisIndex: 0, smooth: true, data: rows.map((row) => row.grossMargin), lineStyle: { color: palette.blue, width: 2 }, itemStyle: { color: palette.blue } },
+                        { name: '營益率', type: 'line', yAxisIndex: 0, smooth: true, data: rows.map((row) => row.operatingMargin), lineStyle: { color: palette.red, width: 2 }, itemStyle: { color: palette.red } },
+                        { name: 'ROE', type: 'line', yAxisIndex: 0, smooth: true, data: rows.map((row) => row.roe), lineStyle: { color: palette.amber, width: 2 }, itemStyle: { color: palette.amber } },
+                        { name: 'EPS', type: 'line', yAxisIndex: 1, smooth: true, data: rows.map((row) => row.eps), lineStyle: { color: palette.teal, width: 2 }, itemStyle: { color: palette.teal } },
+                    ],
+                });
+            };
+
+            const builders = { support: supportOption, priceVolume: priceVolumeOption, institutional: institutionalOption, margin: marginOption, revenue: revenueOption, financial: financialOption };
+
+            const renderCharts = () => {
+                if (!window.echarts) {
+                    nodes.forEach((node) => showEmpty(node, '圖表套件載入失敗'));
+                    return;
+                }
+
+                nodes.forEach((node) => {
+                    const builder = builders[node.dataset.stockEchart];
+                    if (!builder) return;
+                    const option = builder();
+                    if (!option) {
+                        showEmpty(node);
+                        return;
+                    }
+                    let chart = charts.get(node);
+                    if (!chart) {
+                        chart = window.echarts.init(node, null, { renderer: 'canvas' });
+                        charts.set(node, chart);
+                    }
+                    chart.setOption(option, true);
+                    chart.resize();
+                });
+            };
+
+            window.addEventListener('resize', () => charts.forEach((chart) => chart.resize()));
+            window.addEventListener('stock-tab-change', () => setTimeout(renderCharts, 80));
+            renderCharts();
         })();
 
         (() => {
