@@ -59,6 +59,22 @@
             text-decoration: none;
         }
 
+        .theme-related-table {
+            margin-top: 10px;
+        }
+
+        .theme-related-price {
+            align-items: baseline;
+            display: inline-flex;
+            gap: 4px;
+            white-space: nowrap;
+        }
+
+        .theme-related-state,
+        .theme-related-confidence {
+            white-space: nowrap;
+        }
+
         @media (max-width: 640px) {
             .theme-ai-title-row {
                 display: block;
@@ -73,6 +89,40 @@
                 font-size: 15px;
                 line-height: 1.85;
                 max-height: 148px;
+            }
+
+            .theme-related-table {
+                table-layout: fixed;
+                width: 100%;
+            }
+
+            .theme-related-table th {
+                width: 42%;
+            }
+
+            .theme-related-table td {
+                padding-left: 8px;
+                padding-right: 0;
+            }
+
+            .theme-related-table th,
+            .theme-related-table td {
+                overflow: hidden;
+                text-overflow: ellipsis;
+            }
+
+            .theme-related-price-cell {
+                width: 58%;
+            }
+
+            .theme-related-price {
+                justify-content: flex-start;
+                max-width: 100%;
+            }
+
+            .theme-related-state,
+            .theme-related-confidence {
+                display: none;
             }
         }
     </style>
@@ -142,7 +192,7 @@
                 @if ($theme['related_stocks'] !== [])
                     <details style="margin-top:12px">
                         <summary class="button" style="display:inline-flex">查看相關股票 {{ $theme['stock_count'] }} 檔</summary>
-                        <table class="table" style="margin-top:10px">
+                        <table class="table theme-related-table">
                             <tbody>
                             @foreach ($theme['related_stocks'] as $stock)
                                 @php
@@ -154,12 +204,14 @@
                                 @endphp
                                 <tr>
                                     <th><a href="/s/{{ $stock['symbol'] }}">{{ $stock['name'] }}</a></th>
-                                    <td>
-                                        {{ $relatedCloseText }}
-                                        <span style="color:{{ $relatedTone }};font-weight:900">{{ $relatedChangeText }}</span>
+                                    <td class="theme-related-price-cell">
+                                        <span class="theme-related-price">
+                                            <span>{{ $relatedCloseText }}</span>
+                                            <span style="color:{{ $relatedTone }};font-weight:900">{{ $relatedChangeText }}</span>
+                                        </span>
                                     </td>
-                                    <td>{{ $stock['state'] ?? '觀察中' }}</td>
-                                    <td>信心 {{ $stock['confidence'] ?? 0 }}%</td>
+                                    <td class="theme-related-state">{{ $stock['state'] ?? '觀察中' }}</td>
+                                    <td class="theme-related-confidence">信心 {{ $stock['confidence'] ?? 0 }}%</td>
                                 </tr>
                             @endforeach
                             </tbody>
