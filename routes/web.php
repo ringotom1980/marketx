@@ -821,9 +821,11 @@ Route::get('/s/{symbol}', function (string $symbol, StockEventChainBuilder $even
         ->whereNotNull('high')
         ->whereNotNull('low')
         ->whereNotNull('close')
-        ->orderBy('trade_date')
+        ->orderByDesc('trade_date')
         ->limit(1800)
-        ->get(['trade_date', 'open', 'high', 'low', 'close', 'volume']);
+        ->get(['trade_date', 'open', 'high', 'low', 'close', 'volume'])
+        ->sortBy('trade_date')
+        ->values();
     $dailyK = $priceRows
         ->slice(-520)
         ->values()
@@ -867,14 +869,14 @@ Route::get('/s/{symbol}', function (string $symbol, StockEventChainBuilder $even
     $buildSupportChart = function (int $days) use ($priceRows, $supportLatestClose): array {
         $supportRows = $priceRows->slice(-$days)->values();
 
-        if ($supportRows->isEmpty()) {
-            return ['rows' => [], 'current' => $supportLatestClose, 'support' => null, 'pressure' => null];
+        if ($supportRows->count() < 20 || $supportLatestClose === null) {
+            return ['rows' => [], 'current' => $supportLatestClose, 'support' => null, 'pressure' => null, 'note' => '資料不足'];
         }
 
         $low = (float) $supportRows->min('low');
         $high = (float) $supportRows->max('high');
-        $step = max(0.01, ($high - $low) / 10);
-        $bins = collect(range(0, 9))->map(function (int $index) use ($low, $step) {
+        $step = max(0.01, ($high - $low) / 12);
+        $bins = collect(range(0, 11))->map(function (int $index) use ($low, $step) {
             $from = $low + ($step * $index);
             $to = $from + $step;
 
@@ -884,48 +886,48 @@ Route::get('/s/{symbol}', function (string $symbol, StockEventChainBuilder $even
                 'to' => $to,
                 'mid' => ($from + $to) / 2,
                 'volume' => 0,
-                'type' => 'support',
+                'type' => 'neutral',
+                'role' => null,
             ];
         })->all();
 
         foreach ($supportRows as $row) {
             $close = (float) $row->close;
             $index = (int) floor(($close - $low) / $step);
-            $index = max(0, min(9, $index));
-            $bins[$index]['volume'] += (int) ($row->volume ?? 0);
+            $index = max(0, min(count($bins) - 1, $index));
+            $bins[$index]['volume'] += max(0, (int) ($row->volume ?? 0));
         }
 
-        $supportBin = null;
-        $pressureBin = null;
-
-        foreach ($bins as $bin) {
-            if ($supportLatestClose !== null && $bin['to'] <= $supportLatestClose && ($supportBin === null || $bin['volume'] > $supportBin['volume'])) {
-                $supportBin = $bin;
-            }
-
-            if ($supportLatestClose !== null && $bin['from'] >= $supportLatestClose && ($pressureBin === null || $bin['volume'] > $pressureBin['volume'])) {
-                $pressureBin = $bin;
-            }
-        }
+        $activeBins = collect($bins)->filter(fn (array $bin) => (int) $bin['volume'] > 0)->values();
+        $supportBin = $activeBins
+            ->filter(fn (array $bin) => $bin['to'] < $supportLatestClose)
+            ->sortByDesc('to')
+            ->first();
+        $pressureBin = $activeBins
+            ->filter(fn (array $bin) => $bin['from'] > $supportLatestClose)
+            ->sortBy('from')
+            ->first();
+        $isNewHigh = $pressureBin === null && $supportLatestClose >= (float) $supportRows->max('high');
 
         $rows = collect($bins)
             ->reverse()
             ->map(function (array $bin) use ($supportLatestClose, $supportBin, $pressureBin) {
-                $bin['type'] = $supportLatestClose !== null && $bin['mid'] > $supportLatestClose ? 'pressure' : 'support';
-                $bin['role'] = null;
-
-                if ($supportLatestClose !== null && $supportLatestClose >= $bin['from'] && $supportLatestClose <= $bin['to']) {
+                if ($supportLatestClose >= $bin['from'] && $supportLatestClose <= $bin['to']) {
+                    $bin['type'] = 'current';
                     $bin['role'] = '目前價';
                 } elseif ($supportBin && abs($bin['mid'] - $supportBin['mid']) < 0.00001) {
-                    $bin['role'] = '主要支撐';
+                    $bin['type'] = 'support';
+                    $bin['role'] = '支撐';
                 } elseif ($pressureBin && abs($bin['mid'] - $pressureBin['mid']) < 0.00001) {
-                    $bin['role'] = '上方壓力';
+                    $bin['type'] = 'pressure';
+                    $bin['role'] = '壓力';
                 }
 
                 unset($bin['from'], $bin['to'], $bin['mid']);
 
                 return $bin;
             })
+            ->filter(fn (array $bin) => (int) $bin['volume'] > 0 || $bin['role'] !== null)
             ->values()
             ->all();
 
@@ -934,12 +936,13 @@ Route::get('/s/{symbol}', function (string $symbol, StockEventChainBuilder $even
             'current' => $supportLatestClose,
             'support' => $supportBin ? number_format($supportBin['from'], 2).'~'.number_format($supportBin['to'], 2) : null,
             'pressure' => $pressureBin ? number_format($pressureBin['from'], 2).'~'.number_format($pressureBin['to'], 2) : null,
+            'note' => $isNewHigh ? '創新高，暫無明確上方壓力' : null,
         ];
     };
     $supportChart = [
-        'week' => $buildSupportChart(5),
-        'month' => $buildSupportChart(22),
-        'quarter' => $buildSupportChart(66),
+        'week' => $buildSupportChart(130),
+        'month' => $buildSupportChart(260),
+        'quarter' => $buildSupportChart(780),
     ];
 
     $chipRowsForChart = $stockRecord->chips()

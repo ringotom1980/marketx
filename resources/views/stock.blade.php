@@ -488,7 +488,11 @@
                 <div class="mini-chart-card">
                     <div class="mini-chart-head">
                         <h3>三大法人買賣超</h3>
-                        <span class="mini-chart-note">半年</span>
+                        <div class="mini-period-tabs" data-institutional-tabs>
+                            <button class="mini-period-tab active" type="button" data-institutional-period="week">周</button>
+                            <button class="mini-period-tab" type="button" data-institutional-period="month">月</button>
+                            <button class="mini-period-tab" type="button" data-institutional-period="quarter">季</button>
+                        </div>
                     </div>
                     <div class="mini-chart-wrap">
                         <div data-stock-echart="institutional"></div>
@@ -502,7 +506,11 @@
                 <div class="mini-chart-card">
                     <div class="mini-chart-head">
                         <h3>融資融券變化</h3>
-                        <span class="mini-chart-note">半年</span>
+                        <div class="mini-period-tabs" data-margin-tabs>
+                            <button class="mini-period-tab active" type="button" data-margin-period="week">周</button>
+                            <button class="mini-period-tab" type="button" data-margin-period="month">月</button>
+                            <button class="mini-period-tab" type="button" data-margin-period="quarter">季</button>
+                        </div>
                     </div>
                     <div class="mini-chart-wrap">
                         <div data-stock-echart="margin"></div>
@@ -899,6 +907,59 @@
             };
 
             let supportPeriod = 'month';
+            let institutionalPeriod = 'week';
+            let marginPeriod = 'week';
+
+            const periodKey = (dateText, period) => {
+                const date = new Date(`${dateText}T00:00:00+08:00`);
+                if (Number.isNaN(date.getTime())) return dateText;
+
+                if (period === 'quarter') {
+                    return `${date.getFullYear()} Q${Math.floor(date.getMonth() / 3) + 1}`;
+                }
+
+                if (period === 'month') {
+                    return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+                }
+
+                const day = date.getDay() || 7;
+                date.setDate(date.getDate() - day + 1);
+
+                return `${String(date.getMonth() + 1).padStart(2, '0')}/${String(date.getDate()).padStart(2, '0')}`;
+            };
+
+            const groupedChipRows = (period, mode) => {
+                const groups = new Map();
+                (stockCharts.chips || []).forEach((row) => {
+                    const key = periodKey(row.date, period);
+                    if (!groups.has(key)) {
+                        groups.set(key, {
+                            date: key,
+                            foreign: 0,
+                            trust: 0,
+                            dealer: 0,
+                            margin: null,
+                            short: null,
+                            lendingAvailable: null,
+                        });
+                    }
+
+                    const item = groups.get(key);
+
+                    if (mode === 'sum') {
+                        item.foreign += Number(row.foreign || 0);
+                        item.trust += Number(row.trust || 0);
+                        item.dealer += Number(row.dealer || 0);
+                        return;
+                    }
+
+                    item.margin = row.margin;
+                    item.short = row.short;
+                    item.lendingAvailable = row.lendingAvailable;
+                });
+
+                return Array.from(groups.values());
+            };
 
             const supportOption = () => {
                 const pack = stockCharts.support?.[supportPeriod] || stockCharts.support?.month || stockCharts.support?.week || {};
@@ -906,7 +967,7 @@
                 if (!rows.length) return null;
                 const currentText = pack.current === null || pack.current === undefined ? '-' : comma(pack.current, 2);
                 const supportText = pack.support || '-';
-                const pressureText = pack.pressure || '-';
+                const pressureText = pack.pressure || (pack.note || '-');
 
                 return baseOption({
                     title: {
@@ -922,7 +983,7 @@
                         formatter: ({ data }) => [
                             `<b>${data.name}</b>`,
                             `成交量：${comma(data.value)} 股`,
-                            `位置：${data.role || (data.kind === 'pressure' ? '壓力區' : '支撐區')}`,
+                            `位置：${data.role || '成交密集區'}`,
                         ].join('<br>'),
                     },
                     xAxis: { type: 'value', show: false },
@@ -943,9 +1004,11 @@
                             role: row.role || '',
                             itemStyle: {
                                 borderRadius: [0, 8, 8, 0],
-                                color: row.role === '目前價'
+                                color: row.type === 'current'
                                     ? 'rgba(246,199,102,.78)'
-                                    : (row.type === 'pressure' ? palette.redSoft : 'rgba(139,92,246,.68)'),
+                                    : (row.type === 'pressure'
+                                        ? palette.redSoft
+                                        : (row.type === 'support' ? 'rgba(139,92,246,.68)' : 'rgba(148,163,184,.35)')),
                             },
                         })),
                         label: {
@@ -992,7 +1055,7 @@
             };
 
             const institutionalOption = () => {
-                const rows = stockCharts.chips || [];
+                const rows = groupedChipRows(institutionalPeriod, 'sum');
                 if (!rows.length) return null;
                 return baseOption({
                     legend: { top: 0, right: 0, itemWidth: 10, itemHeight: 10, textStyle: { color: palette.gray, fontWeight: 800 } },
@@ -1016,7 +1079,7 @@
             };
 
             const marginOption = () => {
-                const rows = stockCharts.chips || [];
+                const rows = groupedChipRows(marginPeriod, 'last');
                 if (!rows.length) return null;
                 const hasLendingAvailable = rows.some((row) => row.lendingAvailable !== null && row.lendingAvailable !== undefined);
                 return baseOption({
@@ -1126,6 +1189,22 @@
                 button.addEventListener('click', () => {
                     supportPeriod = button.dataset.supportPeriod || 'month';
                     document.querySelectorAll('[data-support-period]').forEach((item) => item.classList.toggle('active', item === button));
+                    renderCharts();
+                });
+            });
+
+            document.querySelectorAll('[data-institutional-period]').forEach((button) => {
+                button.addEventListener('click', () => {
+                    institutionalPeriod = button.dataset.institutionalPeriod || 'week';
+                    document.querySelectorAll('[data-institutional-period]').forEach((item) => item.classList.toggle('active', item === button));
+                    renderCharts();
+                });
+            });
+
+            document.querySelectorAll('[data-margin-period]').forEach((button) => {
+                button.addEventListener('click', () => {
+                    marginPeriod = button.dataset.marginPeriod || 'week';
+                    document.querySelectorAll('[data-margin-period]').forEach((item) => item.classList.toggle('active', item === button));
                     renderCharts();
                 });
             });
