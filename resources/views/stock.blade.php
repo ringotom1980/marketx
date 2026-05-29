@@ -852,7 +852,7 @@
             const baseOption = (extra = {}) => ({
                 animationDuration: 450,
                 color: [palette.red, palette.blue, palette.teal, palette.amber, palette.pink, palette.purple],
-                grid: { left: 44, right: 42, top: 28, bottom: 34, containLabel: true },
+                grid: { left: 28, right: 20, top: 28, bottom: 30, containLabel: true },
                 tooltip: {
                     trigger: 'axis',
                     confine: true,
@@ -874,7 +874,7 @@
                 const rows = stockCharts.support || [];
                 if (!rows.length) return null;
                 return baseOption({
-                    grid: { left: 86, right: 54, top: 10, bottom: 16, containLabel: false },
+                    grid: { left: 86, right: 42, top: 10, bottom: 8, containLabel: false },
                     tooltip: {
                         trigger: 'item',
                         confine: true,
@@ -884,7 +884,7 @@
                             `屬性：${data.kind === 'pressure' ? '壓力區' : '支撐區'}`,
                         ].join('<br>'),
                     },
-                    xAxis: { type: 'value', axisLabel: { formatter: (v) => short(v) } },
+                    xAxis: { type: 'value', show: false },
                     yAxis: {
                         type: 'category',
                         inverse: true,
@@ -925,7 +925,7 @@
                 if (!rows.length) return null;
                 return baseOption({
                     legend: { top: 0, right: 0, itemWidth: 10, itemHeight: 10, textStyle: { color: palette.gray, fontWeight: 800 } },
-                    grid: { left: 48, right: 50, top: 34, bottom: 42, containLabel: true },
+                    grid: { left: 30, right: 30, top: 34, bottom: 26, containLabel: true },
                     tooltip: {
                         trigger: 'axis',
                         confine: true,
@@ -934,11 +934,11 @@
                             return [`<b>${row.date}</b>`, `收盤價：${comma(row.close, 2)}`, `成交量：${comma(row.volume)} 股`].join('<br>');
                         },
                     },
-                    dataZoom: [{ type: 'inside', xAxisIndex: 0 }, { type: 'slider', height: 16, bottom: 10, showDetail: false }],
+                    dataZoom: [{ type: 'inside', xAxisIndex: 0 }],
                     xAxis: { type: 'category', data: rows.map((row) => row.date.slice(5)), boundaryGap: true },
                     yAxis: [
-                        { type: 'value', name: '量', axisLabel: { formatter: (v) => short(v) } },
-                        { type: 'value', name: '價', position: 'right', axisLabel: { formatter: (v) => comma(v, 0) } },
+                        { type: 'value', axisLabel: { formatter: (v) => short(v) } },
+                        { type: 'value', position: 'right', axisLabel: { formatter: (v) => comma(v, 0) } },
                     ],
                     series: [
                         { name: '成交量', type: 'bar', yAxisIndex: 0, data: rows.map((row) => row.volume), itemStyle: { color: 'rgba(91,141,239,.55)', borderRadius: [4, 4, 0, 0] } },
@@ -952,7 +952,7 @@
                 if (!rows.length) return null;
                 return baseOption({
                     legend: { top: 0, right: 0, itemWidth: 10, itemHeight: 10, textStyle: { color: palette.gray, fontWeight: 800 } },
-                    grid: { left: 42, right: 16, top: 34, bottom: 30, containLabel: true },
+                    grid: { left: 30, right: 14, top: 34, bottom: 28, containLabel: true },
                     tooltip: {
                         trigger: 'axis',
                         formatter: (items) => {
@@ -975,7 +975,7 @@
                 if (!rows.length) return null;
                 return baseOption({
                     legend: { top: 0, right: 0, itemWidth: 10, itemHeight: 10, textStyle: { color: palette.gray, fontWeight: 800 } },
-                    grid: { left: 42, right: 16, top: 34, bottom: 30, containLabel: true },
+                    grid: { left: 30, right: 14, top: 34, bottom: 28, containLabel: true },
                     tooltip: {
                         trigger: 'axis',
                         formatter: (items) => {
@@ -997,7 +997,7 @@
                 if (!rows.length) return null;
                 return baseOption({
                     legend: { top: 0, right: 0, itemWidth: 10, itemHeight: 10, textStyle: { color: palette.gray, fontWeight: 800 } },
-                    grid: { left: 48, right: 48, top: 34, bottom: 42, containLabel: true },
+                    grid: { left: 30, right: 30, top: 34, bottom: 30, containLabel: true },
                     tooltip: {
                         trigger: 'axis',
                         formatter: (items) => {
@@ -1008,8 +1008,8 @@
                     dataZoom: [{ type: 'inside', xAxisIndex: 0 }],
                     xAxis: { type: 'category', data: rows.map((row) => String(row.date).slice(0, 7)) },
                     yAxis: [
-                        { type: 'value', name: '仟元', axisLabel: { formatter: (v) => short(v) } },
-                        { type: 'value', name: '%', position: 'right', axisLabel: { formatter: (v) => `${comma(v, 0)}%` } },
+                        { type: 'value', axisLabel: { formatter: (v) => short(v) } },
+                        { type: 'value', position: 'right', axisLabel: { formatter: (v) => `${comma(v, 0)}%` } },
                     ],
                     series: [
                         { name: '月營收', type: 'bar', yAxisIndex: 0, data: rows.map((row) => row.revenue), itemStyle: { color: 'rgba(91,141,239,.62)', borderRadius: [4, 4, 0, 0] } },
@@ -1023,7 +1023,7 @@
                 if (!rows.length) return null;
                 return baseOption({
                     legend: { top: 0, right: 0, itemWidth: 10, itemHeight: 10, textStyle: { color: palette.gray, fontWeight: 800 } },
-                    grid: { left: 42, right: 48, top: 34, bottom: 30, containLabel: true },
+                    grid: { left: 28, right: 30, top: 34, bottom: 28, containLabel: true },
                     tooltip: {
                         trigger: 'axis',
                         formatter: (items) => {
@@ -1033,8 +1033,8 @@
                     },
                     xAxis: { type: 'category', data: rows.map((row) => String(row.date).slice(0, 7)) },
                     yAxis: [
-                        { type: 'value', name: '%', axisLabel: { formatter: (v) => `${comma(v, 0)}%` } },
-                        { type: 'value', name: '元', position: 'right', axisLabel: { formatter: (v) => comma(v, 1) } },
+                        { type: 'value', axisLabel: { formatter: (v) => `${comma(v, 0)}%` } },
+                        { type: 'value', position: 'right', axisLabel: { formatter: (v) => comma(v, 1) } },
                     ],
                     series: [
                         { name: '毛利率', type: 'line', yAxisIndex: 0, smooth: true, data: rows.map((row) => row.grossMargin), lineStyle: { color: palette.blue, width: 2 }, itemStyle: { color: palette.blue } },
