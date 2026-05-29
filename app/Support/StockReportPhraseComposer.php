@@ -53,9 +53,36 @@ class StockReportPhraseComposer
     }
 
     /**
+     * @return array{one_liner:string,condition_keys:array<string,array<int,string>>,engine:string}
+     */
+    public function composeQuickEvaluation(Stock $stock, mixed $score, mixed $chip, mixed $price, mixed $revenue, ?string $radarCardType = null): array
+    {
+        $technical = $this->latestTechnical($stock->id);
+        $financial = $this->latestFinancial($stock->id);
+        $themes = $this->themes($stock->id);
+        $signals = $this->signals($score, $chip, $price, $revenue, $technical, $financial, $themes);
+        $vars = $this->variables($stock, $score, $chip, $price, $revenue, $technical, $financial, $themes);
+        $signals = $this->alignSignalsWithRadarCard($signals, $radarCardType);
+
+        $parts = [
+            $this->renderSection('price_theme', $signals['price_theme'], $vars, 1, false),
+            $this->renderSection('technical', $signals['technical'], $vars, 1, false),
+            $this->renderSection('chip', $signals['chip'], $vars, 1, false),
+            $this->renderSection('fundamental', $signals['fundamental'], $vars, 1, false),
+            $this->renderSection('summary', $signals['summary'], $vars, 1, false),
+        ];
+
+        return [
+            'one_liner' => trim(implode('', array_filter($parts))),
+            'condition_keys' => $signals,
+            'engine' => 'phrase_library_v1',
+        ];
+    }
+
+    /**
      * @param array<int, string> $conditionKeys
      */
-    private function renderSection(string $section, array $conditionKeys, array $vars, int $limit): string
+    private function renderSection(string $section, array $conditionKeys, array $vars, int $limit, bool $trackUsage = true): string
     {
         $conditionKeys = array_values(array_unique(array_filter($conditionKeys)));
 
@@ -84,7 +111,7 @@ class StockReportPhraseComposer
 
         $selected = $phrases->take($limit);
 
-        if ($selected->isNotEmpty()) {
+        if ($trackUsage && $selected->isNotEmpty()) {
             DB::table('report_phrases')
                 ->whereIn('id', $selected->pluck('id')->all())
                 ->increment('usage_count');
@@ -104,6 +131,43 @@ class StockReportPhraseComposer
             'fundamental' => 'fundamental_stable',
             default => 'overall_watch',
         };
+    }
+
+    /**
+     * @param array<string, array<int, string>> $signals
+     * @return array<string, array<int, string>>
+     */
+    private function alignSignalsWithRadarCard(array $signals, ?string $radarCardType): array
+    {
+        if ($radarCardType === null) {
+            return $signals;
+        }
+
+        $summary = match ($radarCardType) {
+            'priority' => ['overall_bull', 'wait_for_confirmation'],
+            'risk' => ['overall_risk', 'invalid_condition'],
+            'potential', 'low_volume' => ['overall_watch', 'wait_for_confirmation'],
+            'weak' => ['overall_bear', 'invalid_condition'],
+            default => $signals['summary'],
+        };
+
+        $signals['summary'] = array_values(array_unique(array_merge($summary, $signals['summary'] ?? [])));
+
+        if ($radarCardType === 'risk') {
+            $signals['price_theme'] = array_values(array_unique(array_merge(['price_extended'], $signals['price_theme'] ?? [])));
+            $signals['technical'] = array_values(array_unique(array_merge(['bais_high', 'macd_shrinking'], $signals['technical'] ?? [])));
+        }
+
+        if ($radarCardType === 'weak') {
+            $signals['price_theme'] = array_values(array_unique(array_merge(['price_down_volume_up'], $signals['price_theme'] ?? [])));
+            $signals['technical'] = array_values(array_unique(array_merge(['ma_bear', 'below_sma20'], $signals['technical'] ?? [])));
+        }
+
+        if ($radarCardType === 'low_volume') {
+            $signals['price_theme'] = array_values(array_unique(array_merge(['low_base_breakout'], $signals['price_theme'] ?? [])));
+        }
+
+        return $signals;
     }
 
     private function replaceVars(string $template, array $vars): string

@@ -13,6 +13,7 @@ use App\Support\GlobalRadarBuilder;
 use App\Support\MarketxAuth;
 use App\Support\MarketDisplay;
 use App\Support\ModuleStateDisplay;
+use App\Support\StockReportPhraseComposer;
 use App\Support\Ai\AiPipelineService;
 use App\Support\Ai\AiUsageLimiter;
 use App\Support\StockEventChainBuilder;
@@ -791,7 +792,7 @@ Route::get('/api/stocks/search', function (Request $request) {
     return response()->json($stocks);
 });
 
-Route::get('/s/{symbol}', function (string $symbol, StockEventChainBuilder $eventChainBuilder) {
+Route::get('/s/{symbol}', function (string $symbol, StockEventChainBuilder $eventChainBuilder, StockReportPhraseComposer $phraseComposer) {
     $stockRecord = Stock::query()
         ->with([
             'dailyPrices' => fn ($query) => $query->latest('trade_date')->limit(1),
@@ -1063,6 +1064,18 @@ Route::get('/s/{symbol}', function (string $symbol, StockEventChainBuilder $even
     $cardText = $latestRadarCard
         ? "\n首頁分類：{$evaluation['label']}".($radarReasonLabels === [] ? '' : '，原因：'.implode('、', array_slice($radarReasonLabels, 0, 4)).'。')
         : '';
+    $phraseEvaluation = $phraseComposer->composeQuickEvaluation(
+        $stockRecord,
+        $latestScore,
+        $latestChip,
+        $latestPrice,
+        $latestRevenue,
+        $latestRadarCard?->card_type
+    );
+    if (($phraseEvaluation['one_liner'] ?? '') !== '') {
+        $interpretation = $phraseEvaluation['one_liner'];
+    }
+
     $stockEvaluationSummary = "目前看多信心為 {$confidence}%，狀態為「{$evaluation['label']}」。\n"
         .$cardText
         ."\n主要支撐：{$supportText}。"
@@ -1109,6 +1122,7 @@ Route::get('/s/{symbol}', function (string $symbol, StockEventChainBuilder $even
         'support_pills' => array_slice($supportPills, 0, 4),
         'risk_pills' => $riskPills,
         'one_liner' => $interpretation,
+        'phrase_engine' => $phraseEvaluation['engine'] ?? null,
     ];
 
     return view('stock', [
