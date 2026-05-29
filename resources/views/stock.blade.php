@@ -556,7 +556,7 @@
         </div>
     </section>
 
-    <script src="https://cdn.jsdelivr.net/npm/echarts@5/dist/echarts.min.js"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/echarts@5/dist/echarts.min.js"></script>
     <script>
         (() => {
             const tabs = Array.from(document.querySelectorAll('[data-stock-info-tabs] .stock-info-tab'));
@@ -573,6 +573,7 @@
         })();
 
         (() => {
+            return;
             const stockCharts = @json($stockCharts);
             const kData = @json($chartData);
             const canvases = Array.from(document.querySelectorAll('[data-stock-mini-chart]'));
@@ -1072,7 +1073,8 @@
 
             window.addEventListener('resize', () => charts.forEach((chart) => chart.resize()));
             window.addEventListener('stock-tab-change', () => setTimeout(renderCharts, 80));
-            renderCharts();
+            window.addEventListener('load', renderCharts);
+            setTimeout(renderCharts, 1200);
         })();
 
         (() => {
