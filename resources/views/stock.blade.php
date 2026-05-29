@@ -131,7 +131,7 @@
 
         .stock-info-tabs {
             display: grid;
-            grid-template-columns: repeat(5, minmax(0, 1fr));
+            grid-template-columns: repeat(4, minmax(0, 1fr));
             gap: 8px;
             margin-bottom: 14px;
         }
@@ -248,12 +248,78 @@
             line-height: 1.7;
         }
 
+        .stock-chart-grid {
+            display: grid;
+            gap: 12px;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+
+        .mini-chart-card {
+            border: 1px solid var(--line);
+            border-radius: 8px;
+            padding: 12px;
+            background: #fff;
+            min-width: 0;
+        }
+
+        .mini-chart-head {
+            align-items: center;
+            display: flex;
+            justify-content: space-between;
+            gap: 10px;
+            margin-bottom: 8px;
+        }
+
+        .mini-chart-head h3 {
+            font-size: 16px;
+            margin: 0;
+        }
+
+        .mini-chart-note {
+            color: var(--muted);
+            font-size: 12px;
+            font-weight: 800;
+            white-space: nowrap;
+        }
+
+        .mini-chart-wrap {
+            height: 220px;
+            width: 100%;
+        }
+
+        .mini-chart-wrap.tall {
+            height: 280px;
+        }
+
+        .mini-chart-wrap canvas {
+            display: block;
+            height: 100%;
+            width: 100%;
+        }
+
+        .chart-legend {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin-top: 8px;
+            color: var(--muted);
+            font-size: 12px;
+        }
+
+        .legend-dot {
+            border-radius: 999px;
+            display: inline-block;
+            height: 8px;
+            margin-right: 4px;
+            width: 8px;
+        }
+
         @media (max-width: 520px) {
             .k-chart-wrap { height: 300px; }
             .chart-tab { padding: 9px 4px; font-size: 13px; }
             .stock-watch-button { padding: 8px 10px; }
             .stock-info-tabs {
-                grid-template-columns: repeat(5, max-content);
+                grid-template-columns: repeat(4, max-content);
                 overflow-x: auto;
                 padding-bottom: 2px;
             }
@@ -270,6 +336,15 @@
             }
             .evaluation-confidence {
                 font-size: 20px;
+            }
+            .stock-chart-grid {
+                grid-template-columns: 1fr;
+            }
+            .mini-chart-wrap {
+                height: 210px;
+            }
+            .mini-chart-wrap.tall {
+                height: 260px;
             }
         }
     </style>
@@ -329,51 +404,43 @@
 
     <section class="panel" style="margin-top:16px">
         <div class="stock-info-tabs" data-stock-info-tabs>
-            <button class="stock-info-tab active" type="button" data-stock-tab="evaluation">評價</button>
-            <button class="stock-info-tab" type="button" data-stock-tab="technical">技術</button>
+            <button class="stock-info-tab active" type="button" data-stock-tab="technical">技術圖表</button>
             <button class="stock-info-tab" type="button" data-stock-tab="chip">籌碼</button>
             <button class="stock-info-tab" type="button" data-stock-tab="fundamental">財務</button>
             <button class="stock-info-tab" type="button" data-stock-tab="ai">AI 報告</button>
         </div>
 
-        <div class="stock-info-panel active" data-stock-panel="evaluation">
-            <h2>評價</h2>
-            <div class="evaluation-quick">
-                <div class="evaluation-hero">
-                    <div class="evaluation-state">
-                        <span class="badge {{ $badgeTone($evaluationQuick['tone'] ?? '') }}">{{ $evaluationQuick['state'] }}</span>
-                        <strong>{{ $evaluationQuick['radar_card'] }}</strong>
+        <div class="stock-info-panel active" data-stock-panel="technical">
+            <h2>技術圖表</h2>
+            <div class="stock-chart-grid">
+                <div class="mini-chart-card">
+                    <div class="mini-chart-head">
+                        <h3>壓力支撐</h3>
+                        <span class="mini-chart-note">近 60 日</span>
                     </div>
-                    <div class="evaluation-confidence">信心 {{ $evaluationQuick['confidence'] }}%</div>
-                </div>
-
-                <div class="evaluation-row">
-                    <div class="evaluation-row-title">主要依據</div>
-                    <div class="quick-pill-list">
-                        @foreach ($evaluationQuick['support_pills'] as $pill)
-                            <span class="quick-pill {{ ($pill['tone'] ?? '') === 'warning' ? 'warning' : (($pill['tone'] ?? '') === 'down' ? 'down' : 'red') }}">{{ $pill['label'] }}</span>
-                        @endforeach
+                    <div class="mini-chart-wrap tall">
+                        <canvas data-stock-mini-chart="support"></canvas>
+                    </div>
+                    <div class="chart-legend">
+                        <span><i class="legend-dot" style="background:#ef4444"></i>壓力</span>
+                        <span><i class="legend-dot" style="background:#f6c766"></i>目前價</span>
+                        <span><i class="legend-dot" style="background:#8b5cf6"></i>支撐</span>
                     </div>
                 </div>
-
-                <div class="evaluation-row">
-                    <div class="evaluation-row-title">主要風險</div>
-                    <div class="quick-pill-list">
-                        @foreach ($evaluationQuick['risk_pills'] as $pill)
-                            <span class="quick-pill {{ ($pill['tone'] ?? '') === 'down' ? 'down' : 'warning' }}">{{ $pill['label'] }}</span>
-                        @endforeach
+                <div class="mini-chart-card">
+                    <div class="mini-chart-head">
+                        <h3>價量走勢</h3>
+                        <span class="mini-chart-note">近 60 日</span>
                     </div>
-                </div>
-
-                <div class="evaluation-row">
-                    <div class="evaluation-row-title">白話解讀</div>
-                    <p class="evaluation-note">{{ $evaluationQuick['one_liner'] }}</p>
+                    <div class="mini-chart-wrap tall">
+                        <canvas data-stock-mini-chart="priceVolume"></canvas>
+                    </div>
+                    <div class="chart-legend">
+                        <span><i class="legend-dot" style="background:#ef4444"></i>收盤價</span>
+                        <span><i class="legend-dot" style="background:#93c5fd"></i>成交量</span>
+                    </div>
                 </div>
             </div>
-        </div>
-
-        <div class="stock-info-panel" data-stock-panel="technical">
-            <h2>技術分析</h2>
             @if ($technical && ! empty($technical['signals']))
                 <div class="signal-list">
                     @foreach ($technical['signals'] as $signal)
@@ -389,7 +456,36 @@
         </div>
 
         <div class="stock-info-panel" data-stock-panel="chip">
-            <h2>籌碼分析</h2>
+            <h2>籌碼圖表</h2>
+            <div class="stock-chart-grid">
+                <div class="mini-chart-card">
+                    <div class="mini-chart-head">
+                        <h3>三大法人買賣超</h3>
+                        <span class="mini-chart-note">近 30 日</span>
+                    </div>
+                    <div class="mini-chart-wrap">
+                        <canvas data-stock-mini-chart="institutional"></canvas>
+                    </div>
+                    <div class="chart-legend">
+                        <span><i class="legend-dot" style="background:#14b8a6"></i>外資</span>
+                        <span><i class="legend-dot" style="background:#f59e0b"></i>投信</span>
+                        <span><i class="legend-dot" style="background:#ec4899"></i>自營商</span>
+                    </div>
+                </div>
+                <div class="mini-chart-card">
+                    <div class="mini-chart-head">
+                        <h3>融資融券變化</h3>
+                        <span class="mini-chart-note">近 30 日</span>
+                    </div>
+                    <div class="mini-chart-wrap">
+                        <canvas data-stock-mini-chart="margin"></canvas>
+                    </div>
+                    <div class="chart-legend">
+                        <span><i class="legend-dot" style="background:#38bdf8"></i>融資</span>
+                        <span><i class="legend-dot" style="background:#f43f5e"></i>融券</span>
+                    </div>
+                </div>
+            </div>
             @if (! empty($chipSignals))
                 <div class="signal-list">
                     @foreach ($chipSignals as $signal)
@@ -405,7 +501,37 @@
         </div>
 
         <div class="stock-info-panel" data-stock-panel="fundamental">
-            <h2>財務營收分析</h2>
+            <h2>財務圖表</h2>
+            <div class="stock-chart-grid">
+                <div class="mini-chart-card">
+                    <div class="mini-chart-head">
+                        <h3>每月營收</h3>
+                        <span class="mini-chart-note">仟元</span>
+                    </div>
+                    <div class="mini-chart-wrap">
+                        <canvas data-stock-mini-chart="revenue"></canvas>
+                    </div>
+                    <div class="chart-legend">
+                        <span><i class="legend-dot" style="background:#38bdf8"></i>月營收</span>
+                        <span><i class="legend-dot" style="background:#f97316"></i>年增率</span>
+                    </div>
+                </div>
+                <div class="mini-chart-card">
+                    <div class="mini-chart-head">
+                        <h3>財報三率與 EPS</h3>
+                        <span class="mini-chart-note">季/年資料</span>
+                    </div>
+                    <div class="mini-chart-wrap">
+                        <canvas data-stock-mini-chart="financial"></canvas>
+                    </div>
+                    <div class="chart-legend">
+                        <span><i class="legend-dot" style="background:#2563eb"></i>毛利率</span>
+                        <span><i class="legend-dot" style="background:#ef4444"></i>營益率</span>
+                        <span><i class="legend-dot" style="background:#f59e0b"></i>ROE</span>
+                        <span><i class="legend-dot" style="background:#14b8a6"></i>EPS</span>
+                    </div>
+                </div>
+            </div>
             @if (! empty($fundamentalSignals))
                 <div class="signal-list">
                     @foreach ($fundamentalSignals as $signal)
@@ -440,8 +566,251 @@
                     const target = tab.dataset.stockTab;
                     tabs.forEach((item) => item.classList.toggle('active', item === tab));
                     panels.forEach((panel) => panel.classList.toggle('active', panel.dataset.stockPanel === target));
+                    window.dispatchEvent(new Event('stock-tab-change'));
                 });
             });
+        })();
+
+        (() => {
+            const stockCharts = @json($stockCharts);
+            const kData = @json($chartData);
+            const canvases = Array.from(document.querySelectorAll('[data-stock-mini-chart]'));
+
+            const colors = {
+                red: '#ef4444',
+                green: '#10b981',
+                blue: '#60a5fa',
+                cyan: '#38bdf8',
+                amber: '#f6c766',
+                orange: '#f97316',
+                purple: '#8b5cf6',
+                teal: '#14b8a6',
+                pink: '#ec4899',
+                grid: '#e5e7eb',
+                text: '#64748b',
+                ink: '#0f172a',
+            };
+
+            const resizeCanvas = (canvas) => {
+                const rect = canvas.getBoundingClientRect();
+                if (rect.width <= 0 || rect.height <= 0) return null;
+                const ratio = window.devicePixelRatio || 1;
+                canvas.width = Math.max(1, Math.floor(rect.width * ratio));
+                canvas.height = Math.max(1, Math.floor(rect.height * ratio));
+                const ctx = canvas.getContext('2d');
+                ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
+                return { ctx, width: rect.width, height: rect.height };
+            };
+
+            const empty = (ctx, width, height, text = '資料不足') => {
+                ctx.clearRect(0, 0, width, height);
+                ctx.fillStyle = colors.text;
+                ctx.font = '13px system-ui, -apple-system, BlinkMacSystemFont, sans-serif';
+                ctx.textAlign = 'center';
+                ctx.fillText(text, width / 2, height / 2);
+            };
+
+            const number = (value) => Number.isFinite(Number(value)) ? Number(value) : null;
+            const compact = (value) => {
+                const abs = Math.abs(value);
+                if (abs >= 1000000) return `${Math.round(value / 1000000)}M`;
+                if (abs >= 1000) return `${Math.round(value / 1000)}k`;
+                return `${Math.round(value)}`;
+            };
+
+            const range = (values) => {
+                const valid = values.map(number).filter((value) => value !== null);
+                if (!valid.length) return { min: 0, max: 1 };
+                let min = Math.min(...valid);
+                let max = Math.max(...valid);
+                if (min === max) {
+                    min -= 1;
+                    max += 1;
+                }
+                const pad = (max - min) * 0.12;
+                return { min: min - pad, max: max + pad };
+            };
+
+            const yScale = (value, min, max, top, bottom) => bottom - ((value - min) / (max - min)) * (bottom - top);
+
+            const drawGrid = (ctx, width, height, left = 34, right = 10, top = 14, bottom = 28) => {
+                ctx.strokeStyle = colors.grid;
+                ctx.lineWidth = 1;
+                ctx.setLineDash([3, 4]);
+                for (let i = 0; i < 4; i++) {
+                    const y = top + ((bottom - top) * i / 3);
+                    ctx.beginPath();
+                    ctx.moveTo(left, y);
+                    ctx.lineTo(width - right, y);
+                    ctx.stroke();
+                }
+                ctx.setLineDash([]);
+            };
+
+            const drawSupport = (canvas) => {
+                const size = resizeCanvas(canvas);
+                if (!size) return;
+                const { ctx, width, height } = size;
+                const data = stockCharts.support || [];
+                if (!data.length) return empty(ctx, width, height);
+                ctx.clearRect(0, 0, width, height);
+                const left = 76;
+                const right = 46;
+                const top = 10;
+                const rowH = (height - top - 16) / data.length;
+                const max = Math.max(...data.map((row) => Number(row.volume || 0)), 1);
+                data.forEach((row, index) => {
+                    const y = top + index * rowH + 4;
+                    const barW = (width - left - right) * (Number(row.volume || 0) / max);
+                    ctx.fillStyle = row.type === 'pressure' ? 'rgba(239,68,68,.28)' : 'rgba(139,92,246,.72)';
+                    ctx.fillRect(left, y, barW, Math.max(6, rowH - 8));
+                    ctx.fillStyle = colors.ink;
+                    ctx.font = '11px system-ui, -apple-system, BlinkMacSystemFont, sans-serif';
+                    ctx.textAlign = 'right';
+                    ctx.fillText(row.label, left - 8, y + rowH * .55);
+                    ctx.textAlign = 'left';
+                    ctx.fillText(compact(Number(row.volume || 0)), left + barW + 4, y + rowH * .55);
+                });
+            };
+
+            const drawBarLine = (canvas, rows, barKey, lineKeys = [], options = {}) => {
+                const size = resizeCanvas(canvas);
+                if (!size) return;
+                const { ctx, width, height } = size;
+                if (!rows.length) return empty(ctx, width, height);
+                ctx.clearRect(0, 0, width, height);
+                const left = 38;
+                const right = 14;
+                const top = 14;
+                const bottom = height - 30;
+                drawGrid(ctx, width, height, left, right, top, bottom);
+                const barValues = rows.map((row) => number(row[barKey])).filter((value) => value !== null);
+                const lineValues = rows.flatMap((row) => lineKeys.map((key) => number(row[key]))).filter((value) => value !== null);
+                const barRange = range([0, ...barValues]);
+                const lineRange = lineValues.length ? range(lineValues) : barRange;
+                const zero = yScale(0, barRange.min, barRange.max, top, bottom);
+                const step = (width - left - right) / Math.max(1, rows.length);
+                const barW = Math.max(3, Math.min(14, step * 0.52));
+
+                rows.forEach((row, index) => {
+                    const value = number(row[barKey]);
+                    if (value === null) return;
+                    const x = left + index * step + step / 2 - barW / 2;
+                    const y = yScale(value, barRange.min, barRange.max, top, bottom);
+                    ctx.fillStyle = options.barColor || colors.blue;
+                    ctx.fillRect(x, Math.min(y, zero), barW, Math.max(2, Math.abs(zero - y)));
+                });
+
+                lineKeys.forEach((key, keyIndex) => {
+                    const lineColor = options.lineColors?.[key] || [colors.red, colors.orange, colors.teal][keyIndex % 3];
+                    ctx.strokeStyle = lineColor;
+                    ctx.lineWidth = 2;
+                    ctx.beginPath();
+                    let started = false;
+                    rows.forEach((row, index) => {
+                        const value = number(row[key]);
+                        if (value === null) return;
+                        const x = left + index * step + step / 2;
+                        const y = yScale(value, lineRange.min, lineRange.max, top, bottom);
+                        if (!started) {
+                            ctx.moveTo(x, y);
+                            started = true;
+                        } else {
+                            ctx.lineTo(x, y);
+                        }
+                    });
+                    if (started) ctx.stroke();
+                });
+
+                ctx.fillStyle = colors.text;
+                ctx.font = '11px system-ui, -apple-system, BlinkMacSystemFont, sans-serif';
+                ctx.textAlign = 'center';
+                rows.forEach((row, index) => {
+                    if (index % Math.ceil(rows.length / 4) === 0 || index === rows.length - 1) {
+                        ctx.fillText(row.date || '', left + index * step + step / 2, height - 8);
+                    }
+                });
+            };
+
+            const drawGroupedBars = (canvas, rows, keys, keyColors) => {
+                const size = resizeCanvas(canvas);
+                if (!size) return;
+                const { ctx, width, height } = size;
+                if (!rows.length) return empty(ctx, width, height);
+                ctx.clearRect(0, 0, width, height);
+                const left = 38;
+                const right = 12;
+                const top = 14;
+                const bottom = height - 30;
+                drawGrid(ctx, width, height, left, right, top, bottom);
+                const values = rows.flatMap((row) => keys.map((key) => number(row[key]))).filter((value) => value !== null);
+                const { min, max } = range(values);
+                const zero = yScale(0, min, max, top, bottom);
+                const step = (width - left - right) / Math.max(1, rows.length);
+                const barW = Math.max(2, Math.min(7, (step * 0.68) / keys.length));
+                rows.forEach((row, index) => {
+                    keys.forEach((key, keyIndex) => {
+                        const value = number(row[key]);
+                        if (value === null) return;
+                        const groupW = barW * keys.length;
+                        const x = left + index * step + step / 2 - groupW / 2 + keyIndex * barW;
+                        const y = yScale(value, min, max, top, bottom);
+                        ctx.fillStyle = keyColors[key] || colors.blue;
+                        ctx.fillRect(x, Math.min(y, zero), barW, Math.max(2, Math.abs(zero - y)));
+                    });
+                });
+            };
+
+            const drawLines = (canvas, rows, keys, keyColors) => {
+                const size = resizeCanvas(canvas);
+                if (!size) return;
+                const { ctx, width, height } = size;
+                if (!rows.length) return empty(ctx, width, height);
+                ctx.clearRect(0, 0, width, height);
+                const left = 38;
+                const right = 12;
+                const top = 14;
+                const bottom = height - 30;
+                drawGrid(ctx, width, height, left, right, top, bottom);
+                const values = rows.flatMap((row) => keys.map((key) => number(row[key]))).filter((value) => value !== null);
+                const { min, max } = range(values);
+                const step = (width - left - right) / Math.max(1, rows.length - 1);
+                keys.forEach((key) => {
+                    ctx.strokeStyle = keyColors[key] || colors.blue;
+                    ctx.lineWidth = 2;
+                    ctx.beginPath();
+                    let started = false;
+                    rows.forEach((row, index) => {
+                        const value = number(row[key]);
+                        if (value === null) return;
+                        const x = left + index * step;
+                        const y = yScale(value, min, max, top, bottom);
+                        if (!started) {
+                            ctx.moveTo(x, y);
+                            started = true;
+                        } else {
+                            ctx.lineTo(x, y);
+                        }
+                    });
+                    if (started) ctx.stroke();
+                });
+            };
+
+            const renderMiniCharts = () => {
+                canvases.forEach((canvas) => {
+                    const type = canvas.dataset.stockMiniChart;
+                    if (type === 'support') drawSupport(canvas);
+                    if (type === 'priceVolume') drawBarLine(canvas, (kData.daily || []).slice(-60).map((row) => ({ date: row.time?.slice(5), volume: row.volume, close: row.close })), 'volume', ['close'], { barColor: 'rgba(147,197,253,.75)', lineColors: { close: colors.red } });
+                    if (type === 'institutional') drawGroupedBars(canvas, stockCharts.chips || [], ['foreign', 'trust', 'dealer'], { foreign: colors.teal, trust: '#f59e0b', dealer: colors.pink });
+                    if (type === 'margin') drawLines(canvas, stockCharts.chips || [], ['margin', 'short'], { margin: colors.cyan, short: '#f43f5e' });
+                    if (type === 'revenue') drawBarLine(canvas, stockCharts.revenues || [], 'revenue', ['yoy'], { barColor: colors.cyan, lineColors: { yoy: colors.orange } });
+                    if (type === 'financial') drawLines(canvas, stockCharts.financials || [], ['grossMargin', 'operatingMargin', 'roe', 'eps'], { grossMargin: '#2563eb', operatingMargin: colors.red, roe: '#f59e0b', eps: colors.teal });
+                });
+            };
+
+            window.addEventListener('resize', renderMiniCharts);
+            window.addEventListener('stock-tab-change', () => setTimeout(renderMiniCharts, 30));
+            renderMiniCharts();
         })();
 
         (() => {

@@ -863,6 +863,96 @@ Route::get('/s/{symbol}', function (string $symbol, StockEventChainBuilder $even
         $priceRows,
         fn ($row) => $row->trade_date->format('Y')
     );
+    $supportLatestClose = $latestPrice?->close === null ? null : (float) $latestPrice->close;
+    $supportRows = $priceRows->slice(-60)->values();
+    $supportChart = [];
+    if ($supportRows->isNotEmpty()) {
+        $low = (float) $supportRows->min('low');
+        $high = (float) $supportRows->max('high');
+        $step = max(0.01, ($high - $low) / 10);
+        $bins = collect(range(0, 9))->map(function (int $index) use ($low, $step) {
+            $from = $low + ($step * $index);
+            $to = $from + $step;
+
+            return [
+                'label' => number_format($from, 2).'~'.number_format($to, 2),
+                'from' => $from,
+                'to' => $to,
+                'volume' => 0,
+                'type' => 'support',
+            ];
+        })->all();
+
+        foreach ($supportRows as $row) {
+            $close = (float) $row->close;
+            $index = (int) floor(($close - $low) / $step);
+            $index = max(0, min(9, $index));
+            $bins[$index]['volume'] += (int) ($row->volume ?? 0);
+        }
+
+        $supportChart = collect($bins)
+            ->reverse()
+            ->map(function (array $bin) use ($supportLatestClose) {
+                $mid = ($bin['from'] + $bin['to']) / 2;
+                $bin['type'] = $supportLatestClose !== null && $mid > $supportLatestClose ? 'pressure' : 'support';
+                unset($bin['from'], $bin['to']);
+
+                return $bin;
+            })
+            ->values()
+            ->all();
+    }
+
+    $chipRowsForChart = $stockRecord->chips()
+        ->latest('trade_date')
+        ->limit(30)
+        ->get(['trade_date', 'foreign_net_buy', 'investment_trust_net_buy', 'dealer_net_buy', 'institutional_net_buy', 'margin_balance', 'short_balance'])
+        ->sortBy('trade_date')
+        ->values()
+        ->map(fn ($row) => [
+            'date' => $row->trade_date->format('m/d'),
+            'foreign' => (int) ($row->foreign_net_buy ?? 0),
+            'trust' => (int) ($row->investment_trust_net_buy ?? 0),
+            'dealer' => (int) ($row->dealer_net_buy ?? 0),
+            'institutional' => (int) ($row->institutional_net_buy ?? 0),
+            'margin' => $row->margin_balance === null ? null : (int) $row->margin_balance,
+            'short' => $row->short_balance === null ? null : (int) $row->short_balance,
+        ])
+        ->all();
+
+    $revenueRowsForChart = DB::table('stock_revenues')
+        ->where('stock_id', $stockRecord->id)
+        ->orderByDesc('year_month')
+        ->limit(36)
+        ->get(['year_month', 'revenue', 'mom_pct', 'yoy_pct'])
+        ->sortBy('year_month')
+        ->values()
+        ->map(fn ($row) => [
+            'date' => (string) $row->year_month,
+            'revenue' => $row->revenue === null ? null : round(((float) $row->revenue) / 1000, 2),
+            'mom' => $row->mom_pct === null ? null : (float) $row->mom_pct,
+            'yoy' => $row->yoy_pct === null ? null : (float) $row->yoy_pct,
+        ])
+        ->all();
+
+    $financialRowsForChart = DB::table('stock_financials')
+        ->where('stock_id', $stockRecord->id)
+        ->orderByDesc('period')
+        ->limit(16)
+        ->get(['period', 'eps', 'roe', 'gross_margin', 'operating_margin', 'per', 'pb_ratio'])
+        ->sortBy('period')
+        ->values()
+        ->map(fn ($row) => [
+            'date' => (string) $row->period,
+            'eps' => $row->eps === null ? null : (float) $row->eps,
+            'roe' => $row->roe === null ? null : (float) $row->roe,
+            'grossMargin' => $row->gross_margin === null ? null : (float) $row->gross_margin,
+            'operatingMargin' => $row->operating_margin === null ? null : (float) $row->operating_margin,
+            'per' => $row->per === null ? null : (float) $row->per,
+            'pb' => $row->pb_ratio === null ? null : (float) $row->pb_ratio,
+        ])
+        ->all();
+
     $latestTechnical = DB::table('stock_technical_indicators_1d')
         ->where('stock_id', $stockRecord->id)
         ->orderByDesc('trade_date')
@@ -1155,6 +1245,12 @@ Route::get('/s/{symbol}', function (string $symbol, StockEventChainBuilder $even
             'daily' => $dailyK,
             'weekly' => $weeklyK,
             'yearly' => $yearlyK,
+        ],
+        'stockCharts' => [
+            'support' => $supportChart,
+            'chips' => $chipRowsForChart,
+            'revenues' => $revenueRowsForChart,
+            'financials' => $financialRowsForChart,
         ],
         'chip' => $latestChip,
         'chipSignals' => $chipSignals,
