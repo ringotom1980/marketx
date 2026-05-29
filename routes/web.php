@@ -977,6 +977,48 @@ Route::get('/s/{symbol}', function (string $symbol, StockEventChainBuilder $even
         ."\n主要支撐：{$supportText}。"
         ."\n主要風險：{$riskText}。"
         ."\n解讀：{$interpretation}";
+    $supportPills = collect($radarReasons)
+        ->filter(fn ($reason) => ($reason['tone'] ?? '') !== 'down')
+        ->map(fn ($reason) => [
+            'label' => $reason['label'] ?? '',
+            'tone' => $reason['tone'] ?? 'up',
+        ])
+        ->filter(fn ($reason) => $reason['label'] !== '')
+        ->values()
+        ->all();
+    if ($supportPills === []) {
+        $supportPills = collect($bullReasons)
+            ->take(4)
+            ->map(fn ($label) => ['label' => $label, 'tone' => 'up'])
+            ->values()
+            ->all();
+    }
+    $riskPills = collect(array_merge($riskReasons, $bearReasons))
+        ->unique()
+        ->take(4)
+        ->map(fn ($label) => ['label' => $label, 'tone' => in_array($label, $bearReasons, true) ? 'down' : 'warning'])
+        ->values()
+        ->all();
+    if ($riskPills === []) {
+        $riskPills = [['label' => '尚無明顯風險旗標', 'tone' => 'warning']];
+    }
+    $radarCardLabels = [
+        'priority' => '今日優先觀察',
+        'risk' => '今日風險升高',
+        'potential' => '潛力觀察',
+        'low_volume' => '低檔爆量',
+        'weak' => '持續弱勢',
+    ];
+    $evaluationQuick = [
+        'state' => $evaluation['label'],
+        'tone' => $evaluation['tone'],
+        'confidence' => $confidence,
+        'radar_card' => $latestRadarCard ? ($radarCardLabels[$latestRadarCard->card_type] ?? $latestRadarCard->card_type) : '未列入今日五張卡',
+        'radar_tone' => $latestRadarCard ? $evaluation['tone'] : 'amber',
+        'support_pills' => array_slice($supportPills, 0, 4),
+        'risk_pills' => $riskPills,
+        'one_liner' => $interpretation,
+    ];
 
     return view('stock', [
         'stock' => [
@@ -1016,6 +1058,7 @@ Route::get('/s/{symbol}', function (string $symbol, StockEventChainBuilder $even
         'eventChains' => $eventChains,
         'latestReport' => $latestReport,
         'summary' => $stockEvaluationSummary,
+        'evaluationQuick' => $evaluationQuick,
     ]);
 });
 

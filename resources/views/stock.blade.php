@@ -161,6 +161,93 @@
             display: block;
         }
 
+        .evaluation-quick {
+            display: grid;
+            gap: 14px;
+        }
+
+        .evaluation-hero {
+            align-items: center;
+            display: flex;
+            justify-content: space-between;
+            gap: 14px;
+            padding-bottom: 12px;
+            border-bottom: 1px solid var(--line);
+        }
+
+        .evaluation-state {
+            display: grid;
+            gap: 6px;
+        }
+
+        .evaluation-state strong {
+            font-size: 24px;
+            line-height: 1.2;
+        }
+
+        .evaluation-confidence {
+            color: var(--ink);
+            font-size: 22px;
+            font-weight: 900;
+            white-space: nowrap;
+        }
+
+        .evaluation-row {
+            display: grid;
+            gap: 8px;
+        }
+
+        .evaluation-row-title {
+            color: var(--muted);
+            font-size: 13px;
+            font-weight: 900;
+        }
+
+        .quick-pill-list {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+        }
+
+        .quick-pill {
+            align-items: center;
+            border-radius: 999px;
+            display: inline-flex;
+            min-height: 28px;
+            padding: 4px 10px;
+            background: #fff1f1;
+            border: 1px solid #fecaca;
+            color: var(--button);
+            font-size: 13px;
+            font-weight: 900;
+            line-height: 1.25;
+        }
+
+        .quick-pill.warning {
+            background: #fffbeb;
+            border-color: #fde68a;
+            color: #a16207;
+        }
+
+        .quick-pill.down,
+        .quick-pill.green {
+            background: #ecfdf5;
+            border-color: #a7f3d0;
+            color: #047857;
+        }
+
+        .quick-pill.red {
+            background: #fff1f1;
+            border-color: #fecaca;
+            color: var(--button);
+        }
+
+        .evaluation-note {
+            margin: 0;
+            color: var(--muted);
+            line-height: 1.7;
+        }
+
         @media (max-width: 520px) {
             .k-chart-wrap { height: 300px; }
             .chart-tab { padding: 9px 4px; font-size: 13px; }
@@ -176,6 +263,13 @@
             }
             .stock-header-row {
                 align-items: flex-start;
+            }
+            .evaluation-hero {
+                align-items: flex-start;
+                display: grid;
+            }
+            .evaluation-confidence {
+                font-size: 20px;
             }
         }
     </style>
@@ -244,7 +338,38 @@
 
         <div class="stock-info-panel active" data-stock-panel="evaluation">
             <h2>評價</h2>
-            <p class="lead">{!! nl2br(e($summary)) !!}</p>
+            <div class="evaluation-quick">
+                <div class="evaluation-hero">
+                    <div class="evaluation-state">
+                        <span class="badge {{ $badgeTone($evaluationQuick['tone'] ?? '') }}">{{ $evaluationQuick['state'] }}</span>
+                        <strong>{{ $evaluationQuick['radar_card'] }}</strong>
+                    </div>
+                    <div class="evaluation-confidence">信心 {{ $evaluationQuick['confidence'] }}%</div>
+                </div>
+
+                <div class="evaluation-row">
+                    <div class="evaluation-row-title">主要依據</div>
+                    <div class="quick-pill-list">
+                        @foreach ($evaluationQuick['support_pills'] as $pill)
+                            <span class="quick-pill {{ ($pill['tone'] ?? '') === 'warning' ? 'warning' : (($pill['tone'] ?? '') === 'down' ? 'down' : 'red') }}">{{ $pill['label'] }}</span>
+                        @endforeach
+                    </div>
+                </div>
+
+                <div class="evaluation-row">
+                    <div class="evaluation-row-title">主要風險</div>
+                    <div class="quick-pill-list">
+                        @foreach ($evaluationQuick['risk_pills'] as $pill)
+                            <span class="quick-pill {{ ($pill['tone'] ?? '') === 'down' ? 'down' : 'warning' }}">{{ $pill['label'] }}</span>
+                        @endforeach
+                    </div>
+                </div>
+
+                <div class="evaluation-row">
+                    <div class="evaluation-row-title">白話解讀</div>
+                    <p class="evaluation-note">{{ $evaluationQuick['one_liner'] }}</p>
+                </div>
+            </div>
         </div>
 
         <div class="stock-info-panel" data-stock-panel="technical">
