@@ -38,6 +38,8 @@ return [
     'marketx' => [
         'global_market_feed' => env('MARKETX_GLOBAL_MARKET_FEED'),
         'global_event_feed' => env('MARKETX_GLOBAL_EVENT_FEED'),
+        'finnhub_api_key' => env('FINNHUB_API_KEY'),
+        'marketaux_api_key' => env('MARKETAUX_API_KEY'),
         'ai_model' => env('MARKETX_AI_MODEL', 'gpt-4.1-mini'),
         'admin_email' => env('MARKETX_ADMIN_EMAIL', 'admin@marketx.local'),
         'admin_password_hash' => env('MARKETX_ADMIN_PASSWORD_HASH'),

@@ -103,6 +103,12 @@ class BuildAgentKnowledgeBases extends Command
         $updated = 0;
         $failed = [];
 
+        foreach ([$this->fetchFinnhubNews(), $this->fetchMarketauxNews()] as $apiNews) {
+            $inserted += $apiNews['inserted'];
+            $updated += $apiNews['updated'];
+            $failed = array_merge($failed, $apiNews['failed_sources']);
+        }
+
         foreach ($sources as $source) {
             try {
                 $response = Http::timeout(15)
@@ -122,6 +128,170 @@ class BuildAgentKnowledgeBases extends Command
                 }
             } catch (\Throwable $exception) {
                 $failed[] = $source['name'].' '.$exception->getMessage();
+            }
+        }
+
+        return ['inserted' => $inserted, 'updated' => $updated, 'failed_sources' => $failed];
+    }
+
+    /**
+     * @return array{inserted:int,updated:int,failed_sources:array<int,string>}
+     */
+    private function fetchFinnhubNews(): array
+    {
+        $token = trim((string) config('services.marketx.finnhub_api_key'));
+        if ($token === '') {
+            return ['inserted' => 0, 'updated' => 0, 'failed_sources' => []];
+        }
+
+        $inserted = 0;
+        $updated = 0;
+        $failed = [];
+        $categories = ['general', 'forex'];
+
+        foreach ($categories as $category) {
+            try {
+                $response = Http::timeout(15)
+                    ->withHeaders(['User-Agent' => 'MarketX-Agent/1.0'])
+                    ->get('https://finnhub.io/api/v1/news', [
+                        'category' => $category,
+                        'token' => $token,
+                    ]);
+
+                if (! $response->successful()) {
+                    $failed[] = 'Finnhub '.$category.' HTTP '.$response->status();
+                    continue;
+                }
+
+                $items = $response->json();
+                if (! is_array($items)) {
+                    $failed[] = 'Finnhub '.$category.' invalid payload';
+                    continue;
+                }
+
+                $source = [
+                    'name' => 'Finnhub '.$category,
+                    'url' => 'https://finnhub.io',
+                    'language' => 'en',
+                    'region' => 'Global',
+                    'category' => $category === 'forex' ? 'currency' : 'global_market',
+                    'source_type' => 'finnhub_api',
+                ];
+
+                foreach (array_slice($items, 0, min($this->limit, 40)) as $item) {
+                    if (! is_array($item) || trim((string) ($item['headline'] ?? '')) === '') {
+                        continue;
+                    }
+
+                    $publishedAt = isset($item['datetime'])
+                        ? CarbonImmutable::createFromTimestamp((int) $item['datetime'], 'UTC')->toIso8601String()
+                        : '';
+
+                    [$didInsert, $didUpdate] = $this->upsertNewsItem($source, [
+                        'title' => (string) ($item['headline'] ?? ''),
+                        'summary' => (string) ($item['summary'] ?? ''),
+                        'url' => (string) ($item['url'] ?? ('https://finnhub.io/news/'.$category.'/'.($item['id'] ?? sha1((string) ($item['headline'] ?? ''))))),
+                        'published_at' => $publishedAt,
+                    ]);
+                    $inserted += $didInsert;
+                    $updated += $didUpdate;
+                }
+            } catch (\Throwable $exception) {
+                $failed[] = 'Finnhub '.$category.' '.$exception->getMessage();
+            }
+        }
+
+        return ['inserted' => $inserted, 'updated' => $updated, 'failed_sources' => $failed];
+    }
+
+    /**
+     * @return array{inserted:int,updated:int,failed_sources:array<int,string>}
+     */
+    private function fetchMarketauxNews(): array
+    {
+        $token = trim((string) config('services.marketx.marketaux_api_key'));
+        if ($token === '') {
+            return ['inserted' => 0, 'updated' => 0, 'failed_sources' => []];
+        }
+
+        $inserted = 0;
+        $updated = 0;
+        $failed = [];
+        $requests = [
+            [
+                'name' => 'Marketaux ADR / AI',
+                'params' => [
+                    'symbols' => 'TSM,UMC,NVDA,AAPL,MSFT,MU,AMD,AVGO',
+                    'language' => 'en',
+                    'limit' => min(25, $this->limit),
+                    'filter_entities' => 'true',
+                ],
+                'category' => 'global_market',
+            ],
+            [
+                'name' => 'Marketaux Taiwan supply chain',
+                'params' => [
+                    'search' => 'Taiwan semiconductor OR AI server OR memory OR shipping OR oil OR gold',
+                    'language' => 'en',
+                    'limit' => min(25, $this->limit),
+                    'filter_entities' => 'true',
+                ],
+                'category' => 'technology',
+            ],
+        ];
+
+        foreach ($requests as $request) {
+            try {
+                $response = Http::timeout(15)
+                    ->withHeaders(['User-Agent' => 'MarketX-Agent/1.0'])
+                    ->get('https://api.marketaux.com/v1/news/all', $request['params'] + [
+                        'api_token' => $token,
+                    ]);
+
+                if (! $response->successful()) {
+                    $failed[] = $request['name'].' HTTP '.$response->status();
+                    continue;
+                }
+
+                $items = $response->json('data');
+                if (! is_array($items)) {
+                    $failed[] = $request['name'].' invalid payload';
+                    continue;
+                }
+
+                $source = [
+                    'name' => $request['name'],
+                    'url' => 'https://www.marketaux.com',
+                    'language' => 'en',
+                    'region' => 'Global',
+                    'category' => $request['category'],
+                    'source_type' => 'marketaux_api',
+                ];
+
+                foreach ($items as $item) {
+                    if (! is_array($item) || trim((string) ($item['title'] ?? '')) === '') {
+                        continue;
+                    }
+
+                    $summary = (string) ($item['description'] ?? $item['snippet'] ?? '');
+                    $sourceName = $item['source'] ?? null;
+                    if (is_array($sourceName)) {
+                        $sourceName = $sourceName['name'] ?? $request['name'];
+                    }
+
+                    [$didInsert, $didUpdate] = $this->upsertNewsItem(array_merge($source, [
+                        'name' => 'Marketaux '.((string) $sourceName ?: $request['name']),
+                    ]), [
+                        'title' => (string) ($item['title'] ?? ''),
+                        'summary' => $summary,
+                        'url' => (string) ($item['url'] ?? ('https://www.marketaux.com/news/'.($item['uuid'] ?? sha1((string) ($item['title'] ?? ''))))),
+                        'published_at' => (string) ($item['published_at'] ?? ''),
+                    ]);
+                    $inserted += $didInsert;
+                    $updated += $didUpdate;
+                }
+            } catch (\Throwable $exception) {
+                $failed[] = $request['name'].' '.$exception->getMessage();
             }
         }
 
@@ -181,7 +351,7 @@ class BuildAgentKnowledgeBases extends Command
 
         $payload = [
             'source_name' => $source['name'],
-            'source_type' => 'rss',
+            'source_type' => $source['source_type'] ?? 'rss',
             'url' => $url,
             'published_at' => $publishedAt,
             'news_date' => $publishedAt?->timezone('Asia/Taipei')->toDateString() ?? $this->date,
