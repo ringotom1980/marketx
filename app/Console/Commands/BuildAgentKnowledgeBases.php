@@ -97,6 +97,53 @@ class BuildAgentKnowledgeBases extends Command
                 'region' => 'US',
                 'category' => 'global_market',
             ],
+            [
+                'name' => '經濟日報',
+                'url' => 'https://money.udn.com/rssfeed/news/1001',
+                'language' => 'zh-TW',
+                'region' => 'Taiwan',
+                'category' => 'taiwan_market',
+                'source_type' => 'rss',
+            ],
+            [
+                'name' => '工商時報即時新聞',
+                'url' => 'https://www.ctee.com.tw/livenews',
+                'language' => 'zh-TW',
+                'region' => 'Taiwan',
+                'category' => 'taiwan_market',
+                'source_type' => 'html_list',
+                'parser' => 'html_links',
+                'match_url_contains' => ['/news/'],
+            ],
+            [
+                'name' => '鉅亨網台股新聞',
+                'url' => 'https://news.cnyes.com/news/cat/tw_stock',
+                'language' => 'zh-TW',
+                'region' => 'Taiwan',
+                'category' => 'taiwan_market',
+                'source_type' => 'html_list',
+                'parser' => 'html_links',
+                'match_url_contains' => ['/news/id/'],
+            ],
+            [
+                'name' => '鉅亨網頭條新聞',
+                'url' => 'https://news.cnyes.com/news/cat/headline',
+                'language' => 'zh-TW',
+                'region' => 'Global',
+                'category' => 'global_market',
+                'source_type' => 'html_list',
+                'parser' => 'html_links',
+                'match_url_contains' => ['/news/id/'],
+            ],
+            [
+                'name' => '公開資訊觀測站即時重大訊息',
+                'url' => 'https://mopsov.twse.com.tw/mops/web/ajax_t05sr01_1',
+                'language' => 'zh-TW',
+                'region' => 'Taiwan',
+                'category' => 'company_disclosure',
+                'source_type' => 'mops_html',
+                'parser' => 'mops_material_info',
+            ],
         ];
 
         $inserted = 0;
@@ -120,7 +167,11 @@ class BuildAgentKnowledgeBases extends Command
                     continue;
                 }
 
-                $items = $this->parseRss($response->body());
+                $items = match ($source['parser'] ?? 'rss') {
+                    'html_links' => $this->parseHtmlLinks($response->body(), $source),
+                    'mops_material_info' => $this->parseMopsMaterialInfo($response->body(), $source),
+                    default => $this->parseRss($response->body()),
+                };
                 foreach (array_slice($items, 0, $this->limit) as $item) {
                     [$didInsert, $didUpdate] = $this->upsertNewsItem($source, $item);
                     $inserted += $didInsert;
@@ -332,6 +383,143 @@ class BuildAgentKnowledgeBases extends Command
         }
 
         return $items;
+    }
+
+    /**
+     * @param array<string,mixed> $source
+     * @return array<int,array<string,string|null>>
+     */
+    private function parseHtmlLinks(string $html, array $source): array
+    {
+        $items = [];
+        $seen = [];
+        preg_match_all('/<a\b[^>]*href=(["\'])(.*?)\1[^>]*>(.*?)<\/a>/is', $html, $matches, PREG_SET_ORDER);
+
+        foreach ($matches as $match) {
+            $title = $this->cleanHtmlText($match[3] ?? '');
+            $href = html_entity_decode((string) ($match[2] ?? ''), ENT_QUOTES | ENT_HTML5);
+
+            if (mb_strlen($title) < 8 || $href === '' || Str::startsWith($href, ['#', 'javascript:'])) {
+                continue;
+            }
+
+            $url = $this->absoluteUrl((string) $source['url'], $href);
+            $filters = $source['match_url_contains'] ?? [];
+            if (is_array($filters) && $filters !== [] && ! collect($filters)->contains(fn ($needle) => Str::contains($url, (string) $needle))) {
+                continue;
+            }
+
+            $key = hash('sha256', $url.'|'.$title);
+            if (isset($seen[$key])) {
+                continue;
+            }
+            $seen[$key] = true;
+
+            $items[] = [
+                'title' => $title,
+                'summary' => '',
+                'url' => $url,
+                'published_at' => '',
+            ];
+
+            if (count($items) >= $this->limit) {
+                break;
+            }
+        }
+
+        return $items;
+    }
+
+    /**
+     * @param array<string,mixed> $source
+     * @return array<int,array<string,string|null>>
+     */
+    private function parseMopsMaterialInfo(string $html, array $source): array
+    {
+        $items = [];
+        $seen = [];
+        preg_match_all('/<tr\b[^>]*>(.*?)<\/tr>/is', $html, $rows);
+
+        foreach ($rows[1] ?? [] as $rowHtml) {
+            preg_match_all('/<t[dh]\b[^>]*>(.*?)<\/t[dh]>/is', $rowHtml, $cellMatches);
+            $cells = collect($cellMatches[1] ?? [])
+                ->map(fn ($cell) => $this->cleanHtmlText((string) $cell))
+                ->filter(fn ($cell) => $cell !== '')
+                ->values()
+                ->all();
+
+            if (count($cells) < 3) {
+                continue;
+            }
+
+            $title = collect($cells)
+                ->filter(fn ($cell) => Str::contains($cell, ['公告', '董事會', '代子公司', '本公司', '說明']))
+                ->last() ?: end($cells);
+
+            $title = trim((string) $title);
+            if (mb_strlen($title) < 8) {
+                continue;
+            }
+
+            $prefix = trim(implode(' ', array_slice($cells, 0, min(4, count($cells)))));
+            $fullTitle = trim($prefix.' '.$title);
+            $key = hash('sha256', $fullTitle);
+            if (isset($seen[$key])) {
+                continue;
+            }
+            $seen[$key] = true;
+
+            $items[] = [
+                'title' => $fullTitle,
+                'summary' => '公開資訊觀測站即時重大訊息',
+                'url' => (string) $source['url'].'#'.$key,
+                'published_at' => '',
+            ];
+
+            if (count($items) >= $this->limit) {
+                break;
+            }
+        }
+
+        if ($items === []) {
+            return $this->parseHtmlLinks($html, $source + ['match_url_contains' => ['/mops/web/']]);
+        }
+
+        return $items;
+    }
+
+    private function cleanHtmlText(string $html): string
+    {
+        $text = preg_replace('/<script\b[^>]*>.*?<\/script>/is', ' ', $html) ?? $html;
+        $text = preg_replace('/<style\b[^>]*>.*?<\/style>/is', ' ', $text) ?? $text;
+        $text = html_entity_decode(strip_tags($text), ENT_QUOTES | ENT_HTML5);
+        $text = preg_replace('/\s+/u', ' ', $text) ?? $text;
+
+        return trim($text);
+    }
+
+    private function absoluteUrl(string $baseUrl, string $href): string
+    {
+        if (Str::startsWith($href, ['http://', 'https://'])) {
+            return $href;
+        }
+
+        $parts = parse_url($baseUrl);
+        $scheme = $parts['scheme'] ?? 'https';
+        $host = $parts['host'] ?? '';
+
+        if (Str::startsWith($href, '//')) {
+            return $scheme.':'.$href;
+        }
+
+        if (Str::startsWith($href, '/')) {
+            return $scheme.'://'.$host.$href;
+        }
+
+        $path = $parts['path'] ?? '/';
+        $dir = rtrim(str_replace('\\', '/', dirname($path)), '/');
+
+        return $scheme.'://'.$host.($dir === '' ? '' : $dir).'/'.$href;
     }
 
     /**
