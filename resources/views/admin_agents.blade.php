@@ -225,6 +225,54 @@
         </div>
     </section>
 
+    <section class="panel" style="margin-top:16px">
+        <h2>新聞來源監控</h2>
+        <p class="lead">每次代理人收集新聞都會記錄來源、抓到幾則、寫入幾則、最後時間與失敗原因，方便判斷資料來源是否可靠。</p>
+
+        @if (($newsSourceLatest ?? collect())->isEmpty())
+            <p class="lead" style="margin-top:12px">目前還沒有新聞來源抓取紀錄。</p>
+        @else
+            <table class="table agent-compact-table" style="margin-top:12px">
+                <thead>
+                <tr>
+                    <th>來源</th>
+                    <th>狀態</th>
+                    <th>抓取結果</th>
+                    <th>最後時間</th>
+                </tr>
+                </thead>
+                <tbody>
+                @foreach ($newsSourceLatest as $run)
+                    <tr>
+                        <th>
+                            {{ $run->source_name }}<br>
+                            <span class="lead">{{ $run->source_type }}｜{{ $run->category ?: '未分類' }}</span>
+                        </th>
+                        <td>
+                            <span class="badge {{ $statusClass($run->status) }}">{{ $run->status === 'success' ? '正常' : '失敗' }}</span>
+                        </td>
+                        <td>
+                            <span class="lead">抓到 {{ $run->item_count }}｜新增 {{ $run->inserted_count }}｜更新 {{ $run->updated_count }}</span>
+                            @if ($run->error_message)
+                                <br><span class="lead">{{ \Illuminate\Support\Str::limit($run->error_message, 80) }}</span>
+                            @endif
+                        </td>
+                        <td>{{ $formatTime($run->fetched_at) }}</td>
+                    </tr>
+                @endforeach
+                </tbody>
+            </table>
+        @endif
+
+        @if (($newsCategoryStats ?? collect())->isNotEmpty())
+            <div class="agent-meta" style="margin-top:14px">
+                @foreach ($newsCategoryStats as $stat)
+                    <span class="badge amber">{{ $stat->category ?: '未分類' }} {{ number_format($stat->total) }}</span>
+                @endforeach
+            </div>
+        @endif
+    </section>
+
     <section class="agent-hero" style="margin-top:16px">
         <div class="panel">
             <h2>需要處理的案件</h2>

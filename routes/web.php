@@ -22,6 +22,7 @@ use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Route;
+use Illuminate\Support\Facades\Schema;
 
 Route::get('/login', function () {
     if (session()->get('marketx_admin') === true || session()->has('marketx_user_id')) {
@@ -1955,6 +1956,27 @@ Route::get('/admin/agents', function () {
             'agent_roles.name as agent_name',
         ]);
 
+    $newsSourceRuns = Schema::hasTable('agent_news_source_runs')
+        ? DB::table('agent_news_source_runs')
+            ->orderByDesc('fetched_at')
+            ->orderByDesc('id')
+            ->limit(40)
+            ->get()
+        : collect();
+    $newsSourceLatest = $newsSourceRuns
+        ->groupBy('source_name')
+        ->map(fn ($runs) => $runs->first())
+        ->values();
+    $newsCategoryStats = Schema::hasTable('news_items')
+        ? DB::table('news_items')
+            ->select('category', DB::raw('count(*) as total'), DB::raw('max(updated_at) as latest_at'))
+            ->where('status', 'active')
+            ->groupBy('category')
+            ->orderByDesc('total')
+            ->limit(12)
+            ->get()
+        : collect();
+
     $summary = [
         'roles' => $roles->count(),
         'active_roles' => $roles->where('is_active', true)->count(),
@@ -1964,6 +1986,8 @@ Route::get('/admin/agents', function () {
         'today_runs' => AgentRun::query()->whereDate('created_at', now('Asia/Taipei')->toDateString())->count(),
         'pending_learning_suggestions' => DB::table('agent_learning_suggestions')->where('status', 'pending')->count(),
         'knowledge_items' => DB::table('market_knowledge_items')->where('status', 'active')->count(),
+        'news_sources' => $newsSourceLatest->count(),
+        'news_source_failures' => $newsSourceRuns->where('status', 'failed')->count(),
     ];
 
     return view('admin_agents', [
@@ -1973,6 +1997,9 @@ Route::get('/admin/agents', function () {
         'reviewedFindings' => $reviewedFindings,
         'latestMemories' => $latestMemories,
         'pendingLearningSuggestions' => $pendingLearningSuggestions,
+        'newsSourceRuns' => $newsSourceRuns,
+        'newsSourceLatest' => $newsSourceLatest,
+        'newsCategoryStats' => $newsCategoryStats,
         'summary' => $summary,
     ]);
 });

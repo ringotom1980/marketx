@@ -157,13 +157,20 @@ class BuildAgentKnowledgeBases extends Command
         }
 
         foreach ($sources as $source) {
+            $startedAt = microtime(true);
+            $sourceInserted = 0;
+            $sourceUpdated = 0;
+            $itemCount = 0;
+
             try {
                 $response = Http::timeout(15)
                     ->withHeaders(['User-Agent' => 'MarketX-Agent/1.0'])
                     ->get($source['url']);
 
                 if (! $response->successful()) {
-                    $failed[] = $source['name'].' HTTP '.$response->status();
+                    $error = $source['name'].' HTTP '.$response->status();
+                    $failed[] = $error;
+                    $this->recordNewsSourceRun($source, 'failed', 0, 0, 0, $startedAt, $error);
                     continue;
                 }
 
@@ -172,13 +179,20 @@ class BuildAgentKnowledgeBases extends Command
                     'mops_material_info' => $this->parseMopsMaterialInfo($response->body(), $source),
                     default => $this->parseRss($response->body()),
                 };
+                $itemCount = count($items);
                 foreach (array_slice($items, 0, $this->limit) as $item) {
                     [$didInsert, $didUpdate] = $this->upsertNewsItem($source, $item);
                     $inserted += $didInsert;
                     $updated += $didUpdate;
+                    $sourceInserted += $didInsert;
+                    $sourceUpdated += $didUpdate;
                 }
+
+                $this->recordNewsSourceRun($source, 'success', $sourceInserted, $sourceUpdated, $itemCount, $startedAt);
             } catch (\Throwable $exception) {
-                $failed[] = $source['name'].' '.$exception->getMessage();
+                $error = $source['name'].' '.$exception->getMessage();
+                $failed[] = $error;
+                $this->recordNewsSourceRun($source, 'failed', $sourceInserted, $sourceUpdated, $itemCount, $startedAt, $exception->getMessage());
             }
         }
 
@@ -201,6 +215,19 @@ class BuildAgentKnowledgeBases extends Command
         $categories = ['general', 'forex'];
 
         foreach ($categories as $category) {
+            $startedAt = microtime(true);
+            $sourceInserted = 0;
+            $sourceUpdated = 0;
+            $itemCount = 0;
+            $source = [
+                'name' => 'Finnhub '.$category,
+                'url' => 'https://finnhub.io',
+                'language' => 'en',
+                'region' => 'Global',
+                'category' => $category === 'forex' ? 'currency' : 'global_market',
+                'source_type' => 'finnhub_api',
+            ];
+
             try {
                 $response = Http::timeout(15)
                     ->withHeaders(['User-Agent' => 'MarketX-Agent/1.0'])
@@ -210,26 +237,23 @@ class BuildAgentKnowledgeBases extends Command
                     ]);
 
                 if (! $response->successful()) {
-                    $failed[] = 'Finnhub '.$category.' HTTP '.$response->status();
+                    $error = 'Finnhub '.$category.' HTTP '.$response->status();
+                    $failed[] = $error;
+                    $this->recordNewsSourceRun($source, 'failed', 0, 0, 0, $startedAt, $error);
                     continue;
                 }
 
                 $items = $response->json();
                 if (! is_array($items)) {
-                    $failed[] = 'Finnhub '.$category.' invalid payload';
+                    $error = 'Finnhub '.$category.' invalid payload';
+                    $failed[] = $error;
+                    $this->recordNewsSourceRun($source, 'failed', 0, 0, 0, $startedAt, $error);
                     continue;
                 }
 
-                $source = [
-                    'name' => 'Finnhub '.$category,
-                    'url' => 'https://finnhub.io',
-                    'language' => 'en',
-                    'region' => 'Global',
-                    'category' => $category === 'forex' ? 'currency' : 'global_market',
-                    'source_type' => 'finnhub_api',
-                ];
-
-                foreach (array_slice($items, 0, min($this->limit, 40)) as $item) {
+                $items = array_slice($items, 0, min($this->limit, 40));
+                $itemCount = count($items);
+                foreach ($items as $item) {
                     if (! is_array($item) || trim((string) ($item['headline'] ?? '')) === '') {
                         continue;
                     }
@@ -246,9 +270,14 @@ class BuildAgentKnowledgeBases extends Command
                     ]);
                     $inserted += $didInsert;
                     $updated += $didUpdate;
+                    $sourceInserted += $didInsert;
+                    $sourceUpdated += $didUpdate;
                 }
+
+                $this->recordNewsSourceRun($source, 'success', $sourceInserted, $sourceUpdated, $itemCount, $startedAt);
             } catch (\Throwable $exception) {
                 $failed[] = 'Finnhub '.$category.' '.$exception->getMessage();
+                $this->recordNewsSourceRun($source, 'failed', $sourceInserted, $sourceUpdated, $itemCount, $startedAt, $exception->getMessage());
             }
         }
 
@@ -292,6 +321,19 @@ class BuildAgentKnowledgeBases extends Command
         ];
 
         foreach ($requests as $request) {
+            $startedAt = microtime(true);
+            $sourceInserted = 0;
+            $sourceUpdated = 0;
+            $itemCount = 0;
+            $source = [
+                'name' => $request['name'],
+                'url' => 'https://www.marketaux.com',
+                'language' => 'en',
+                'region' => 'Global',
+                'category' => $request['category'],
+                'source_type' => 'marketaux_api',
+            ];
+
             try {
                 $response = Http::timeout(15)
                     ->withHeaders(['User-Agent' => 'MarketX-Agent/1.0'])
@@ -300,24 +342,21 @@ class BuildAgentKnowledgeBases extends Command
                     ]);
 
                 if (! $response->successful()) {
-                    $failed[] = $request['name'].' HTTP '.$response->status();
+                    $error = $request['name'].' HTTP '.$response->status();
+                    $failed[] = $error;
+                    $this->recordNewsSourceRun($source, 'failed', 0, 0, 0, $startedAt, $error);
                     continue;
                 }
 
                 $items = $response->json('data');
                 if (! is_array($items)) {
-                    $failed[] = $request['name'].' invalid payload';
+                    $error = $request['name'].' invalid payload';
+                    $failed[] = $error;
+                    $this->recordNewsSourceRun($source, 'failed', 0, 0, 0, $startedAt, $error);
                     continue;
                 }
 
-                $source = [
-                    'name' => $request['name'],
-                    'url' => 'https://www.marketaux.com',
-                    'language' => 'en',
-                    'region' => 'Global',
-                    'category' => $request['category'],
-                    'source_type' => 'marketaux_api',
-                ];
+                $itemCount = count($items);
 
                 foreach ($items as $item) {
                     if (! is_array($item) || trim((string) ($item['title'] ?? '')) === '') {
@@ -340,13 +379,56 @@ class BuildAgentKnowledgeBases extends Command
                     ]);
                     $inserted += $didInsert;
                     $updated += $didUpdate;
+                    $sourceInserted += $didInsert;
+                    $sourceUpdated += $didUpdate;
                 }
+
+                $this->recordNewsSourceRun($source, 'success', $sourceInserted, $sourceUpdated, $itemCount, $startedAt);
             } catch (\Throwable $exception) {
                 $failed[] = $request['name'].' '.$exception->getMessage();
+                $this->recordNewsSourceRun($source, 'failed', $sourceInserted, $sourceUpdated, $itemCount, $startedAt, $exception->getMessage());
             }
         }
 
         return ['inserted' => $inserted, 'updated' => $updated, 'failed_sources' => $failed];
+    }
+
+    /**
+     * @param array<string,mixed> $source
+     */
+    private function recordNewsSourceRun(
+        array $source,
+        string $status,
+        int $inserted,
+        int $updated,
+        int $itemCount,
+        float $startedAt,
+        ?string $error = null,
+    ): void {
+        if (! Schema::hasTable('agent_news_source_runs')) {
+            return;
+        }
+
+        DB::table('agent_news_source_runs')->insert([
+            'source_name' => (string) ($source['name'] ?? 'unknown'),
+            'source_type' => (string) ($source['source_type'] ?? ($source['parser'] ?? 'rss')),
+            'category' => $source['category'] ?? null,
+            'status' => $status,
+            'fetched_at' => now('Asia/Taipei'),
+            'duration_ms' => max(0, (int) round((microtime(true) - $startedAt) * 1000)),
+            'item_count' => max(0, $itemCount),
+            'inserted_count' => max(0, $inserted),
+            'updated_count' => max(0, $updated),
+            'error_message' => $error ? Str::limit($error, 1200, '') : null,
+            'metadata' => $this->json([
+                'url' => $source['url'] ?? null,
+                'parser' => $source['parser'] ?? 'rss',
+                'language' => $source['language'] ?? null,
+                'region' => $source['region'] ?? null,
+            ]),
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
     }
 
     /**
