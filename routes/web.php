@@ -13,6 +13,7 @@ use App\Support\GlobalRadarBuilder;
 use App\Support\MarketxAuth;
 use App\Support\MarketDisplay;
 use App\Support\ModuleStateDisplay;
+use App\Support\SponsorDataHealth;
 use App\Support\StockReportPhraseComposer;
 use App\Support\Ai\AiPipelineService;
 use App\Support\Ai\AiUsageLimiter;
@@ -2138,6 +2139,15 @@ Route::get('/admin/agents', function () {
         'newsSourceLatest' => $newsSourceLatest,
         'newsCategoryStats' => $newsCategoryStats,
         'summary' => $summary,
+    ]);
+});
+
+Route::get('/admin/sponsor', function (SponsorDataHealth $health) {
+    MarketxAuth::requireAdmin();
+
+    return view('admin_sponsor', [
+        'items' => $health->items(),
+        'summary' => $health->summary(),
     ]);
 });
 
