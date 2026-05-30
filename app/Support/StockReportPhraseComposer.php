@@ -10,10 +10,17 @@ use Illuminate\Support\Str;
 class StockReportPhraseComposer
 {
     /**
+     * @var array<int, int>
+     */
+    private array $usedLanguageAssetIds = [];
+
+    /**
      * @return array{summary:string,bull_case:string,bear_case:string,risk_summary:string,data_pack:array<string,mixed>}
      */
     public function compose(Stock $stock, mixed $score, mixed $chip, mixed $price, mixed $revenue): array
     {
+        $this->usedLanguageAssetIds = [];
+
         $technical = $this->latestTechnical($stock->id);
         $financial = $this->latestFinancial($stock->id);
         $themes = $this->themes($stock->id);
@@ -36,7 +43,8 @@ class StockReportPhraseComposer
             'data_pack' => [
                 'symbol' => $stock->symbol,
                 'name' => $stock->name,
-                'engine' => 'phrase_library_v1',
+                'engine' => 'phrase_library_v2',
+                'language_asset_ids' => $this->usedLanguageAssetIds,
                 'signals' => $signals,
                 'themes' => $themes,
                 'score' => [
@@ -57,6 +65,8 @@ class StockReportPhraseComposer
      */
     public function composeQuickEvaluation(Stock $stock, mixed $score, mixed $chip, mixed $price, mixed $revenue, ?string $radarCardType = null): array
     {
+        $this->usedLanguageAssetIds = [];
+
         $technical = $this->latestTechnical($stock->id);
         $financial = $this->latestFinancial($stock->id);
         $themes = $this->themes($stock->id);
@@ -193,11 +203,26 @@ class StockReportPhraseComposer
             $conditionKeys = [$this->fallbackCondition($section)];
         }
 
+        $languageAssets = $this->selectLanguageAssets($section, $conditionKeys, $vars, $limit, $diversify);
+        if ($trackUsage && $languageAssets->isNotEmpty()) {
+            DB::table('language_assets')
+                ->whereIn('id', $languageAssets->pluck('id')->all())
+                ->increment('usage_count', 1, ['last_used_at' => now(), 'updated_at' => now()]);
+        }
+
+        if ($languageAssets->isNotEmpty()) {
+            return $languageAssets
+                ->map(fn (object $asset) => $this->replaceVars((string) $asset->text, $vars))
+                ->implode('');
+        }
+
+        $remaining = $limit;
+
         $phrases = DB::table('report_phrases')
             ->where('section', $section)
             ->where('status', 'active')
             ->whereIn('condition_key', $conditionKeys)
-            ->limit(max($limit * 3, $limit))
+            ->limit(max($remaining * 3, $remaining))
             ->get(['id', 'condition_key', 'template', 'weight', 'usage_count'])
             ->sort(function (object $a, object $b) use ($conditionKeys) {
                 $rankA = array_search($a->condition_key, $conditionKeys, true);
@@ -216,11 +241,11 @@ class StockReportPhraseComposer
                 ->where('status', 'active')
                 ->where('condition_key', $this->fallbackCondition($section))
                 ->orderByDesc('weight')
-                ->limit($limit)
+                ->limit($remaining)
                 ->get(['id', 'condition_key', 'template', 'weight', 'usage_count']);
         }
 
-        $selected = $this->selectPhrases($phrases, $limit, $diversify ? (string) ($vars['_seed'] ?? '') : '');
+        $selected = $this->selectPhrases($phrases, $remaining, $diversify ? (string) ($vars['_seed'] ?? '') : '');
 
         if ($trackUsage && $selected->isNotEmpty()) {
             DB::table('report_phrases')
@@ -228,9 +253,188 @@ class StockReportPhraseComposer
                 ->increment('usage_count');
         }
 
-        return $selected
+        return $languageAssets
+            ->map(fn (object $asset) => $this->replaceVars((string) $asset->text, $vars))
+            ->merge($selected
             ->map(fn (object $phrase) => $this->replaceVars((string) $phrase->template, $vars))
+            )
             ->implode('');
+    }
+
+    /**
+     * @param array<int, string> $conditionKeys
+     */
+    private function selectLanguageAssets(string $section, array $conditionKeys, array $vars, int $limit, bool $diversify): Collection
+    {
+        if ($limit <= 0) {
+            return collect();
+        }
+
+        if (! DB::getSchemaBuilder()->hasTable('language_assets')) {
+            return collect();
+        }
+
+        $lookupKeys = $this->languageConditionKeys($section, $conditionKeys);
+        $tone = $this->toneForConditionKeys($conditionKeys);
+
+        $assets = DB::table('language_assets')
+            ->where('status', 'active')
+            ->whereIn('asset_type', ['phrase', 'sentence'])
+            ->where(function ($query) use ($section) {
+                $query->where('section', $section)
+                    ->orWhereNull('section');
+            })
+            ->where(function ($query) use ($lookupKeys) {
+                $query->whereIn('condition_key', $lookupKeys)
+                    ->orWhereNull('condition_key');
+            })
+            ->when($this->usedLanguageAssetIds !== [], fn ($query) => $query->whereNotIn('id', $this->usedLanguageAssetIds))
+            ->limit(max($limit * 6, 12))
+            ->get(['id', 'condition_key', 'tone', 'text', 'weight', 'usage_count'])
+            ->filter(fn (object $asset) => trim((string) $asset->text) !== '');
+
+        $toneAlignedAssets = $assets
+            ->filter(fn (object $asset) => in_array((string) $asset->tone, [$tone, 'neutral'], true))
+            ->values();
+
+        if ($toneAlignedAssets->isNotEmpty()) {
+            $assets = $toneAlignedAssets;
+        }
+
+        $assets = $assets
+            ->sort(function (object $a, object $b) use ($lookupKeys, $tone, $vars, $diversify) {
+                $rankA = $this->assetRank($a, $lookupKeys, $tone, $vars, $diversify);
+                $rankB = $this->assetRank($b, $lookupKeys, $tone, $vars, $diversify);
+
+                return $rankA <=> $rankB;
+            })
+            ->take($limit)
+            ->values();
+
+        $this->usedLanguageAssetIds = array_values(array_unique(array_merge(
+            $this->usedLanguageAssetIds,
+            $assets->pluck('id')->map(fn ($id) => (int) $id)->all(),
+        )));
+
+        return $assets;
+    }
+
+    /**
+     * @param array<int, string> $conditionKeys
+     * @return array<int, string>
+     */
+    private function languageConditionKeys(string $section, array $conditionKeys): array
+    {
+        $aliases = [
+            'today_rebound_after_drop' => ['base_rebound', 'weak_rebound'],
+            'today_pullback_after_run' => ['overextended'],
+            'recent_downtrend' => ['weak_rebound', 'below_ma'],
+            'recent_momentum' => ['trend_continuation'],
+            'theme_hot_price_up' => ['trend_continuation'],
+            'price_up_volume_up' => ['base_rebound', 'trend_continuation'],
+            'price_up_volume_flat' => ['trend_continuation'],
+            'price_down_volume_up' => ['overextended', 'upper_shadow'],
+            'price_extended' => ['overextended'],
+            'low_base_breakout' => ['base_rebound'],
+            'ma_bull' => ['trend_continuation'],
+            'macd_bull' => ['macd_turning'],
+            'kd_golden' => ['macd_turning'],
+            'rsi_strong' => ['trend_continuation'],
+            'breakout20' => ['trend_continuation'],
+            'bais_high' => ['overextended'],
+            'rsi_overheat' => ['overextended'],
+            'macd_shrinking' => ['upper_shadow'],
+            'upper_shadow' => ['upper_shadow'],
+            'below_sma20' => ['below_ma'],
+            'ma_bear' => ['below_ma'],
+            'macd_bear' => ['below_ma'],
+            'kd_dead' => ['below_ma'],
+            'rsi_weak' => ['below_ma'],
+            'foreign_trust_buy' => ['institutional_buy'],
+            'institutional_buy' => ['institutional_buy'],
+            'foreign_trust_sell' => ['margin_pressure'],
+            'institutional_sell' => ['margin_pressure'],
+            'margin_high' => ['margin_pressure'],
+            'short_high' => ['margin_pressure'],
+            'revenue_yoy_strong' => ['revenue_growth'],
+            'revenue_mom_strong' => ['revenue_growth'],
+            'revenue_yoy_weak' => ['valuation_gap'],
+            'revenue_mom_weak' => ['valuation_gap'],
+            'per_high' => ['valuation_gap'],
+            'pb_high' => ['valuation_gap'],
+            'price_fundamental_gap' => ['valuation_gap'],
+            'overall_bull' => ['balanced_bull'],
+            'overall_watch' => ['follow_up'],
+            'overall_risk' => ['balanced_risk'],
+            'overall_bear' => ['balanced_risk'],
+            'wait_for_confirmation' => ['follow_up'],
+            'invalid_condition' => ['contrast'],
+        ];
+
+        $keys = [$this->fallbackCondition($section)];
+
+        foreach ($conditionKeys as $key) {
+            $keys[] = $key;
+
+            foreach ($aliases[$key] ?? [] as $alias) {
+                $keys[] = $alias;
+            }
+        }
+
+        return array_values(array_unique(array_filter($keys)));
+    }
+
+    /**
+     * @param array<int, string> $conditionKeys
+     */
+    private function toneForConditionKeys(array $conditionKeys): string
+    {
+        $joined = implode('|', $conditionKeys);
+
+        if (Str::contains($joined, ['risk', 'extended', 'over', 'upper_shadow', 'gap', 'margin_high', 'short_high', 'high'])) {
+            return 'risk';
+        }
+
+        if (Str::contains($joined, ['bear', 'weak', 'sell', 'below', 'dead', 'downtrend', 'down_volume'])) {
+            return 'bear';
+        }
+
+        if (Str::contains($joined, ['bull', 'strong', 'buy', 'golden', 'rebound', 'momentum', 'breakout', 'growth', 'up_volume'])) {
+            return 'bull';
+        }
+
+        return 'neutral';
+    }
+
+    /**
+     * @param array<int, string> $lookupKeys
+     * @return array<int, int|string>
+     */
+    private function assetRank(object $asset, array $lookupKeys, string $tone, array $vars, bool $diversify): array
+    {
+        $conditionRank = array_search($asset->condition_key, $lookupKeys, true);
+        $conditionRank = $conditionRank === false ? 999 : $conditionRank;
+
+        $toneRank = match ((string) $asset->tone) {
+            $tone => 0,
+            'neutral' => 1,
+            default => 2,
+        };
+
+        $diversityRank = 0;
+        if ($diversify) {
+            $seed = (string) ($vars['_seed'] ?? '');
+            $diversityRank = crc32($seed.'|language_asset|'.$asset->id) % 100;
+        }
+
+        return [
+            $conditionRank,
+            $toneRank,
+            -((int) $asset->weight),
+            (int) $asset->usage_count,
+            $diversityRank,
+            (int) $asset->id,
+        ];
     }
 
     private function selectPhrases(Collection $phrases, int $limit, string $seed): Collection
