@@ -15,11 +15,20 @@ class StockReportPhraseComposer
     private array $usedLanguageAssetIds = [];
 
     /**
+     * @var array<int, int>
+     */
+    private array $usedParagraphTemplateIds = [];
+
+    private ?int $usedArticleTemplateId = null;
+
+    /**
      * @return array{summary:string,bull_case:string,bear_case:string,risk_summary:string,data_pack:array<string,mixed>}
      */
     public function compose(Stock $stock, mixed $score, mixed $chip, mixed $price, mixed $revenue): array
     {
         $this->usedLanguageAssetIds = [];
+        $this->usedParagraphTemplateIds = [];
+        $this->usedArticleTemplateId = null;
 
         $technical = $this->latestTechnical($stock->id);
         $financial = $this->latestFinancial($stock->id);
@@ -35,6 +44,9 @@ class StockReportPhraseComposer
             '5、總評：'.$this->renderSection('summary', $signals['summary'], $vars, 2),
         ];
 
+        $article = $this->selectArticleTemplate($signals, $vars);
+        $paragraphs = $this->renderArticleParagraphs($article, $signals, $vars);
+
         return [
             'summary' => implode("\n\n", $paragraphs),
             'bull_case' => $this->renderSection('summary', ['overall_bull', 'wait_for_confirmation'], $vars, 2),
@@ -43,7 +55,9 @@ class StockReportPhraseComposer
             'data_pack' => [
                 'symbol' => $stock->symbol,
                 'name' => $stock->name,
-                'engine' => 'phrase_library_v2',
+                'engine' => 'phrase_library_v3',
+                'article_template_id' => $this->usedArticleTemplateId,
+                'paragraph_template_ids' => $this->usedParagraphTemplateIds,
                 'language_asset_ids' => $this->usedLanguageAssetIds,
                 'signals' => $signals,
                 'themes' => $themes,
@@ -190,6 +204,248 @@ class StockReportPhraseComposer
         }
 
         return '';
+    }
+
+    /**
+     * @param array<string, array<int, string>> $signals
+     */
+    private function selectArticleTemplate(array $signals, array $vars): ?object
+    {
+        if (! DB::getSchemaBuilder()->hasTable('article_templates')) {
+            return null;
+        }
+
+        $scenarios = $this->articleScenarios($signals);
+
+        $article = DB::table('article_templates')
+            ->where('status', 'active')
+            ->whereIn('scenario', $scenarios)
+            ->orderByRaw($this->orderByFieldSql('scenario', $scenarios))
+            ->orderByDesc('weight')
+            ->orderBy('usage_count')
+            ->first(['id', 'scenario', 'section_order', 'opening_template', 'closing_template', 'weight', 'usage_count']);
+
+        if (! $article) {
+            return null;
+        }
+
+        $this->usedArticleTemplateId = (int) $article->id;
+
+        DB::table('article_templates')
+            ->where('id', $article->id)
+            ->increment('usage_count', 1, ['updated_at' => now()]);
+
+        return $article;
+    }
+
+    /**
+     * @param array<string, array<int, string>> $signals
+     * @return array<int, string>
+     */
+    private function articleScenarios(array $signals): array
+    {
+        $flat = implode('|', array_merge(...array_values($signals)));
+
+        return match (true) {
+            Str::contains($flat, ['price_extended', 'overall_risk', 'valuation_gap', 'upper_shadow']) => ['risk', 'balanced'],
+            Str::contains($flat, ['low_base_breakout', 'today_rebound_after_drop']) => ['low_volume_breakout', 'balanced'],
+            Str::contains($flat, ['recent_downtrend', 'overall_bear', 'ma_bear']) => ['weak_trend', 'balanced'],
+            Str::contains($flat, ['theme_hot_price_up', 'recent_momentum', 'overall_bull']) => ['priority', 'balanced'],
+            default => ['potential', 'balanced'],
+        };
+    }
+
+    /**
+     * @param array<string, array<int, string>> $signals
+     * @return array<int, string>
+     */
+    private function renderArticleParagraphs(?object $article, array $signals, array $vars): array
+    {
+        $paragraphs = [];
+        $sectionOrder = $this->articleSectionOrder($article);
+
+        foreach ($sectionOrder as $index => $section) {
+            $paragraphs[] = $this->renderParagraphSection(
+                (int) $index + 1,
+                $section,
+                $signals[$section] ?? $signals['summary'],
+                $vars,
+                $this->sectionLimit($section),
+            );
+        }
+
+        $opening = $article?->opening_template ? $this->replaceVars((string) $article->opening_template, $vars) : '';
+        $closing = $article?->closing_template ? $this->replaceVars((string) $article->closing_template, $vars) : '';
+
+        return array_values(array_filter(array_merge([$opening], $paragraphs, [$closing])));
+    }
+
+    /**
+     * @return array<int, string>
+     */
+    private function articleSectionOrder(?object $article): array
+    {
+        $default = ['price_theme', 'technical', 'chip', 'fundamental', 'summary'];
+
+        if (! $article?->section_order) {
+            return $default;
+        }
+
+        $sections = json_decode((string) $article->section_order, true);
+        if (! is_array($sections)) {
+            return $default;
+        }
+
+        $sections = array_values(array_filter(array_map(function (mixed $section): ?string {
+            $section = (string) $section;
+
+            return in_array($section, ['theme', 'price_theme'], true)
+                ? 'price_theme'
+                : (in_array($section, ['technical', 'chip', 'fundamental', 'summary'], true) ? $section : null);
+        }, $sections)));
+
+        return $sections === [] ? $default : array_values(array_unique($sections));
+    }
+
+    /**
+     * @param array<int, string> $conditionKeys
+     */
+    private function renderParagraphSection(int $index, string $section, array $conditionKeys, array $vars, int $limit): string
+    {
+        $template = $this->selectParagraphTemplate($section, $conditionKeys, $vars);
+        $detail = $this->renderSection($section, $conditionKeys, $vars, $limit, true, true);
+        $body = $template ? $this->replaceVars((string) $template->body_template, $vars) : '';
+
+        if ($body !== '' && $detail !== '' && ! Str::contains($body, $detail)) {
+            $body .= $detail;
+        }
+
+        if ($body === '') {
+            $body = $detail;
+        }
+
+        return $index.'、'.$this->sectionTitle($section).'：'.$body;
+    }
+
+    /**
+     * @param array<int, string> $conditionKeys
+     */
+    private function selectParagraphTemplate(string $section, array $conditionKeys, array $vars): ?object
+    {
+        if (! DB::getSchemaBuilder()->hasTable('paragraph_templates')) {
+            return null;
+        }
+
+        $scenarios = $this->paragraphScenarios($section, $conditionKeys);
+        $tone = $this->toneForConditionKeys($conditionKeys);
+
+        $template = DB::table('paragraph_templates')
+            ->where('status', 'active')
+            ->where('section', $section)
+            ->whereIn('scenario', $scenarios)
+            ->where(function ($query) use ($tone) {
+                $query->where('tone', $tone)
+                    ->orWhere('tone', 'neutral');
+            })
+            ->orderByRaw($this->orderByFieldSql('scenario', $scenarios))
+            ->orderByDesc('weight')
+            ->orderBy('usage_count')
+            ->first(['id', 'scenario', 'body_template', 'weight', 'usage_count']);
+
+        if (! $template) {
+            return null;
+        }
+
+        $this->usedParagraphTemplateIds[] = (int) $template->id;
+
+        DB::table('paragraph_templates')
+            ->where('id', $template->id)
+            ->increment('usage_count', 1, ['updated_at' => now()]);
+
+        return $template;
+    }
+
+    /**
+     * @param array<int, string> $conditionKeys
+     * @return array<int, string>
+     */
+    private function paragraphScenarios(string $section, array $conditionKeys): array
+    {
+        $keys = $this->languageConditionKeys($section, $conditionKeys);
+
+        $aliases = [
+            'price_theme' => [
+                'base_rebound' => 'base_rebound',
+                'low_base_breakout' => 'base_rebound',
+                'trend_continuation' => 'trend',
+                'overextended' => 'risk',
+                'price_extended' => 'risk',
+                'weak_rebound' => 'weak',
+            ],
+            'technical' => [
+                'ma_bull' => 'trend',
+                'macd_turning' => 'trend',
+                'below_ma' => 'failed_breakout',
+                'upper_shadow' => 'failed_breakout',
+            ],
+            'chip' => [
+                'institutional_buy' => 'institutional',
+                'margin_pressure' => 'margin_risk',
+            ],
+            'fundamental' => [
+                'revenue_growth' => 'growth',
+                'valuation_gap' => 'risk',
+            ],
+            'summary' => [
+                'balanced_bull' => 'card_alignment',
+                'balanced_risk' => 'card_alignment',
+                'follow_up' => 'card_alignment',
+            ],
+        ];
+
+        $scenarios = [];
+        foreach ($keys as $key) {
+            if (isset($aliases[$section][$key])) {
+                $scenarios[] = $aliases[$section][$key];
+            }
+        }
+
+        $scenarios[] = 'balanced';
+        $scenarios[] = $section;
+
+        return array_values(array_unique($scenarios));
+    }
+
+    private function sectionTitle(string $section): string
+    {
+        return match ($section) {
+            'price_theme' => '近期股價走勢與題材',
+            'technical' => '技術分析',
+            'chip' => '籌碼及資金走向',
+            'fundamental' => '營收狀況及股利政策',
+            default => '總評',
+        };
+    }
+
+    private function sectionLimit(string $section): int
+    {
+        return match ($section) {
+            'price_theme', 'technical' => 2,
+            default => 1,
+        };
+    }
+
+    /**
+     * @param array<int, string> $values
+     */
+    private function orderByFieldSql(string $column, array $values): string
+    {
+        $cases = collect($values)
+            ->values()
+            ->map(fn (string $value, int $index) => "when '".$value."' then ".$index)
+            ->implode(' ');
+
+        return 'case '.$column.' '.$cases.' else 999 end';
     }
 
     /**

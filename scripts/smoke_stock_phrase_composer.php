@@ -50,6 +50,9 @@ $recentAssets = DB::table('language_assets')
 echo json_encode([
     'symbol' => $stock->symbol,
     'name' => $stock->name,
+    'engine' => data_get($report, 'data_pack.engine'),
+    'article_template_id' => data_get($report, 'data_pack.article_template_id'),
+    'paragraph_template_ids' => data_get($report, 'data_pack.paragraph_template_ids'),
     'summary_preview' => mb_substr($report['summary'], 0, 500),
     'recent_language_assets' => $recentAssets,
 ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_PRETTY_PRINT).PHP_EOL;

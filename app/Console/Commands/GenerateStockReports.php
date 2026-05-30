@@ -51,7 +51,7 @@ class GenerateStockReports extends Command
                     'bear_case' => $report['bear_case'],
                     'risk_summary' => $report['risk_summary'],
                     'data_pack' => json_encode($report['data_pack'], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
-                    'model' => 'phrase-library-v2',
+                    'model' => 'phrase-library-v3',
                     'token_usage' => json_encode(['prompt_tokens' => 0, 'completion_tokens' => 0]),
                     'created_at' => now(),
                     'updated_at' => now(),
@@ -63,7 +63,7 @@ class GenerateStockReports extends Command
 
         DB::table('ai_logs')->insert([
             'task' => 'stock_report_generation',
-            'model' => 'phrase-library-v2',
+            'model' => 'phrase-library-v3',
             'input_hash' => null,
             'prompt_tokens' => 0,
             'completion_tokens' => 0,
