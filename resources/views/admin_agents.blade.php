@@ -215,6 +215,14 @@
             <strong>{{ $summary['active_memories'] }}</strong>
             <span>學習記憶</span>
         </div>
+        <div class="agent-kpi">
+            <strong>{{ $summary['knowledge_items'] ?? 0 }}</strong>
+            <span>知識庫資料</span>
+        </div>
+        <div class="agent-kpi">
+            <strong>{{ $summary['pending_learning_suggestions'] ?? 0 }}</strong>
+            <span>待審學習建議</span>
+        </div>
     </section>
 
     <section class="agent-hero" style="margin-top:16px">
@@ -325,6 +333,38 @@
             @endforeach
         </div>
     </section>
+
+    <details class="panel agent-details" open>
+        <summary>待審學習建議</summary>
+        @if (($pendingLearningSuggestions ?? collect())->isEmpty())
+            <p class="lead" style="margin-top:12px">目前沒有待審學習建議。</p>
+        @else
+            <table class="table agent-compact-table" style="margin-top:12px">
+                <tbody>
+                @foreach ($pendingLearningSuggestions as $suggestion)
+                    @php
+                        $payload = is_string($suggestion->proposed_payload) ? json_decode($suggestion->proposed_payload, true) : [];
+                        $preview = $payload['text'] ?? $payload['body_template'] ?? $payload['opening_template'] ?? $payload['recommendation'] ?? '';
+                    @endphp
+                    <tr>
+                        <th>
+                            ALS-{{ $suggestion->id }}<br>
+                            <span class="badge amber">{{ $suggestion->suggestion_type }}</span>
+                        </th>
+                        <td>
+                            <strong>{{ $suggestion->title }}</strong><br>
+                            <span class="lead">{{ $suggestion->agent_name ?? '代理人' }}｜優先 {{ $suggestion->priority }}｜{{ $suggestion->target_table }}</span><br>
+                            <span class="lead">{{ $suggestion->rationale }}</span>
+                            @if ($preview)
+                                <br><span class="lead">{{ \Illuminate\Support\Str::limit($preview, 160) }}</span>
+                            @endif
+                        </td>
+                    </tr>
+                @endforeach
+                </tbody>
+            </table>
+        @endif
+    </details>
 
     <details class="panel agent-details">
         <summary>已處理與觀察中的案件</summary>

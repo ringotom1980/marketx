@@ -1937,6 +1937,24 @@ Route::get('/admin/agents', function () {
         ->limit(20)
         ->get();
 
+    $pendingLearningSuggestions = DB::table('agent_learning_suggestions')
+        ->leftJoin('agent_roles', 'agent_roles.id', '=', 'agent_learning_suggestions.agent_role_id')
+        ->where('agent_learning_suggestions.status', 'pending')
+        ->orderByDesc('agent_learning_suggestions.priority')
+        ->orderByDesc('agent_learning_suggestions.id')
+        ->limit(30)
+        ->get([
+            'agent_learning_suggestions.id',
+            'agent_learning_suggestions.suggestion_type',
+            'agent_learning_suggestions.target_table',
+            'agent_learning_suggestions.priority',
+            'agent_learning_suggestions.title',
+            'agent_learning_suggestions.rationale',
+            'agent_learning_suggestions.proposed_payload',
+            'agent_learning_suggestions.created_at',
+            'agent_roles.name as agent_name',
+        ]);
+
     $summary = [
         'roles' => $roles->count(),
         'active_roles' => $roles->where('is_active', true)->count(),
@@ -1944,6 +1962,8 @@ Route::get('/admin/agents', function () {
         'reviewed_findings' => AgentFinding::query()->whereIn('status', ['accepted', 'rejected', 'resolved', 'observing'])->count(),
         'active_memories' => AgentMemory::query()->where('status', 'active')->count(),
         'today_runs' => AgentRun::query()->whereDate('created_at', now('Asia/Taipei')->toDateString())->count(),
+        'pending_learning_suggestions' => DB::table('agent_learning_suggestions')->where('status', 'pending')->count(),
+        'knowledge_items' => DB::table('market_knowledge_items')->where('status', 'active')->count(),
     ];
 
     return view('admin_agents', [
@@ -1952,6 +1972,7 @@ Route::get('/admin/agents', function () {
         'pendingFindings' => $pendingFindings,
         'reviewedFindings' => $reviewedFindings,
         'latestMemories' => $latestMemories,
+        'pendingLearningSuggestions' => $pendingLearningSuggestions,
         'summary' => $summary,
     ]);
 });

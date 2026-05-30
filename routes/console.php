@@ -137,3 +137,28 @@ Schedule::command('market:agents-suggest-report-phrases --limit=12')
     ->dailyAt('01:55')
     ->timezone('Asia/Taipei')
     ->withoutOverlapping();
+
+Schedule::command('market:agents-learning-pipeline --phase=collect --limit=120')
+    ->cron('10 */6 * * *')
+    ->timezone('Asia/Taipei')
+    ->withoutOverlapping();
+
+Schedule::command('market:agents-learning-pipeline --phase=classify --limit=160')
+    ->dailyAt('01:12')
+    ->timezone('Asia/Taipei')
+    ->withoutOverlapping();
+
+Schedule::command('market:agents-learning-pipeline --phase=language --limit=80')
+    ->dailyAt('01:52')
+    ->timezone('Asia/Taipei')
+    ->withoutOverlapping();
+
+Schedule::command('market:agents-learning-pipeline --phase=rules --limit=80')
+    ->dailyAt('02:08')
+    ->timezone('Asia/Taipei')
+    ->withoutOverlapping();
+
+Schedule::command('market:agents-learning-pipeline --phase=review --limit=80')
+    ->dailyAt('02:18')
+    ->timezone('Asia/Taipei')
+    ->withoutOverlapping();

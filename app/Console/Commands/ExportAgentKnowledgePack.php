@@ -47,6 +47,11 @@ class ExportAgentKnowledgePack extends Command
             'agent_findings' => $this->agentFindings(),
             'recent_agent_runs' => $this->recentAgentRuns(),
             'active_memories' => $this->activeMemories(),
+            'learning_knowledge' => $this->learningKnowledge(),
+            'language_assets' => $this->languageAssets(),
+            'paragraph_templates' => $this->paragraphTemplates(),
+            'article_templates' => $this->articleTemplates(),
+            'pending_learning_suggestions' => $this->pendingLearningSuggestions(),
             'radar_performance' => $this->radarPerformance(),
             'data_freshness' => $this->dataFreshness(),
             'expected_output' => [
@@ -203,6 +208,166 @@ class ExportAgentKnowledgePack extends Command
             ->all();
     }
 
+    private function learningKnowledge(): array
+    {
+        if (! $this->hasTable('market_knowledge_items')) {
+            return [];
+        }
+
+        return DB::table('market_knowledge_items')
+            ->where('status', 'active')
+            ->orderByDesc('importance_score')
+            ->orderByDesc('knowledge_date')
+            ->limit(80)
+            ->get([
+                'id',
+                'knowledge_type',
+                'source_type',
+                'source_name',
+                'knowledge_date',
+                'title',
+                'summary',
+                'category',
+                'region',
+                'sentiment',
+                'importance_score',
+                'confidence_score',
+                'themes',
+                'industries',
+                'symbols',
+                'keywords',
+            ])
+            ->map(fn (object $row) => [
+                'id' => $row->id,
+                'knowledge_type' => $row->knowledge_type,
+                'source_type' => $row->source_type,
+                'source_name' => $row->source_name,
+                'knowledge_date' => $row->knowledge_date,
+                'title' => $row->title,
+                'summary' => $row->summary,
+                'category' => $row->category,
+                'region' => $row->region,
+                'sentiment' => $row->sentiment,
+                'importance_score' => (int) $row->importance_score,
+                'confidence_score' => (int) $row->confidence_score,
+                'themes' => $this->decodeJson($row->themes),
+                'industries' => $this->decodeJson($row->industries),
+                'symbols' => $this->decodeJson($row->symbols),
+                'keywords' => $this->decodeJson($row->keywords),
+            ])
+            ->values()
+            ->all();
+    }
+
+    private function languageAssets(): array
+    {
+        if (! $this->hasTable('language_assets')) {
+            return [];
+        }
+
+        return DB::table('language_assets')
+            ->where('status', 'active')
+            ->orderBy('asset_type')
+            ->orderBy('section')
+            ->orderByDesc('weight')
+            ->limit(120)
+            ->get(['asset_type', 'section', 'tone', 'condition_key', 'text', 'weight', 'source', 'usage_count'])
+            ->map(fn (object $row) => [
+                'asset_type' => $row->asset_type,
+                'section' => $row->section,
+                'tone' => $row->tone,
+                'condition_key' => $row->condition_key,
+                'text' => $row->text,
+                'weight' => (int) $row->weight,
+                'source' => $row->source,
+                'usage_count' => (int) $row->usage_count,
+            ])
+            ->values()
+            ->all();
+    }
+
+    private function paragraphTemplates(): array
+    {
+        if (! $this->hasTable('paragraph_templates')) {
+            return [];
+        }
+
+        return DB::table('paragraph_templates')
+            ->where('status', 'active')
+            ->orderBy('section')
+            ->orderByDesc('weight')
+            ->limit(80)
+            ->get(['template_key', 'name', 'section', 'scenario', 'tone', 'body_template', 'required_conditions', 'optional_conditions', 'weight'])
+            ->map(fn (object $row) => [
+                'template_key' => $row->template_key,
+                'name' => $row->name,
+                'section' => $row->section,
+                'scenario' => $row->scenario,
+                'tone' => $row->tone,
+                'body_template' => $row->body_template,
+                'required_conditions' => $this->decodeJson($row->required_conditions),
+                'optional_conditions' => $this->decodeJson($row->optional_conditions),
+                'weight' => (int) $row->weight,
+            ])
+            ->values()
+            ->all();
+    }
+
+    private function articleTemplates(): array
+    {
+        if (! $this->hasTable('article_templates')) {
+            return [];
+        }
+
+        return DB::table('article_templates')
+            ->where('status', 'active')
+            ->orderBy('scenario')
+            ->orderByDesc('weight')
+            ->limit(40)
+            ->get(['template_key', 'name', 'scenario', 'tone', 'section_order', 'opening_template', 'closing_template', 'style_rules', 'selection_rules', 'weight'])
+            ->map(fn (object $row) => [
+                'template_key' => $row->template_key,
+                'name' => $row->name,
+                'scenario' => $row->scenario,
+                'tone' => $row->tone,
+                'section_order' => $this->decodeJson($row->section_order),
+                'opening_template' => $row->opening_template,
+                'closing_template' => $row->closing_template,
+                'style_rules' => $this->decodeJson($row->style_rules),
+                'selection_rules' => $this->decodeJson($row->selection_rules),
+                'weight' => (int) $row->weight,
+            ])
+            ->values()
+            ->all();
+    }
+
+    private function pendingLearningSuggestions(): array
+    {
+        if (! $this->hasTable('agent_learning_suggestions')) {
+            return [];
+        }
+
+        return DB::table('agent_learning_suggestions')
+            ->where('status', 'pending')
+            ->orderByDesc('priority')
+            ->orderByDesc('id')
+            ->limit(80)
+            ->get(['id', 'suggestion_type', 'target_table', 'priority', 'title', 'rationale', 'proposed_payload', 'evidence_payload', 'created_at'])
+            ->map(fn (object $row) => [
+                'suggestion_no' => 'ALS-'.$row->id,
+                'suggestion_type' => $row->suggestion_type,
+                'target_table' => $row->target_table,
+                'priority' => (int) $row->priority,
+                'title' => $row->title,
+                'rationale' => $row->rationale,
+                'proposed_payload' => $this->decodeJson($row->proposed_payload),
+                'evidence_payload' => $this->decodeJson($row->evidence_payload),
+                'created_at' => $this->timeString($row->created_at),
+            ])
+            ->values()
+            ->all();
+    }
+
     private function radarPerformance(): array
     {
         if (! $this->hasTable('stock_radar_observations') || ! $this->hasTable('stock_radar_observation_checks')) {
@@ -352,5 +517,20 @@ class ExportAgentKnowledgePack extends Command
         }
 
         return CarbonImmutable::parse($time)->timezone('Asia/Taipei')->toDateTimeString();
+    }
+
+    private function decodeJson(mixed $value): array
+    {
+        if (is_array($value)) {
+            return $value;
+        }
+
+        if (! is_string($value) || trim($value) === '') {
+            return [];
+        }
+
+        $decoded = json_decode($value, true);
+
+        return is_array($decoded) ? $decoded : [];
     }
 }
