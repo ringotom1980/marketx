@@ -14,8 +14,8 @@ Schedule::command('market:global-morning-pipeline')
     ->withoutOverlapping();
 
 foreach ([
-    // US close first pass and delayed Yahoo Finance confirmations.
-    '04:10', '04:40', '05:10', '06:30', '07:30',
+    // US close first pass and delayed Yahoo Finance confirmations before the 06:10 final morning backfill.
+    '04:10', '04:40', '05:10',
     // Japan / Korea close first pass and backfill checks.
     '14:15', '14:45', '15:30',
     // Hong Kong / China close first pass and backfill checks.
@@ -29,14 +29,19 @@ foreach ([
         ->withoutOverlapping();
 }
 
-foreach (['08:00', '08:20'] as $time) {
+Schedule::command('market:build-daily-context --session=premarket')
+    ->dailyAt('06:30')
+    ->timezone('Asia/Taipei')
+    ->withoutOverlapping();
+
+foreach (['06:50'] as $time) {
     Schedule::command('market:ai-generate-global-premarket --live')
         ->dailyAt($time)
         ->timezone('Asia/Taipei')
         ->withoutOverlapping();
 }
 
-foreach (['08:10', '08:25'] as $time) {
+foreach (['07:10', '07:20'] as $time) {
     Schedule::command('market:ai-generate-theme-premarket --live')
         ->dailyAt($time)
         ->timezone('Asia/Taipei')
@@ -44,17 +49,12 @@ foreach (['08:10', '08:25'] as $time) {
 }
 
 Schedule::command('market:build-stock-radar-cards')
-    ->dailyAt('08:30')
+    ->dailyAt('07:30')
     ->timezone('Asia/Taipei')
     ->withoutOverlapping();
 
 Schedule::command('market:update-stock-radar-observations')
-    ->dailyAt('08:32')
-    ->timezone('Asia/Taipei')
-    ->withoutOverlapping();
-
-Schedule::command('market:build-daily-context --session=premarket')
-    ->dailyAt('08:35')
+    ->dailyAt('07:32')
     ->timezone('Asia/Taipei')
     ->withoutOverlapping();
 
