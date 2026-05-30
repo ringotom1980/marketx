@@ -793,6 +793,98 @@ Route::get('/api/stocks/search', function (Request $request) {
     return response()->json($stocks);
 });
 
+Route::get('/api/stocks/{symbol}/quote-chart', function (string $symbol) {
+    $stockRecord = Stock::query()->where('symbol', $symbol)->firstOrFail();
+    $priceRows = $stockRecord->dailyPrices()
+        ->whereNotNull('open')
+        ->whereNotNull('high')
+        ->whereNotNull('low')
+        ->whereNotNull('close')
+        ->orderByDesc('trade_date')
+        ->limit(520)
+        ->get(['trade_date', 'open', 'high', 'low', 'close', 'volume'])
+        ->sortBy('trade_date')
+        ->values();
+    $dailyK = $priceRows
+        ->map(fn ($row) => [
+            'time' => $row->trade_date->toDateString(),
+            'open' => (float) $row->open,
+            'high' => (float) $row->high,
+            'low' => (float) $row->low,
+            'close' => (float) $row->close,
+            'volume' => (int) ($row->volume ?? 0),
+        ])
+        ->all();
+    $latestSnapshot = Schema::hasTable('stock_snapshots')
+        ? DB::table('stock_snapshots')
+            ->where('symbol', $stockRecord->symbol)
+            ->whereNotNull('close')
+            ->orderByDesc('snapshot_at')
+            ->first()
+        : null;
+    $realtimeRows = [];
+
+    if ($latestSnapshot?->snapshot_at) {
+        $snapshotAt = \Carbon\CarbonImmutable::parse((string) $latestSnapshot->snapshot_at, 'Asia/Taipei');
+        $snapshotDate = $snapshotAt->toDateString();
+        $realtimeRows = DB::table('stock_snapshots')
+            ->where('symbol', $stockRecord->symbol)
+            ->whereDate('snapshot_at', $snapshotDate)
+            ->whereNotNull('close')
+            ->orderBy('snapshot_at')
+            ->limit(360)
+            ->get(['snapshot_at', 'open', 'high', 'low', 'close', 'change_price', 'change_rate', 'volume', 'total_volume'])
+            ->map(function ($row) {
+                $at = \Carbon\CarbonImmutable::parse((string) $row->snapshot_at, 'Asia/Taipei');
+
+                return [
+                    'time' => $at->utc()->timestamp,
+                    'label' => $at->format('H:i'),
+                    'value' => (float) $row->close,
+                    'open' => $row->open === null ? null : (float) $row->open,
+                    'high' => $row->high === null ? null : (float) $row->high,
+                    'low' => $row->low === null ? null : (float) $row->low,
+                    'close' => (float) $row->close,
+                    'change' => $row->change_price === null ? null : (float) $row->change_price,
+                    'changePct' => $row->change_rate === null ? null : (float) $row->change_rate,
+                    'volume' => (int) ($row->total_volume ?? $row->volume ?? 0),
+                ];
+            })
+            ->all();
+
+        if ($snapshotAt->isWeekday() && $latestSnapshot->close !== null) {
+            $snapshotDay = $snapshotAt->toDateString();
+            $lastIndex = count($dailyK) - 1;
+            $lastDaily = $lastIndex >= 0 ? $dailyK[$lastIndex] : null;
+            $snapshotBar = [
+                'time' => $snapshotDay,
+                'open' => (float) ($latestSnapshot->open ?? $latestSnapshot->close),
+                'high' => (float) ($latestSnapshot->high ?? $latestSnapshot->close),
+                'low' => (float) ($latestSnapshot->low ?? $latestSnapshot->close),
+                'close' => (float) $latestSnapshot->close,
+                'volume' => (int) ($latestSnapshot->total_volume ?? $latestSnapshot->volume ?? 0),
+            ];
+
+            if ($lastDaily && $lastDaily['time'] === $snapshotDay) {
+                $dailyK[$lastIndex] = array_merge($snapshotBar, [
+                    'open' => $lastDaily['open'] ?: $snapshotBar['open'],
+                    'high' => max($lastDaily['high'], $snapshotBar['high']),
+                    'low' => min($lastDaily['low'], $snapshotBar['low']),
+                ]);
+            } elseif (! $lastDaily || $snapshotDay > $lastDaily['time']) {
+                $dailyK[] = $snapshotBar;
+            }
+        }
+    }
+
+    return response()->json([
+        'chartData' => [
+            'realtime' => $realtimeRows,
+            'daily' => $dailyK,
+        ],
+    ]);
+});
+
 Route::get('/s/{symbol}', function (string $symbol, StockEventChainBuilder $eventChainBuilder, StockReportPhraseComposer $phraseComposer) {
     $stockRecord = Stock::query()
         ->with([
@@ -854,6 +946,59 @@ Route::get('/s/{symbol}', function (string $symbol, StockEventChainBuilder $even
             'volume' => (int) ($row->volume ?? 0),
         ])
         ->all();
+    $realtimeLine = [];
+    if ($latestSnapshot?->snapshot_at) {
+        $snapshotAt = \Carbon\CarbonImmutable::parse((string) $latestSnapshot->snapshot_at, 'Asia/Taipei');
+        $snapshotDate = $snapshotAt->toDateString();
+        $realtimeLine = DB::table('stock_snapshots')
+            ->where('symbol', $stockRecord->symbol)
+            ->whereDate('snapshot_at', $snapshotDate)
+            ->whereNotNull('close')
+            ->orderBy('snapshot_at')
+            ->limit(360)
+            ->get(['snapshot_at', 'open', 'high', 'low', 'close', 'change_price', 'change_rate', 'volume', 'total_volume'])
+            ->map(function ($row) {
+                $at = \Carbon\CarbonImmutable::parse((string) $row->snapshot_at, 'Asia/Taipei');
+
+                return [
+                    'time' => $at->utc()->timestamp,
+                    'label' => $at->format('H:i'),
+                    'value' => (float) $row->close,
+                    'open' => $row->open === null ? null : (float) $row->open,
+                    'high' => $row->high === null ? null : (float) $row->high,
+                    'low' => $row->low === null ? null : (float) $row->low,
+                    'close' => (float) $row->close,
+                    'change' => $row->change_price === null ? null : (float) $row->change_price,
+                    'changePct' => $row->change_rate === null ? null : (float) $row->change_rate,
+                    'volume' => (int) ($row->total_volume ?? $row->volume ?? 0),
+                ];
+            })
+            ->all();
+
+        if ($snapshotAt->isWeekday() && $latestSnapshot->close !== null) {
+            $snapshotDay = $snapshotAt->toDateString();
+            $lastIndex = count($dailyK) - 1;
+            $lastDaily = $lastIndex >= 0 ? $dailyK[$lastIndex] : null;
+            $snapshotBar = [
+                'time' => $snapshotDay,
+                'open' => (float) ($latestSnapshot->open ?? $latestSnapshot->close),
+                'high' => (float) ($latestSnapshot->high ?? $latestSnapshot->close),
+                'low' => (float) ($latestSnapshot->low ?? $latestSnapshot->close),
+                'close' => (float) $latestSnapshot->close,
+                'volume' => (int) ($latestSnapshot->total_volume ?? $latestSnapshot->volume ?? 0),
+            ];
+
+            if ($lastDaily && $lastDaily['time'] === $snapshotDay) {
+                $dailyK[$lastIndex] = array_merge($snapshotBar, [
+                    'open' => $lastDaily['open'] ?: $snapshotBar['open'],
+                    'high' => max($lastDaily['high'], $snapshotBar['high']),
+                    'low' => min($lastDaily['low'], $snapshotBar['low']),
+                ]);
+            } elseif (! $lastDaily || $snapshotDay > $lastDaily['time']) {
+                $dailyK[] = $snapshotBar;
+            }
+        }
+    }
     $latestIntradayDate = Schema::hasTable('stock_kbars_1m')
         ? DB::table('stock_kbars_1m')
             ->where('symbol', $stockRecord->symbol)
@@ -1355,6 +1500,7 @@ Route::get('/s/{symbol}', function (string $symbol, StockEventChainBuilder $even
         })->all(),
         'technical' => $technicalPayload,
         'chartData' => [
+            'realtime' => $realtimeLine,
             'intraday' => $intradayK,
             'daily' => $dailyK,
             'weekly' => $weeklyK,

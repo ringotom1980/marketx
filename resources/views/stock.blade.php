@@ -114,6 +114,32 @@
             -webkit-touch-callout: none;
         }
 
+        .live-price-dot {
+            position: absolute;
+            width: 10px;
+            height: 10px;
+            border-radius: 999px;
+            pointer-events: none;
+            transform: translate(-50%, -50%);
+            z-index: 4;
+            animation: livePulse 1s ease-in-out infinite;
+            box-shadow: 0 0 0 4px rgba(180, 35, 24, .12);
+        }
+
+        .live-price-dot.red {
+            background: #b42318;
+        }
+
+        .live-price-dot.green {
+            background: #147d55;
+            box-shadow: 0 0 0 4px rgba(20, 125, 85, .12);
+        }
+
+        @keyframes livePulse {
+            0%, 100% { opacity: .45; transform: translate(-50%, -50%) scale(.85); }
+            50% { opacity: 1; transform: translate(-50%, -50%) scale(1.25); }
+        }
+
         .chart-empty {
             display: none;
             align-items: center;
@@ -427,7 +453,7 @@
     <section class="panel" style="margin-top:16px">
         <h2>K 線圖</h2>
         <div class="chart-tabs" data-chart-tabs>
-            <button class="chart-tab" type="button" data-range="intraday">當日</button>
+            <button class="chart-tab" type="button" data-range="realtime">即時線</button>
             <button class="chart-tab active" type="button" data-range="daily">日K</button>
             <button class="chart-tab" type="button" data-range="weekly">周K</button>
             <button class="chart-tab" type="button" data-range="yearly">年K</button>
@@ -1542,12 +1568,14 @@
         })();
 
         (() => {
-            const chartData = @json($chartData);
+            let chartData = @json($chartData);
+            const liveChartUrl = @json('/api/stocks/'.$stock['symbol'].'/quote-chart');
             const container = document.getElementById('stock-k-chart');
             const empty = document.getElementById('stock-chart-empty');
             const buttons = Array.from(document.querySelectorAll('[data-chart-tabs] .chart-tab'));
             let chart = null;
             let resizeObserver = null;
+            let currentRange = 'daily';
 
             const formatPrice = (value) => Number(value).toLocaleString('zh-TW', {
                 minimumFractionDigits: Number(value) >= 100 ? 0 : 2,
@@ -1556,15 +1584,18 @@
 
             const rowsFor = (range) => (chartData[range] || [])
                 .map((item) => ({
-                    time: range === 'intraday' ? Number(item.time) : item.time,
+                    time: range === 'realtime' || range === 'intraday' ? Number(item.time) : item.time,
                     label: item.label || item.time,
+                    value: Number(item.value ?? item.close),
                     open: Number(item.open),
                     high: Number(item.high),
                     low: Number(item.low),
                     close: Number(item.close),
                     volume: Number(item.volume || 0),
                 }))
-                .filter((item) => item.time && Number.isFinite(item.open) && Number.isFinite(item.high) && Number.isFinite(item.low) && Number.isFinite(item.close));
+                .filter((item) => item.time && (range === 'realtime'
+                    ? Number.isFinite(item.value)
+                    : Number.isFinite(item.open) && Number.isFinite(item.high) && Number.isFinite(item.low) && Number.isFinite(item.close)));
 
             const destroyChart = () => {
                 if (resizeObserver) {
@@ -1579,6 +1610,7 @@
             };
 
             const render = (range) => {
+                currentRange = range;
                 const rows = rowsFor(range);
                 buttons.forEach((button) => button.classList.toggle('active', button.dataset.range === range));
                 destroyChart();
@@ -1604,7 +1636,7 @@
                     rightPriceScale: { borderColor: '#dbe1e8', scaleMargins: { top: 0.08, bottom: 0.24 } },
                     timeScale: {
                         borderColor: '#dbe1e8',
-                        timeVisible: range === 'intraday',
+                        timeVisible: range === 'realtime' || range === 'intraday',
                         secondsVisible: false,
                     },
                     localization: { priceFormatter: formatPrice },
@@ -1620,6 +1652,50 @@
                         pinch: true,
                     },
                 });
+
+                if (range === 'realtime') {
+                    const first = rows[0];
+                    const last = rows[rows.length - 1];
+                    const tone = last && first && last.value >= first.value ? 'red' : 'green';
+                    const line = chart.addLineSeries({
+                        color: tone === 'red' ? '#b42318' : '#147d55',
+                        lineWidth: 2,
+                        priceFormat: { type: 'price', precision: 2, minMove: 0.01 },
+                        lastValueVisible: true,
+                        priceLineVisible: true,
+                    });
+                    line.setData(rows.map((item) => ({ time: item.time, value: item.value })));
+
+                    const dot = document.createElement('span');
+                    dot.className = `live-price-dot ${tone}`;
+                    container.appendChild(dot);
+
+                    const positionDot = () => {
+                        const x = chart?.timeScale().timeToCoordinate(last.time);
+                        const y = line.priceToCoordinate(last.value);
+                        if (x === null || y === null || x === undefined || y === undefined) {
+                            dot.style.display = 'none';
+                            return;
+                        }
+                        dot.style.display = 'block';
+                        dot.style.left = `${x}px`;
+                        dot.style.top = `${y}px`;
+                    };
+
+                    chart.timeScale().fitContent();
+                    chart.timeScale().subscribeVisibleTimeRangeChange(positionDot);
+                    window.setTimeout(positionDot, 80);
+                    resizeObserver = new ResizeObserver(() => {
+                        if (!chart) return;
+                        chart.applyOptions({
+                            width: container.clientWidth,
+                            height: container.clientHeight,
+                        });
+                        window.setTimeout(positionDot, 40);
+                    });
+                    resizeObserver.observe(container);
+                    return;
+                }
 
                 const candles = chart.addCandlestickSeries({
                     upColor: '#b42318',
@@ -1656,9 +1732,27 @@
             };
 
             buttons.forEach((button) => button.addEventListener('click', () => render(button.dataset.range || 'daily')));
+            const refreshLiveChart = async () => {
+                try {
+                    const response = await fetch(liveChartUrl, {
+                        headers: { Accept: 'application/json' },
+                        credentials: 'same-origin',
+                    });
+                    if (!response.ok) return;
+                    const payload = await response.json();
+                    if (!payload.chartData) return;
+                    chartData = { ...chartData, ...payload.chartData };
+                    if (currentRange === 'realtime' || currentRange === 'daily') {
+                        render(currentRange);
+                    }
+                } catch (error) {
+                    // 靜默略過，下一輪再補。
+                }
+            };
             const startWhenReady = () => {
                 if (window.LightweightCharts) {
                     render('daily');
+                    window.setInterval(refreshLiveChart, 60000);
                     return;
                 }
                 window.setTimeout(startWhenReady, 80);
