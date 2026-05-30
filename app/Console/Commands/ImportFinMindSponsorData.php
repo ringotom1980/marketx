@@ -29,6 +29,10 @@ class ImportFinMindSponsorData extends Command
 
     private const BROKER_AGG_URL = 'https://api.finmindtrade.com/api/v4/taiwan_stock_trading_daily_report_secid_agg';
 
+    private const STOCK_SNAPSHOT_URL = 'https://api.finmindtrade.com/api/v4/taiwan_stock_tick_snapshot';
+
+    private const FUTURES_SNAPSHOT_URL = 'https://api.finmindtrade.com/api/v4/taiwan_futures_snapshot';
+
     public function handle(): int
     {
         $dataset = (string) $this->argument('dataset');
@@ -57,12 +61,24 @@ class ImportFinMindSponsorData extends Command
 
     private function importSnapshot(): int
     {
-        return $this->storeSnapshots($this->fetchData('taiwan_stock_tick_snapshot', $this->option('symbol') ?: null, false));
+        $params = [];
+
+        if ($this->option('symbol')) {
+            $params['data_id'] = (string) $this->option('symbol');
+        }
+
+        return $this->storeSnapshots($this->fetchSpecial(self::STOCK_SNAPSHOT_URL, $params));
     }
 
     private function importFuturesSnapshot(): int
     {
-        $rows = $this->fetchData('taiwan_futures_snapshot', $this->option('symbol') ?: null, false);
+        $params = [];
+
+        if ($this->option('symbol')) {
+            $params['data_id'] = (string) $this->option('symbol');
+        }
+
+        $rows = $this->fetchSpecial(self::FUTURES_SNAPSHOT_URL, $params);
 
         foreach ($rows as $row) {
             DB::table('global_market_data')->updateOrInsert(
