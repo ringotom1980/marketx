@@ -45,7 +45,7 @@ if (! function_exists('marketx_realtime_line_rows')) {
         $now = \Carbon\CarbonImmutable::now('Asia/Taipei');
         $today = $now->toDateString();
         $isLiveSession = $now->isWeekday()
-            && $now->betweenIncluded($now->setTime(8, 55), $now->setTime(13, 35));
+            && $now->betweenIncluded($now->setTime(9, 0), $now->setTime(13, 30));
         $snapshotAt = $latestSnapshot?->snapshot_at
             ? \Carbon\CarbonImmutable::parse((string) $latestSnapshot->snapshot_at, 'Asia/Taipei')
             : null;
@@ -83,29 +83,29 @@ if (! function_exists('marketx_realtime_line_rows')) {
 
         $snapshotRowsFor = function (string $date) use ($symbol): array {
             return DB::table('stock_snapshots')
-            ->where('symbol', $symbol)
-            ->whereDate('snapshot_at', $date)
-            ->whereNotNull('close')
-            ->orderBy('snapshot_at')
-            ->limit(720)
-            ->get(['snapshot_at', 'open', 'high', 'low', 'close', 'change_price', 'change_rate', 'volume', 'total_volume'])
-            ->map(function ($row) {
-                $at = \Carbon\CarbonImmutable::parse((string) $row->snapshot_at, 'Asia/Taipei');
+                ->where('symbol', $symbol)
+                ->whereDate('snapshot_at', $date)
+                ->whereNotNull('close')
+                ->orderBy('snapshot_at')
+                ->limit(720)
+                ->get(['snapshot_at', 'open', 'high', 'low', 'close', 'change_price', 'change_rate', 'volume', 'total_volume'])
+                ->map(function ($row) {
+                    $at = \Carbon\CarbonImmutable::parse((string) $row->snapshot_at, 'Asia/Taipei');
 
-                return [
-                    'time' => $at->utc()->timestamp,
-                    'label' => $at->format('H:i'),
-                    'value' => (float) $row->close,
-                    'open' => $row->open === null ? null : (float) $row->open,
-                    'high' => $row->high === null ? null : (float) $row->high,
-                    'low' => $row->low === null ? null : (float) $row->low,
-                    'close' => (float) $row->close,
-                    'change' => $row->change_price === null ? null : (float) $row->change_price,
-                    'changePct' => $row->change_rate === null ? null : (float) $row->change_rate,
-                    'volume' => (int) ($row->total_volume ?? $row->volume ?? 0),
-                ];
-            })
-            ->all();
+                    return [
+                        'time' => $at->utc()->timestamp,
+                        'label' => $at->format('H:i'),
+                        'value' => (float) $row->close,
+                        'open' => $row->open === null ? null : (float) $row->open,
+                        'high' => $row->high === null ? null : (float) $row->high,
+                        'low' => $row->low === null ? null : (float) $row->low,
+                        'close' => (float) $row->close,
+                        'change' => $row->change_price === null ? null : (float) $row->change_price,
+                        'changePct' => $row->change_rate === null ? null : (float) $row->change_rate,
+                        'volume' => (int) ($row->total_volume ?? $row->volume ?? 0),
+                    ];
+                })
+                ->all();
         };
 
         if (! $isLiveSession || $snapshotDate !== $today || ! Schema::hasTable('stock_snapshots')) {
@@ -113,8 +113,17 @@ if (! function_exists('marketx_realtime_line_rows')) {
         }
 
         $snapshotRows = $snapshotRowsFor($today);
+        if ($snapshotRows !== []) {
+            $marketOpen = $now->setTime(9, 0)->utc()->timestamp;
+            if (($snapshotRows[0]['time'] ?? $marketOpen) > $marketOpen) {
+                array_unshift($snapshotRows, array_merge($snapshotRows[0], [
+                    'time' => $marketOpen,
+                    'label' => '09:00',
+                ]));
+            }
+        }
 
-        return count($snapshotRows) >= 2 ? $snapshotRows : ($kbarRows ?: $snapshotRows);
+        return $snapshotRows;
     }
 }
 
