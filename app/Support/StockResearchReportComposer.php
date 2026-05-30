@@ -46,7 +46,7 @@ class StockResearchReportComposer
         $supportResistance = $this->supportResistance($prices, $latestPrice);
 
         return [
-            'engine' => 'research_report_v2',
+            'engine' => 'research_report_v3',
             'symbol' => $stock->symbol,
             'name' => $stock->name,
             'market' => $stock->market,
@@ -79,17 +79,16 @@ class StockResearchReportComposer
 
     private function renderReport(array $pack): string
     {
-        $sections = [
-            "一、近期股價與量能\n".$this->priceSection($pack),
-            "二、支撐與壓力\n".$this->supportSection($pack),
-            "三、技術分析\n".$this->technicalSection($pack),
-            "四、籌碼與資金動向\n".$this->chipSection($pack),
-            "五、財報、營收與評價\n".$this->fundamentalSection($pack),
-            "六、新聞與題材\n".$this->newsSection($pack),
-            "七、觀察方向\n".$this->directionSection($pack),
-        ];
-
-        return implode("\n\n", array_filter($sections));
+        return implode("\n\n", array_filter([
+            "一、近期股價與量能\n\n".$this->priceSection($pack),
+            "二、支撐與壓力\n\n".$this->supportSection($pack),
+            "三、技術結構\n\n".$this->technicalSection($pack),
+            "四、籌碼與資金動向\n\n".$this->chipSection($pack),
+            "五、財報、營收與評價\n\n".$this->fundamentalSection($pack),
+            "六、新聞與題材\n\n".$this->newsSection($pack),
+            "七、觀察重點\n\n".$this->directionSection($pack),
+            "總結\n\n".$this->summarySection($pack),
+        ]));
     }
 
     private function priceSection(array $pack): string
@@ -97,24 +96,12 @@ class StockResearchReportComposer
         $price = $pack['price'];
         $trend = $pack['price_trend'];
         $lines = [
-            "{$pack['name']}最新收盤 {$this->n($price['close'])} 元，單日漲跌 {$this->signed($price['change'])} 元（{$this->signedPct($price['change_pct'])}），成交量 {$this->shares($price['volume'])}。",
-            "近 5 日報酬 {$this->signedPct($trend['return5'])}，近 20 日報酬 {$this->signedPct($trend['return20'])}，近 60 日報酬 {$this->signedPct($trend['return60'])}，量能約為 20 日均量的 {$this->n($trend['volume_ratio20'])} 倍。",
+            "{$pack['name']}最新收盤 {$this->n($price['close'])} 元，單日{$this->changeWord($price['change'])} {$this->absNumber($price['change'])} 元（{$this->signedPct($price['change_pct'])}），成交量 {$this->shares($price['volume'])}。",
+            "近 5 日報酬率 {$this->signedPct($trend['return5'])}，近 20 日報酬率 {$this->signedPct($trend['return20'])}，近 60 日報酬率 {$this->signedPct($trend['return60'])}。",
+            "目前成交量約為 20 日平均成交量的 {$this->n($trend['volume_ratio20'])} 倍。",
+            '',
+            $this->priceNarrative($pack),
         ];
-
-        $condition = 'price_sideways';
-        $tone = 'neutral';
-        if (($trend['return20'] ?? 0) > 8 && ($trend['volume_ratio20'] ?? 0) >= 1.2) {
-            $condition = 'price_volume_breakout';
-            $tone = 'positive';
-        } elseif (($trend['return20'] ?? 0) < -8 && ($price['change_pct'] ?? 0) > 0) {
-            $condition = 'weak_rebound';
-            $tone = 'cautious';
-        } elseif (($trend['return20'] ?? 0) > 15) {
-            $condition = 'overextended';
-            $tone = 'risk';
-        }
-
-        $lines[] = '分析：'.($this->librarySentence('price_theme', $tone, [$condition], $this->vars($pack)) ?: $this->priceFallbackSentence($pack));
 
         return implode("\n", $lines);
     }
@@ -122,63 +109,80 @@ class StockResearchReportComposer
     private function supportSection(array $pack): string
     {
         $sr = $pack['support_resistance'];
-        $supportText = $sr['support'] ? "支撐區約 {$sr['support']}" : '支撐區目前資料不足';
-        $pressureText = $sr['pressure'] ? "壓力區約 {$sr['pressure']}" : '上方暫無明確壓力';
-        $line = "以近 90 日價量分布估算，目前價 {$this->n($sr['current'])} 元，{$supportText}，{$pressureText}。";
+        $lines = ['依近 90 日價量分布估算：'];
 
-        if ($sr['support_strength'] !== null && $sr['pressure_strength'] !== null) {
-            $line .= "支撐區成交量約 {$this->shares($sr['support_strength'])}，壓力區成交量約 {$this->shares($sr['pressure_strength'])}。";
-        } elseif ($sr['support_strength'] !== null) {
-            $line .= "支撐區成交量約 {$this->shares($sr['support_strength'])}，上方若進入創高區，壓力需改以放量長黑、上影線與法人賣壓觀察。";
+        if ($sr['support'] !== null) {
+            $lines[] = '支撐區 '.$sr['support'].' 元';
+            $lines[] = '';
+            $lines[] = '支撐區累積成交量：'.$this->shares($sr['support_strength']);
+        } else {
+            $lines[] = '支撐區：目前資料不足';
         }
 
-        return $line."\n分析：支撐與壓力不是固定目標價，而是近期成交密集區。若股價跌破支撐且量能放大，代表原本願意承接的位置被打穿；若接近壓力區卻無法放量突破，就容易出現整理或回測。";
+        $lines[] = '';
+
+        if ($sr['pressure'] !== null) {
+            $lines[] = '壓力區 '.$sr['pressure'].' 元';
+            $lines[] = '';
+            $lines[] = '壓力區累積成交量：'.$this->shares($sr['pressure_strength']);
+        } else {
+            $lines[] = '壓力區：上方暫無明確成交密集壓力';
+        }
+
+        $lines[] = '';
+        $lines[] = '現價 '.$this->n($sr['current']).' 元'.$this->supportPositionText($sr);
+        $lines[] = '';
+        $lines[] = $this->supportNarrative($sr);
+
+        return implode("\n", $lines);
     }
 
     private function technicalSection(array $pack): string
     {
+        $price = $pack['price'];
         $t = $pack['technical'];
-        $items = [
-            "均線：收盤價 {$this->n($pack['price']['close'])}，SMA20 {$this->n($t['sma20'])}，SMA60 {$this->n($t['sma60'])}，SMA120 {$this->n($t['sma120'])}。",
-            "動能：RSI14 {$this->n($t['rsi14'])}，MACD {$this->n($t['macd'])}，Signal {$this->n($t['macd_signal'])}，柱狀體 {$this->n($t['macd_histogram'])}，KD 為 K {$this->n($t['k9'])} / D {$this->n($t['d9'])}。",
-            "乖離與波動：20 日乖離 {$this->signedPct($t['bais20'])}，ATR14 {$this->n($t['atr14'])}，布林上緣 {$this->n($t['bollinger_upper20'])}，布林下緣 {$this->n($t['bollinger_lower20'])}。",
+        $lines = [
+            '均線位置',
+            '收盤價：'.$this->n($price['close']),
+            'SMA20：'.$this->n($t['sma20']),
+            'SMA60：'.$this->n($t['sma60']),
+            'SMA120：'.$this->n($t['sma120']),
+            '',
+            '目前股價：',
+            $this->maPositionLine($price['close'], $t['sma20'], '20 日均線'),
+            $this->maPositionLine($price['close'], $t['sma60'], '60 日均線'),
+            '',
+            '動能指標',
+            'RSI14：'.$this->n($t['rsi14']),
+            'MACD：'.$this->n($t['macd']),
+            'Signal：'.$this->n($t['macd_signal']),
+            'MACD柱狀體：'.$this->n($t['macd_histogram']),
+            'KD：',
+            'K = '.$this->n($t['k9']),
+            'D = '.$this->n($t['d9']),
+            '',
+            '波動指標',
+            '20日乖離：'.$this->signedPct($t['bais20']),
+            'ATR14：'.$this->n($t['atr14']),
+            '布林上緣：'.$this->n($t['bollinger_upper20']),
+            '布林下緣：'.$this->n($t['bollinger_lower20']),
+            '',
+            $this->technicalNarrative($pack),
         ];
 
-        $conditions = [];
-        if (($pack['price']['close'] ?? 0) > ($t['sma20'] ?? INF) && ($t['sma20'] ?? 0) > ($t['sma60'] ?? INF)) {
-            $conditions[] = 'ma_bullish_stack';
-        }
-        if (($t['macd_histogram'] ?? null) !== null && ($t['macd_histogram_previous'] ?? null) !== null) {
-            $conditions[] = $t['macd_histogram'] >= $t['macd_histogram_previous'] ? 'macd_turning_up' : 'macd_turning_down';
-        }
-        if (($t['rsi14'] ?? 0) >= 75) {
-            $conditions[] = 'rsi_overheated';
-        } elseif (($t['rsi14'] ?? 0) <= 40) {
-            $conditions[] = 'rsi_weak';
-        }
-        if (($t['bais20'] ?? 0) >= 10) {
-            $conditions[] = 'bais_overheated';
-        }
-
-        $tone = in_array('macd_turning_down', $conditions, true) || in_array('rsi_overheated', $conditions, true) ? 'cautious' : 'positive';
-        $analysis = $this->librarySentence('technical', $tone, $conditions, $this->vars($pack));
-        if ($analysis === '') {
-            $analysis = $this->technicalFallbackSentence($conditions);
-        }
-
-        return implode("\n", $items)."\n分析：".$analysis;
+        return implode("\n", $lines);
     }
 
     private function chipSection(array $pack): string
     {
         $c = $pack['chip'];
         $lines = [
-            '三大法人買賣超',
+            '三大法人',
             $this->taiwanDate($c['trade_date'] ?? null),
-            '外資 '.$this->signedShares($c['foreign_net_buy']),
-            '投信 '.$this->signedShares($c['investment_trust_net_buy']),
-            '自營商 '.$this->signedShares($c['dealer_net_buy']),
-            '合計 '.$this->signedShares($c['institutional_net_buy']),
+            '外資    '.$this->signedShares($c['foreign_net_buy']),
+            '投信   '.$this->signedShares($c['investment_trust_net_buy']),
+            '自營商   '.$this->signedShares($c['dealer_net_buy']),
+            '合計  '.$this->signedShares($c['institutional_net_buy']),
             '',
             '近 5 日',
             '法人合計 '.$this->signedShares($c['institutional_net_buy_5d']),
@@ -187,10 +191,13 @@ class StockResearchReportComposer
             '法人合計 '.$this->signedShares($c['institutional_net_buy_20d']),
             '',
             '融資融券',
-            '融資餘額 '.$this->shares($c['margin_balance']).'、融券餘額 '.$this->shares($c['short_balance']),
-            '近 5 日融資變化 '.$this->signedShares($c['margin_change_5d']).'。',
+            '融資餘額：'.$this->shares($c['margin_balance']),
+            '融券餘額：'.$this->shares($c['short_balance']),
             '',
-            '分析：'.$this->chipAnalysis($pack),
+            '近5日融資變化：',
+            $this->signedShares($c['margin_change_5d']),
+            '',
+            $this->chipNarrative($pack),
         ];
 
         return implode("\n", $lines);
@@ -201,53 +208,89 @@ class StockResearchReportComposer
         $f = $pack['financial'];
         $r = $pack['revenue'];
         $lines = [
-            '月營收',
             '最新月營收 '.$this->money($r['revenue']),
-            '月增率 '.$this->signedPct($r['mom_pct']).'，年增率 '.$this->signedPct($r['yoy_pct']),
-            '近 3 個月累計營收 '.$this->money($r['revenue_3m']).'，近 12 個月累計營收 '.$this->money($r['revenue_12m']).'。',
+            '月增率：'.$this->signedPct($r['mom_pct']),
+            '年增率：'.$this->signedPct($r['yoy_pct']),
+            '近3個月累計營收：'.$this->money($r['revenue_3m']),
+            '近12個月累計營收：'.$this->money($r['revenue_12m']),
             '',
             '財報指標',
-            '最新財報期間 '.$f['period'],
-            'EPS '.$this->n($f['eps']).' 元，ROE '.$this->pct($f['roe']).'，毛利率 '.$this->pct($f['gross_margin']).'，營業利益率 '.$this->pct($f['operating_margin']).'。',
-            '',
-            '評價面',
+            $this->periodLabel($f['period']),
+            'EPS：'.$this->n($f['eps']).' 元',
+            'ROE：'.$this->pct($f['roe']),
+            '毛利率：'.$this->pct($f['gross_margin']),
+            '營業利益率：'.$this->pct($f['operating_margin']),
             $this->valuationLine($f),
             '',
-            '分析：'.$this->fundamentalAnalysis($pack),
+            $this->fundamentalNarrative($pack),
         ];
 
-        return implode("\n", $lines);
+        return implode("\n", array_values(array_filter($lines, fn ($line) => $line !== null)));
     }
 
     private function newsSection(array $pack): string
     {
-        $themeText = $pack['themes'] === [] ? '目前沒有明確題材標籤' : implode('、', array_slice($pack['themes'], 0, 4));
-        $lines = ["目前關聯題材：{$themeText}。"];
+        $lines = ['主要關聯題材'];
 
-        if ($pack['news'] === []) {
-            $lines[] = '近期新聞資料庫尚未抓到直接關聯新聞，因此題材面先以產業分類、族群熱度與股價反應交叉觀察。';
+        if ($pack['themes'] === []) {
+            $lines[] = '目前沒有明確題材標籤';
         } else {
-            $lines[] = '近期關聯新聞：';
-            foreach (array_slice($pack['news'], 0, 4) as $news) {
-                $source = $news['source'] ? '／'.$news['source'] : '';
-                $lines[] = '- '.$news['date'].$source.'：'.$news['title'];
+            foreach (array_slice($pack['themes'], 0, 6) as $theme) {
+                $lines[] = $theme;
             }
-            $lines[] = '分析：新聞只能代表市場正在討論的方向，仍要回到股價、量能與法人資金是否同步確認。';
         }
 
-        return implode("\n", $lines);
+        $lines[] = '';
+        $lines[] = '近期市場關注事件';
+
+        if ($pack['news'] === []) {
+            $lines[] = '目前新聞資料庫尚未抓到與個股直接相關的近期新聞。';
+        } else {
+            foreach (array_slice($pack['news'], 0, 5) as $news) {
+                $lines[] = $this->newsDate($news['date'] ?? null);
+                $lines[] = $news['title'];
+                $lines[] = '';
+            }
+        }
+
+        $lines[] = $this->newsNarrative($pack);
+
+        return trim(implode("\n", $lines));
     }
 
     private function directionSection(array $pack): string
     {
         $directions = [
-            '觀察股價是否能站穩 20 日均線與主要支撐區，若跌破且量能放大，代表短線結構轉弱。',
-            '觀察接近壓力區時是否能放量突破；若只靠題材推升但成交量沒有延續，容易轉為震盪。',
-            '觀察三大法人近 5 日方向是否延續，若法人轉賣且融資同步增加，籌碼風險會提高。',
-            '觀察月營收與最新財報是否能支撐目前評價，避免只看題材熱度而忽略基本面落差。',
+            '觀察股價是否維持於 '.$this->keyTrendLine($pack).' 與主要支撐結構之上。',
+            '觀察接近壓力區時成交量是否同步增加，以確認市場參與度是否持續。',
+            '觀察三大法人買賣方向是否改變，目前'.$this->institutionalDirectionText($pack).'。',
+            '觀察後續月營收與財報是否延續目前趨勢，以確認基本面與市場評價的一致性。',
         ];
 
-        return implode("\n", array_map(fn (string $line) => '- '.$line, $directions));
+        return implode("\n", array_map(fn (string $line, int $index) => ($index + 1).'、'.$line, $directions, array_keys($directions)));
+    }
+
+    private function summarySection(array $pack): string
+    {
+        $points = $this->summaryPoints($pack);
+        $lines = [
+            '當前階段判定',
+            $this->stageText($pack),
+            '',
+            '關鍵依據',
+        ];
+
+        foreach ($points['basis'] as $basis) {
+            $lines[] = $basis;
+        }
+
+        $lines[] = '';
+        $lines[] = '市場關注重點';
+        foreach ($points['focus'] as $focus) {
+            $lines[] = $focus;
+        }
+
+        return implode("\n", $lines);
     }
 
     private function renderDirections(array $pack, string $type): string
@@ -320,7 +363,7 @@ class StockResearchReportComposer
             ->where('stock_theme_map.stock_id', $stockId)
             ->orderByDesc('theme_scores.heat_score')
             ->orderByDesc('stock_theme_map.weight')
-            ->limit(5)
+            ->limit(6)
             ->pluck('themes.name')
             ->map(fn ($name) => (string) $name)
             ->all();
@@ -480,233 +523,270 @@ class StockResearchReportComposer
         return $row?->card_type;
     }
 
-    /**
-     * @param array<int, string> $conditionKeys
-     * @param array<string,mixed> $vars
-     */
-    private function librarySentence(string $section, string $tone, array $conditionKeys, array $vars): string
+    private function priceNarrative(array $pack): string
     {
-        if (! Schema::hasTable('language_assets')) {
-            return '';
+        $trend = $pack['price_trend'];
+        $price = $pack['price'];
+        $volume = $trend['volume_ratio20'] ?? null;
+
+        if (($trend['return20'] ?? 0) < -8 && ($trend['return60'] ?? 0) > 20) {
+            return '短期表現與中期表現出現落差。近 20 日股價明顯回落，但近 60 日仍維持大幅上漲，代表先前累積的漲幅尚未完全被消化。'.($volume !== null && $volume > 1.2 ? '成交量維持在均量之上，顯示市場關注度仍高於一般水準，但後續仍需觀察量能是否持續維持。' : '若後續量能無法回升，反彈力道容易受到限制。');
+        }
+        if (($trend['return20'] ?? 0) > 10 && ($volume ?? 0) > 1.2) {
+            return '近期股價與量能同步轉強，代表市場參與度仍高。若後續量能能維持在均量之上，股價較有機會維持強勢結構；但若短線漲幅過快，也要留意高檔震盪與獲利了結壓力。';
+        }
+        if (($trend['return20'] ?? 0) < -8) {
+            return '近 20 日股價仍偏弱，短線即使出現反彈，也需要量能與均線同步改善才能確認止穩。若成交量放大但股價無法收復短均線，代表上方賣壓仍需時間消化。';
+        }
+        if (($price['change_pct'] ?? 0) < 0 && ($volume ?? 0) > 1.5) {
+            return '單日下跌且成交量高於均量，代表市場出現較明顯換手。後續要觀察下跌是否只是短線調節，或是開始形成更持續的賣壓。';
         }
 
-        $conditionKeys = array_values(array_unique(array_filter($conditionKeys)));
-        $assets = DB::table('language_assets')
-            ->where('status', 'active')
-            ->whereIn('asset_type', ['phrase', 'sentence'])
-            ->where(function ($query) use ($section) {
-                $query->where('section', $section)->orWhereNull('section');
-            })
-            ->where(function ($query) use ($conditionKeys) {
-                if ($conditionKeys !== []) {
-                    $query->whereIn('condition_key', $conditionKeys)->orWhereNull('condition_key');
-                } else {
-                    $query->whereNull('condition_key');
-                }
-            })
-            ->where(function ($query) use ($tone) {
-                $query->where('tone', $tone)->orWhere('tone', 'neutral');
-            })
-            ->limit(12)
-            ->get(['id', 'condition_key', 'tone', 'text', 'weight', 'usage_count'])
-            ->filter(fn (object $asset) => trim((string) $asset->text) !== '')
-            ->sort(function (object $a, object $b) use ($conditionKeys, $tone) {
-                return [
-                    (string) $a->tone === $tone ? 0 : 1,
-                    in_array((string) $a->condition_key, $conditionKeys, true) ? 0 : 1,
-                    -((int) $a->weight),
-                    (int) $a->usage_count,
-                ] <=> [
-                    (string) $b->tone === $tone ? 0 : 1,
-                    in_array((string) $b->condition_key, $conditionKeys, true) ? 0 : 1,
-                    -((int) $b->weight),
-                    (int) $b->usage_count,
-                ];
-            })
-            ->values();
-
-        $asset = $assets->first();
-        if (! $asset) {
-            return '';
-        }
-
-        DB::table('language_assets')
-            ->where('id', $asset->id)
-            ->increment('usage_count', 1, ['last_used_at' => now(), 'updated_at' => now()]);
-
-        return $this->replaceVars((string) $asset->text, $vars);
+        return '近期股價尚未形成明確單邊趨勢，重點在於短均線能否逐步轉強，以及成交量是否能配合價格走勢同步擴大。';
     }
 
-    private function chipAnalysis(array $pack): string
+    private function supportPositionText(array $sr): string
+    {
+        if ($sr['pressure'] === null && $sr['support'] !== null) {
+            return '位於支撐區上方，上方暫無明確歷史成交密集壓力。';
+        }
+        if ($sr['pressure'] !== null) {
+            return '仍位於壓力區下方，後續需觀察接近壓力帶時的成交量變化。';
+        }
+
+        return '目前支撐與壓力資料仍不完整。';
+    }
+
+    private function supportNarrative(array $sr): string
+    {
+        $supportStrength = $sr['support_strength'] ?? null;
+        $pressureStrength = $sr['pressure_strength'] ?? null;
+
+        if ($supportStrength !== null && $pressureStrength !== null && $supportStrength > $pressureStrength) {
+            return '支撐區累積成交量高於壓力區，代表過去較多交易集中於支撐區附近。後續需觀察股價是否維持於主要成交密集區之上，若跌破支撐且量能放大，結構會明顯轉弱。';
+        }
+        if ($supportStrength !== null && $pressureStrength !== null && $pressureStrength > $supportStrength) {
+            return '壓力區累積成交量高於支撐區，代表上方可能有較多套牢或換手賣壓。若股價接近壓力區時無法放量突破，較容易出現震盪整理。';
+        }
+
+        return '支撐與壓力屬於價量結構的參考，不是固定目標價。若股價跌破支撐，應往下一個成交密集區重新尋找支撐；若放量突破壓力區，才代表上方賣壓逐步被消化。';
+    }
+
+    private function maPositionLine(?float $close, ?float $ma, string $name): string
+    {
+        if ($close === null || $ma === null) {
+            return $name.'資料不足';
+        }
+
+        return ($close >= $ma ? '高於 ' : '低於 ').$name;
+    }
+
+    private function technicalNarrative(array $pack): string
+    {
+        $price = $pack['price'];
+        $t = $pack['technical'];
+        $parts = [];
+
+        if (($price['close'] ?? null) !== null && ($t['sma20'] ?? null) !== null && ($t['sma60'] ?? null) !== null) {
+            if ($price['close'] < $t['sma20'] && $price['close'] > $t['sma60']) {
+                $parts[] = '股價已跌破 20 日均線，但仍維持於 60 日均線之上，代表短線轉弱但中期結構尚未完全破壞。';
+            } elseif ($price['close'] > $t['sma20'] && $t['sma20'] > $t['sma60']) {
+                $parts[] = '股價維持在 20 日均線之上，且短中期均線排列偏多，技術結構仍相對有利。';
+            } elseif ($price['close'] < $t['sma20'] && $price['close'] < $t['sma60']) {
+                $parts[] = '股價同時低於 20 日與 60 日均線，短中期結構偏弱，需等重新站回均線後才較能確認止穩。';
+            }
+        }
+
+        if (($t['rsi14'] ?? null) !== null || ($t['k9'] ?? null) !== null || ($t['macd_histogram'] ?? null) !== null) {
+            if (($t['rsi14'] ?? 50) < 45 && ($t['k9'] ?? 50) < 35) {
+                $parts[] = 'RSI 與 KD 位於相對低檔區域，代表短線動能已偏弱，但也要觀察是否出現止跌訊號。';
+            } elseif (($t['rsi14'] ?? 0) >= 70) {
+                $parts[] = 'RSI 已接近或進入偏熱區，若股價續漲但量能無法延續，容易出現震盪或拉回。';
+            }
+
+            if (($t['macd_histogram'] ?? null) !== null && ($t['macd_histogram_previous'] ?? null) !== null) {
+                $parts[] = $t['macd_histogram'] >= $t['macd_histogram_previous']
+                    ? 'MACD 柱狀體較前期改善，代表短線動能有回穩跡象。'
+                    : 'MACD 顯示短期動能較前期減弱，應關注股價是否能維持於中期趨勢結構之上。';
+            }
+        }
+
+        if (($t['bais20'] ?? null) !== null && abs($t['bais20']) >= 10) {
+            $parts[] = '20 日乖離已經偏大，代表股價與短期均線距離拉開，後續容易出現均線靠攏或股價修正。';
+        }
+
+        return implode('', $parts) ?: '技術面目前沒有出現極端訊號，後續仍以均線位置、MACD 動能與量能是否延續作為主要觀察。';
+    }
+
+    private function chipNarrative(array $pack): string
     {
         $c = $pack['chip'];
-        $conditions = [];
-        $tone = 'neutral';
-        if (($c['institutional_net_buy_5d'] ?? 0) > 0) {
-            $conditions[] = 'institutional_buy';
-            $tone = 'positive';
+        if (($c['institutional_net_buy_5d'] ?? 0) < 0 && ($c['institutional_net_buy_20d'] ?? 0) < 0 && ($c['margin_change_5d'] ?? 0) > 0) {
+            return '近期法人資金呈現持續流出狀態。同期間融資餘額增加，代表市場參與結構出現變化，後續需持續觀察法人動向是否改變，以及融資增幅是否持續擴大。';
         }
-        if (($c['institutional_net_buy_5d'] ?? 0) < 0) {
-            $conditions[] = 'institutional_sell';
-            $tone = 'cautious';
+        if (($c['institutional_net_buy_5d'] ?? 0) > 0 && ($c['institutional_net_buy_20d'] ?? 0) > 0) {
+            return '近 5 日與近 20 日法人買賣方向偏向同側買超，代表中短期法人資金仍有承接。若股價能維持在主要均線之上，籌碼面可視為支撐條件之一。';
+        }
+        if (($c['institutional_net_buy'] ?? 0) < 0 && ($c['institutional_net_buy_5d'] ?? 0) > 0) {
+            return '單日法人轉為賣超，但近 5 日仍維持買超，代表短線可能出現調節，不一定代表趨勢立即反轉，後續需觀察賣超是否連續擴大。';
         }
         if (($c['margin_change_5d'] ?? 0) > 0) {
-            $conditions[] = 'margin_increase';
-            $tone = $tone === 'positive' ? 'neutral' : 'cautious';
+            return '融資餘額近 5 日增加，代表散戶資金參與度提高。若股價同步走強可視為人氣升溫，但若股價轉弱，融資增加會放大波動風險。';
         }
 
-        $sentence = $this->librarySentence('chip', $tone, $conditions, $this->vars($pack));
-        if ($sentence !== '') {
-            return $sentence;
-        }
-
-        if (($c['institutional_net_buy_5d'] ?? 0) > 0 && ($c['margin_change_5d'] ?? 0) <= 0) {
-            return '法人近 5 日仍偏向買超，而且融資沒有同步快速增加，籌碼結構相對乾淨，後續可觀察法人買盤是否延續。';
-        }
-        if (($c['margin_change_5d'] ?? 0) > 0 && ($c['institutional_net_buy_5d'] ?? 0) < 0) {
-            return '近 5 日呈現法人賣超、融資增加的組合，代表籌碼有轉向散戶承接的跡象，若股價同時跌破支撐，風險會升高。';
-        }
-
-        return '籌碼目前沒有出現非常一致的方向，應搭配價量、均線位置與題材熱度一起判斷，不宜只看單日法人買賣超。';
+        return '籌碼面目前沒有出現非常一致的方向，應搭配價量、均線位置與題材熱度一起判斷，不宜只看單日法人買賣超。';
     }
 
-    private function fundamentalAnalysis(array $pack): string
+    private function fundamentalNarrative(array $pack): string
     {
         $f = $pack['financial'];
         $r = $pack['revenue'];
-        $conditions = [];
-        $tone = 'neutral';
-
-        if (($r['yoy_pct'] ?? 0) > 10) {
-            $conditions[] = 'revenue_growth';
-            $tone = 'positive';
-        } elseif (($r['yoy_pct'] ?? 0) < 0) {
-            $conditions[] = 'revenue_decline';
-            $tone = 'cautious';
-        }
-
         $per = $f['per'] ?? $f['per_estimated'];
-        if ($per !== null && $per >= 35) {
-            $conditions[] = 'valuation_high';
-            $tone = $tone === 'positive' ? 'neutral' : 'cautious';
+        $sentences = [];
+
+        if (($r['yoy_pct'] ?? null) !== null && ($r['mom_pct'] ?? null) !== null) {
+            if ($r['yoy_pct'] > 20 && $r['mom_pct'] < 0) {
+                $sentences[] = '營收年增率維持高成長，但月營收較前月下滑，代表長期成長趨勢仍在，但短期動能需要持續追蹤。';
+            } elseif ($r['yoy_pct'] > 10) {
+                $sentences[] = '營收年增率仍維持成長，基本面對股價具有一定支撐。';
+            } elseif ($r['yoy_pct'] < 0) {
+                $sentences[] = '營收年增率轉弱，基本面能否重新回到成長軌道會是後續重要觀察。';
+            }
         }
 
-        $sentence = $this->librarySentence('fundamental', $tone, $conditions, $this->vars($pack));
-        if ($sentence !== '') {
-            return $sentence;
+        if (($f['gross_margin'] ?? null) !== null || ($f['operating_margin'] ?? null) !== null) {
+            $sentences[] = '獲利能力需搭配毛利率、營業利益率與 ROE 觀察，若三者能維持穩定，代表本業獲利品質較有支撐。';
         }
 
-        if (($r['yoy_pct'] ?? 0) > 10 && ($per ?? 999) < 30) {
-            return '營收年增仍有支撐，且評價沒有明顯脫離財報表現，基本面能提供一定支撐。';
-        }
-        if (($r['yoy_pct'] ?? 0) < 0 && ($per ?? 0) >= 30) {
-            return '營收轉弱但評價仍偏高，代表市場期待尚未完全反映基本面壓力，後續需觀察營收是否回穩。';
+        if ($per !== null && $per >= 50) {
+            $sentences[] = '目前市場評價已反映相當程度的成長預期，因此後續須特別注意營收與獲利是否持續成長。';
+        } elseif ($per !== null && $per < 30) {
+            $sentences[] = '目前評價相對沒有過度拉高，若營收與獲利延續改善，基本面較能支撐股價表現。';
         }
 
-        return '基本面目前較適合用營收趨勢、毛利率與 ROE 交叉確認，若題材很熱但營收沒有同步改善，評價承受度會下降。';
+        return implode('', $sentences) ?: '基本面目前較適合用營收趨勢、毛利率、ROE 與估值水準交叉確認，若題材很熱但營收沒有同步改善，評價承受度會下降。';
+    }
+
+    private function newsNarrative(array $pack): string
+    {
+        $themes = $pack['themes'];
+        if ($themes === []) {
+            return '近期新聞主軸尚未形成明確題材，後續仍需觀察是否有新的產業事件、營收公告或法人資金流向帶動市場關注。';
+        }
+
+        $themeText = implode('、', array_slice($themes, 0, 4));
+        return "近期新聞主軸集中於：{$themeText}\n\n相關題材熱度仍需搭配未來營收、獲利與股價走勢確認，若只有題材熱度但沒有實際營運數據跟上，後續波動會比較大。";
+    }
+
+    private function keyTrendLine(array $pack): string
+    {
+        $price = $pack['price'];
+        $t = $pack['technical'];
+        if (($price['close'] ?? null) !== null && ($t['sma60'] ?? null) !== null && $price['close'] >= $t['sma60']) {
+            return '60 日均線';
+        }
+
+        return '20 日均線';
+    }
+
+    private function institutionalDirectionText(array $pack): string
+    {
+        $c = $pack['chip'];
+        if (($c['institutional_net_buy_5d'] ?? 0) > 0) {
+            return '近 5 日法人資金偏向流入';
+        }
+        if (($c['institutional_net_buy_5d'] ?? 0) < 0) {
+            return '近 5 日法人資金偏向流出';
+        }
+
+        return '法人資金方向尚未明確';
     }
 
     /**
-     * @return array<string,string>
+     * @return array{basis:array<int,string>,focus:array<int,string>}
      */
-    private function vars(array $pack): array
+    private function summaryPoints(array $pack): array
     {
+        $price = $pack['price'];
+        $trend = $pack['price_trend'];
+        $t = $pack['technical'];
+        $c = $pack['chip'];
+        $r = $pack['revenue'];
+        $basis = [];
+
+        if (($trend['return60'] ?? 0) > 20) {
+            $basis[] = '近 60 日仍維持明顯上漲';
+        } elseif (($trend['return60'] ?? 0) < -10) {
+            $basis[] = '近 60 日股價仍處於弱勢區間';
+        }
+
+        if (($price['close'] ?? null) !== null && ($t['sma20'] ?? null) !== null && ($t['sma60'] ?? null) !== null) {
+            if ($price['close'] < $t['sma20'] && $price['close'] > $t['sma60']) {
+                $basis[] = '股價跌破 20 日均線但仍高於 60 日均線';
+            } elseif ($price['close'] > $t['sma20']) {
+                $basis[] = '股價仍站在 20 日均線之上';
+            }
+        }
+
+        if (($c['institutional_net_buy_5d'] ?? 0) < 0 && ($c['institutional_net_buy_20d'] ?? 0) < 0) {
+            $basis[] = '法人近 5 日與近 20 日持續賣超';
+        } elseif (($c['institutional_net_buy_5d'] ?? 0) > 0) {
+            $basis[] = '法人近 5 日偏向買超';
+        }
+
+        if ($pack['themes'] !== []) {
+            $basis[] = implode('、', array_slice($pack['themes'], 0, 3)).' 題材仍具市場關注度';
+        }
+
+        if (($r['yoy_pct'] ?? 0) > 10) {
+            $basis[] = '營收年增率仍具支撐';
+        }
+
         return [
-            'stock_name' => (string) $pack['name'],
-            'symbol' => (string) $pack['symbol'],
-            'theme_text' => $pack['themes'] === [] ? '目前題材不明確' : implode('、', array_slice($pack['themes'], 0, 3)),
-            'close' => $this->n($pack['price']['close'] ?? null),
-            'return5' => $this->signedPct($pack['price_trend']['return5'] ?? null),
-            'return20' => $this->signedPct($pack['price_trend']['return20'] ?? null),
-            'volume_ratio20' => $this->n($pack['price_trend']['volume_ratio20'] ?? null),
-            'support' => (string) ($pack['support_resistance']['support'] ?? '支撐未明'),
-            'pressure' => (string) ($pack['support_resistance']['pressure'] ?? '壓力未明'),
-            'institutional_5d' => $this->signedShares($pack['chip']['institutional_net_buy_5d'] ?? null),
-            'revenue_yoy' => $this->signedPct($pack['revenue']['yoy_pct'] ?? null),
+            'basis' => array_slice($basis, 0, 6),
+            'focus' => [
+                '法人資金是否回流',
+                '股價是否維持中期結構',
+                '題材熱度是否能轉化為營收與獲利',
+                '後續月營收與財報是否延續成長趨勢',
+            ],
         ];
     }
 
-    /**
-     * @param array<string,string> $vars
-     */
-    private function replaceVars(string $text, array $vars): string
+    private function stageText(array $pack): string
     {
-        foreach ($vars as $key => $value) {
-            $text = str_replace('{'.$key.'}', $value, $text);
-        }
-
-        return $text;
-    }
-
-    private function valuationLine(array $f): string
-    {
-        $items = [];
-        if ($f['per'] !== null) {
-            $items[] = '本益比 '.$this->n($f['per']).' 倍';
-        } elseif ($f['per_estimated'] !== null) {
-            $items[] = '本益比估算 '.$this->n($f['per_estimated']).' 倍（以最新 EPS 年化推估）';
-        } else {
-            $items[] = '本益比暫無可用資料';
-        }
-
-        if ($f['pb_ratio'] !== null) {
-            $items[] = '股價淨值比 '.$this->n($f['pb_ratio']).' 倍';
-        }
-
-        if ($f['dividend_yield'] !== null) {
-            $items[] = '殖利率 '.$this->pct($f['dividend_yield']);
-        }
-
-        $line = implode('，', $items).'。';
-        if ($f['pb_ratio'] === null || $f['dividend_yield'] === null) {
-            $line .= '股價淨值比與殖利率若尚未匯入，先以 EPS、ROE、毛利率、營收年增率與籌碼狀態交叉判讀。';
-        }
-
-        return $line;
-    }
-
-    private function priceFallbackSentence(array $pack): string
-    {
+        $price = $pack['price'];
         $trend = $pack['price_trend'];
-        if (($trend['return20'] ?? 0) > 8 && ($trend['volume_ratio20'] ?? 0) >= 1.2) {
-            return '近期漲幅與量能同步放大，代表市場追價意願仍在，但若接近壓力區仍需觀察是否能有效換手。';
+        $t = $pack['technical'];
+
+        if (($trend['return60'] ?? 0) > 30 && ($price['close'] ?? 0) < ($t['sma20'] ?? -INF) && ($price['close'] ?? 0) > ($t['sma60'] ?? INF)) {
+            return '高檔整理階段';
         }
-        if (($trend['return20'] ?? 0) < -8) {
-            return '近期股價仍處於弱勢修正後的回彈階段，若反彈量能不足，仍可能只是短線修復。';
+        if (($price['close'] ?? 0) > ($t['sma20'] ?? INF) && ($t['sma20'] ?? 0) > ($t['sma60'] ?? INF)) {
+            return '多方延續觀察階段';
+        }
+        if (($price['close'] ?? 0) < ($t['sma20'] ?? -INF) && ($price['close'] ?? 0) < ($t['sma60'] ?? -INF)) {
+            return '弱勢修復觀察階段';
         }
 
-        return '近期股價尚未形成明確單邊趨勢，重點在於能否站穩短均線並讓量能逐步回溫。';
+        return '區間整理觀察階段';
     }
 
-    /**
-     * @param array<int,string> $conditions
-     */
-    private function technicalFallbackSentence(array $conditions): string
+    private function valuationLine(array $f): ?string
     {
-        if (in_array('ma_bullish_stack', $conditions, true) && in_array('macd_turning_up', $conditions, true)) {
-            return '均線與 MACD 同步偏多，短線結構相對有利，但仍要避免在乖離過大時追高。';
+        if ($f['per'] !== null) {
+            return '本益比：'.$this->n($f['per']).' 倍';
         }
-        if (in_array('rsi_overheated', $conditions, true) || in_array('bais_overheated', $conditions, true)) {
-            return '技術面已出現過熱訊號，若後續量能無法延續，短線容易轉為震盪或拉回。';
-        }
-        if (in_array('macd_turning_down', $conditions, true)) {
-            return 'MACD 動能轉弱，代表上攻力道有放緩跡象，需要觀察股價是否守住短期均線。';
+        if ($f['per_estimated'] !== null) {
+            return '推估本益比：'.$this->n($f['per_estimated']).' 倍';
         }
 
-        return '技術面目前沒有出現極端訊號，應以均線位置、MACD 動能與量能是否延續作為主要觀察。';
+        return null;
     }
 
-    private function taiwanDate(mixed $date): string
+    private function periodLabel(mixed $period): string
     {
-        if ($date === null || $date === '') {
-            return '日期資料不足';
-        }
-
-        try {
-            return now('Asia/Taipei')->parse((string) $date)->format('n月j日');
-        } catch (\Throwable) {
-            return (string) $date;
-        }
+        return str_replace('Q', ' Q', (string) $period);
     }
 
     private function sum(Collection $rows, string $field): int
@@ -772,6 +852,11 @@ class StockResearchReportComposer
         return $value === null ? '資料不足' : ($value > 0 ? '+' : '').rtrim(rtrim(number_format($value, 2), '0'), '.');
     }
 
+    private function absNumber(?float $value): string
+    {
+        return $value === null ? '資料不足' : rtrim(rtrim(number_format(abs($value), 2), '0'), '.');
+    }
+
     private function signedPct(?float $value): string
     {
         return $value === null ? '資料不足' : ($value > 0 ? '+' : '').number_format($value, 2).'%';
@@ -794,6 +879,49 @@ class StockResearchReportComposer
 
     private function range(float $from, float $to): string
     {
-        return $this->n($from).'~'.$this->n($to);
+        return $this->n($from).' ~ '.$this->n($to);
+    }
+
+    private function changeWord(?float $change): string
+    {
+        if ($change === null) {
+            return '漲跌';
+        }
+
+        if ($change > 0) {
+            return '上漲';
+        }
+
+        if ($change < 0) {
+            return '下跌';
+        }
+
+        return '持平';
+    }
+
+    private function taiwanDate(mixed $date): string
+    {
+        if ($date === null || $date === '') {
+            return '日期資料不足';
+        }
+
+        try {
+            return now('Asia/Taipei')->parse((string) $date)->format('n 月 j 日');
+        } catch (\Throwable) {
+            return (string) $date;
+        }
+    }
+
+    private function newsDate(mixed $date): string
+    {
+        if ($date === null || $date === '') {
+            return '日期資料不足';
+        }
+
+        try {
+            return now('Asia/Taipei')->parse((string) $date)->format('Y/m/d');
+        } catch (\Throwable) {
+            return (string) $date;
+        }
     }
 }
