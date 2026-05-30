@@ -839,6 +839,38 @@ Route::get('/s/{symbol}', function (string $symbol, StockEventChainBuilder $even
             'volume' => (int) ($row->volume ?? 0),
         ])
         ->all();
+    $latestIntradayDate = Schema::hasTable('stock_kbars_1m')
+        ? DB::table('stock_kbars_1m')
+            ->where('symbol', $stockRecord->symbol)
+            ->max('trade_date')
+        : null;
+    $intradayK = $latestIntradayDate
+        ? DB::table('stock_kbars_1m')
+            ->where('symbol', $stockRecord->symbol)
+            ->where('trade_date', $latestIntradayDate)
+            ->whereNotNull('open')
+            ->whereNotNull('high')
+            ->whereNotNull('low')
+            ->whereNotNull('close')
+            ->orderBy('minute')
+            ->get(['trade_date', 'minute', 'open', 'high', 'low', 'close', 'volume'])
+            ->map(function ($row) {
+                $timestamp = \Carbon\CarbonImmutable::parse($row->trade_date.' '.$row->minute, 'Asia/Taipei')
+                    ->utc()
+                    ->timestamp;
+
+                return [
+                    'time' => $timestamp,
+                    'label' => substr((string) $row->minute, 0, 5),
+                    'open' => (float) $row->open,
+                    'high' => (float) $row->high,
+                    'low' => (float) $row->low,
+                    'close' => (float) $row->close,
+                    'volume' => (int) ($row->volume ?? 0),
+                ];
+            })
+            ->all()
+        : [];
     $aggregateK = function ($rows, callable $keyResolver): array {
         return $rows
             ->groupBy($keyResolver)
@@ -847,7 +879,8 @@ Route::get('/s/{symbol}', function (string $symbol, StockEventChainBuilder $even
                 $last = $group->last();
 
                 return [
-                    'time' => (string) $key,
+                    'time' => $last->trade_date->toDateString(),
+                    'label' => (string) $key,
                     'open' => (float) $first->open,
                     'high' => (float) $group->max('high'),
                     'low' => (float) $group->min('low'),
@@ -1304,7 +1337,7 @@ Route::get('/s/{symbol}', function (string $symbol, StockEventChainBuilder $even
         })->all(),
         'technical' => $technicalPayload,
         'chartData' => [
-            'intraday' => [],
+            'intraday' => $intradayK,
             'daily' => $dailyK,
             'weekly' => $weeklyK,
             'yearly' => $yearlyK,

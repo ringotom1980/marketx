@@ -105,7 +105,7 @@
             -webkit-touch-callout: none;
         }
 
-        .k-chart-wrap canvas {
+        .k-chart-wrap #stock-k-chart {
             width: 100%;
             height: 100%;
             display: block;
@@ -419,10 +419,10 @@
             <button class="chart-tab" type="button" data-range="yearly">年K</button>
         </div>
         <div class="k-chart-wrap">
-            <canvas id="stock-k-chart"></canvas>
+            <div id="stock-k-chart"></div>
         </div>
-        <p class="chart-tip">長按顯示十字線；點其他 K 棒可移動十字線，按住左右拖曳可平移，雙指可縮放。</p>
-        <p class="chart-empty" id="stock-chart-empty">目前尚未接入個股當日分時資料，先看日 K、周 K、年 K。</p>
+        <p class="chart-tip">拖曳可平移、滑鼠滾輪或雙指可縮放；點擊或滑動圖表可查看十字線與 OHLC。</p>
+        <p class="chart-empty" id="stock-chart-empty">目前這個週期還沒有足夠 K 線資料。</p>
     </section>
 
     <section class="panel" style="margin-top:16px">
@@ -594,6 +594,7 @@
     </section>
 
     <script defer src="https://cdn.jsdelivr.net/npm/echarts@5/dist/echarts.min.js"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/lightweight-charts@4.2.3/dist/lightweight-charts.standalone.production.js"></script>
     <script>
         (() => {
             const tabs = Array.from(document.querySelectorAll('[data-stock-info-tabs] .stock-info-tab'));
@@ -1231,6 +1232,7 @@
             const canvas = document.getElementById('stock-k-chart');
             const empty = document.getElementById('stock-chart-empty');
             const buttons = Array.from(document.querySelectorAll('[data-chart-tabs] .chart-tab'));
+            return;
             const ctx = canvas.getContext('2d');
             let activeRange = 'daily';
             let start = 0;
@@ -1523,6 +1525,131 @@
             canvas.addEventListener('touchend', () => { pinchDistance = null; });
 
             setRange(activeRange);
+        })();
+
+        (() => {
+            const chartData = @json($chartData);
+            const container = document.getElementById('stock-k-chart');
+            const empty = document.getElementById('stock-chart-empty');
+            const buttons = Array.from(document.querySelectorAll('[data-chart-tabs] .chart-tab'));
+            let chart = null;
+            let resizeObserver = null;
+
+            const formatPrice = (value) => Number(value).toLocaleString('zh-TW', {
+                minimumFractionDigits: Number(value) >= 100 ? 0 : 2,
+                maximumFractionDigits: 2,
+            });
+
+            const rowsFor = (range) => (chartData[range] || [])
+                .map((item) => ({
+                    time: range === 'intraday' ? Number(item.time) : item.time,
+                    label: item.label || item.time,
+                    open: Number(item.open),
+                    high: Number(item.high),
+                    low: Number(item.low),
+                    close: Number(item.close),
+                    volume: Number(item.volume || 0),
+                }))
+                .filter((item) => item.time && Number.isFinite(item.open) && Number.isFinite(item.high) && Number.isFinite(item.low) && Number.isFinite(item.close));
+
+            const destroyChart = () => {
+                if (resizeObserver) {
+                    resizeObserver.disconnect();
+                    resizeObserver = null;
+                }
+                if (chart) {
+                    chart.remove();
+                    chart = null;
+                }
+                container.replaceChildren();
+            };
+
+            const render = (range) => {
+                const rows = rowsFor(range);
+                buttons.forEach((button) => button.classList.toggle('active', button.dataset.range === range));
+                destroyChart();
+
+                const hasData = rows.length > 0 && window.LightweightCharts;
+                container.style.display = hasData ? 'block' : 'none';
+                empty.style.display = hasData ? 'none' : 'flex';
+                if (!hasData) return;
+
+                chart = LightweightCharts.createChart(container, {
+                    width: container.clientWidth,
+                    height: container.clientHeight,
+                    layout: {
+                        background: { type: 'solid', color: '#ffffff' },
+                        textColor: '#657385',
+                        fontFamily: '"Microsoft JhengHei", system-ui, sans-serif',
+                    },
+                    grid: {
+                        vertLines: { color: '#edf0f3' },
+                        horzLines: { color: '#edf0f3' },
+                    },
+                    crosshair: { mode: LightweightCharts.CrosshairMode.Normal },
+                    rightPriceScale: { borderColor: '#dbe1e8', scaleMargins: { top: 0.08, bottom: 0.24 } },
+                    timeScale: {
+                        borderColor: '#dbe1e8',
+                        timeVisible: range === 'intraday',
+                        secondsVisible: false,
+                    },
+                    localization: { priceFormatter: formatPrice },
+                    handleScroll: {
+                        mouseWheel: true,
+                        pressedMouseMove: true,
+                        horzTouchDrag: true,
+                        vertTouchDrag: false,
+                    },
+                    handleScale: {
+                        axisPressedMouseMove: true,
+                        mouseWheel: true,
+                        pinch: true,
+                    },
+                });
+
+                const candles = chart.addCandlestickSeries({
+                    upColor: '#b42318',
+                    downColor: '#147d55',
+                    borderUpColor: '#b42318',
+                    borderDownColor: '#147d55',
+                    wickUpColor: '#b42318',
+                    wickDownColor: '#147d55',
+                    priceFormat: { type: 'price', precision: 2, minMove: 0.01 },
+                });
+                candles.setData(rows.map(({ time, open, high, low, close }) => ({ time, open, high, low, close })));
+
+                const volume = chart.addHistogramSeries({
+                    priceScaleId: '',
+                    priceFormat: { type: 'volume' },
+                    color: '#94a3b8',
+                });
+                chart.priceScale('').applyOptions({ scaleMargins: { top: 0.78, bottom: 0 } });
+                volume.setData(rows.map((item) => ({
+                    time: item.time,
+                    value: item.volume,
+                    color: item.close >= item.open ? 'rgba(180, 35, 24, .24)' : 'rgba(20, 125, 85, .24)',
+                })));
+
+                chart.timeScale().fitContent();
+                resizeObserver = new ResizeObserver(() => {
+                    if (!chart) return;
+                    chart.applyOptions({
+                        width: container.clientWidth,
+                        height: container.clientHeight,
+                    });
+                });
+                resizeObserver.observe(container);
+            };
+
+            buttons.forEach((button) => button.addEventListener('click', () => render(button.dataset.range || 'daily')));
+            const startWhenReady = () => {
+                if (window.LightweightCharts) {
+                    render('daily');
+                    return;
+                }
+                window.setTimeout(startWhenReady, 80);
+            };
+            startWhenReady();
         })();
     </script>
 @endsection
