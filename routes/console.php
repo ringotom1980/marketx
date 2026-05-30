@@ -132,3 +132,8 @@ Schedule::command('market:agents-review-cases')
     ->dailyAt('01:40')
     ->timezone('Asia/Taipei')
     ->withoutOverlapping();
+
+Schedule::command('market:agents-suggest-report-phrases --limit=12')
+    ->dailyAt('01:55')
+    ->timezone('Asia/Taipei')
+    ->withoutOverlapping();
