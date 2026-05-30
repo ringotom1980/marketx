@@ -172,3 +172,8 @@ Schedule::command('market:agents-learning-pipeline --phase=review --limit=80')
     ->dailyAt('02:18')
     ->timezone('Asia/Taipei')
     ->withoutOverlapping();
+
+Schedule::command('market:agents-publish-language-suggestions --limit=40 --min-priority=62')
+    ->dailyAt('02:28')
+    ->timezone('Asia/Taipei')
+    ->withoutOverlapping();
