@@ -1752,7 +1752,7 @@
             const startWhenReady = () => {
                 if (window.LightweightCharts) {
                     render('daily');
-                    window.setInterval(refreshLiveChart, 60000);
+                    window.setInterval(refreshLiveChart, 30000);
                     return;
                 }
                 window.setTimeout(startWhenReady, 80);

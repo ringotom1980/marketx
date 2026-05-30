@@ -815,9 +815,32 @@ Route::get('/api/stocks/{symbol}/quote-chart', function (string $symbol) {
             'volume' => (int) ($row->volume ?? 0),
         ])
         ->all();
-    $latestSnapshot = Schema::hasTable('stock_snapshots')
+    $snapshotSession = Schema::hasTable('stock_snapshots')
         ? DB::table('stock_snapshots')
             ->where('symbol', $stockRecord->symbol)
+            ->whereNotNull('close')
+            ->selectRaw('DATE(snapshot_at) as session_date, count(*) as rows_count')
+            ->groupByRaw('DATE(snapshot_at)')
+            ->orderByDesc('session_date')
+            ->limit(5)
+            ->get()
+            ->first(fn ($row) => (int) $row->rows_count >= 2 && \Carbon\CarbonImmutable::parse((string) $row->session_date, 'Asia/Taipei')->isWeekday())
+        : null;
+    if (! $snapshotSession && Schema::hasTable('stock_snapshots')) {
+        $snapshotSession = DB::table('stock_snapshots')
+            ->where('symbol', $stockRecord->symbol)
+            ->whereNotNull('close')
+            ->selectRaw('DATE(snapshot_at) as session_date, count(*) as rows_count')
+            ->groupByRaw('DATE(snapshot_at)')
+            ->orderByDesc('session_date')
+            ->limit(5)
+            ->get()
+            ->first(fn ($row) => \Carbon\CarbonImmutable::parse((string) $row->session_date, 'Asia/Taipei')->isWeekday());
+    }
+    $latestSnapshot = $snapshotSession
+        ? DB::table('stock_snapshots')
+            ->where('symbol', $stockRecord->symbol)
+            ->whereDate('snapshot_at', (string) $snapshotSession->session_date)
             ->whereNotNull('close')
             ->orderByDesc('snapshot_at')
             ->first()
@@ -896,9 +919,32 @@ Route::get('/s/{symbol}', function (string $symbol, StockEventChainBuilder $even
         ->firstOrFail();
 
     $latestPrice = $stockRecord->dailyPrices->first();
-    $latestSnapshot = Schema::hasTable('stock_snapshots')
+    $snapshotSession = Schema::hasTable('stock_snapshots')
         ? DB::table('stock_snapshots')
             ->where('symbol', $stockRecord->symbol)
+            ->whereNotNull('close')
+            ->selectRaw('DATE(snapshot_at) as session_date, count(*) as rows_count')
+            ->groupByRaw('DATE(snapshot_at)')
+            ->orderByDesc('session_date')
+            ->limit(5)
+            ->get()
+            ->first(fn ($row) => (int) $row->rows_count >= 2 && \Carbon\CarbonImmutable::parse((string) $row->session_date, 'Asia/Taipei')->isWeekday())
+        : null;
+    if (! $snapshotSession && Schema::hasTable('stock_snapshots')) {
+        $snapshotSession = DB::table('stock_snapshots')
+            ->where('symbol', $stockRecord->symbol)
+            ->whereNotNull('close')
+            ->selectRaw('DATE(snapshot_at) as session_date, count(*) as rows_count')
+            ->groupByRaw('DATE(snapshot_at)')
+            ->orderByDesc('session_date')
+            ->limit(5)
+            ->get()
+            ->first(fn ($row) => \Carbon\CarbonImmutable::parse((string) $row->session_date, 'Asia/Taipei')->isWeekday());
+    }
+    $latestSnapshot = $snapshotSession
+        ? DB::table('stock_snapshots')
+            ->where('symbol', $stockRecord->symbol)
+            ->whereDate('snapshot_at', (string) $snapshotSession->session_date)
             ->whereNotNull('close')
             ->orderByDesc('snapshot_at')
             ->first()

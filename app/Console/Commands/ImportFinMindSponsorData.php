@@ -19,6 +19,8 @@ class ImportFinMindSponsorData extends Command
         {--end= : End date, defaults to start option}
         {--limit=0 : Limit per-stock imports, 0 means all requested rows}
         {--sleep=0 : Seconds to sleep between per-stock requests}
+        {--repeat=1 : Repeat snapshot imports inside one command run}
+        {--interval=30 : Seconds between repeated snapshot imports}
         {--token= : FinMind API token, optional}';
 
     protected $description = 'Import FinMind Sponsor datasets into MarketX normalized tables.';
@@ -36,6 +38,13 @@ class ImportFinMindSponsorData extends Command
     public function handle(): int
     {
         $dataset = (string) $this->argument('dataset');
+
+        if ($dataset === 'snapshot' && (int) $this->option('repeat') > 1) {
+            $count = $this->importRepeatedSnapshots();
+            $this->info("FinMind Sponsor {$dataset} rows upserted: {$count}");
+
+            return self::SUCCESS;
+        }
 
         $count = match ($dataset) {
             'snapshot' => $this->importSnapshot(),
@@ -57,6 +66,23 @@ class ImportFinMindSponsorData extends Command
         $this->info("FinMind Sponsor {$dataset} rows upserted: {$count}");
 
         return self::SUCCESS;
+    }
+
+    private function importRepeatedSnapshots(): int
+    {
+        $repeat = max(1, min(4, (int) $this->option('repeat')));
+        $interval = max(5, min(55, (int) $this->option('interval')));
+        $count = 0;
+
+        for ($round = 0; $round < $repeat; $round++) {
+            if ($round > 0) {
+                sleep($interval);
+            }
+
+            $count += $this->importSnapshot();
+        }
+
+        return $count;
     }
 
     private function importSnapshot(): int
