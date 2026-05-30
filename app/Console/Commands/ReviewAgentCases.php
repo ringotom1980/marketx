@@ -63,6 +63,11 @@ class ReviewAgentCases extends Command
     {
         return match ($case->finding_type) {
             'ai_report_missing' => $this->reviewAiReportMissing($case),
+            'stock_report_empty',
+            'stock_report_repeated_sentence',
+            'stock_report_contradiction',
+            'stock_report_card_tone_mismatch',
+            'stock_report_too_generic' => $this->reviewStockReportQualityCase($case),
             'home_cards_missing' => $this->reviewHomeCardsMissing($case),
             'home_card_empty' => $this->reviewHomeCardEmpty($case),
             'stock_score_missing' => $this->reviewStockScoreMissing($case),
@@ -80,6 +85,17 @@ class ReviewAgentCases extends Command
                 'feedback' => '目前沒有足夠自動判斷規則，先標記觀察並保留案例供後續知識庫累積。',
             ],
         };
+    }
+
+    /**
+     * @return array{status:string,feedback:string}
+     */
+    private function reviewStockReportQualityCase(AgentFinding $case): array
+    {
+        return [
+            'status' => 'pending',
+            'feedback' => '個股報告品質稽核已確認需要 Codex 處理。請依案件 payload 檢查 report_id、模板 ID、語句 ID，優先修正重複語句、方向矛盾與五張卡分類語氣不一致。',
+        ];
     }
 
     /**
