@@ -313,18 +313,115 @@ class StockReportPhraseComposer
     private function renderParagraphSection(int $index, string $section, array $conditionKeys, array $vars, int $limit): string
     {
         $template = $this->selectParagraphTemplate($section, $conditionKeys, $vars);
-        $detail = $this->renderSection($section, $conditionKeys, $vars, $limit, true, true);
+        $detailLimit = $template ? 1 : $limit;
+        $detail = $this->renderSection($section, $conditionKeys, $vars, $detailLimit, true, true);
         $body = $template ? $this->replaceVars((string) $template->body_template, $vars) : '';
-
-        if ($body !== '' && $detail !== '' && ! Str::contains($body, $detail)) {
-            $body .= $detail;
-        }
+        $body = $this->appendDetailIfUseful($body, $detail, $section);
 
         if ($body === '') {
             $body = $detail;
         }
 
         return $index.'、'.$this->sectionTitle($section).'：'.$body;
+    }
+
+    private function appendDetailIfUseful(string $body, string $detail, string $section): string
+    {
+        $body = trim($body);
+        $detail = trim($detail);
+
+        if ($body === '') {
+            return $detail;
+        }
+
+        if ($detail === '') {
+            return $body;
+        }
+
+        if (Str::contains($body, $detail) || Str::contains($detail, $body)) {
+            return $body;
+        }
+
+        if ($this->isHighlySimilarText($body, $detail) || $this->textToneConflict($body, $detail)) {
+            return $body;
+        }
+
+        $bodyIsShort = mb_strlen($body) < 90;
+        $detailHasNumbers = preg_match('/\d+(?:\.\d+)?%?/u', $detail) === 1;
+        $detailHasSectionSignal = $this->detailHasSectionSignal($detail, $section);
+
+        if (! $bodyIsShort && ! $detailHasNumbers && ! $detailHasSectionSignal) {
+            return $body;
+        }
+
+        return rtrim($body).' '.$detail;
+    }
+
+    private function isHighlySimilarText(string $body, string $detail): bool
+    {
+        $bodyFingerprint = $this->textFingerprint($body);
+        $detailFingerprint = $this->textFingerprint($detail);
+
+        if ($bodyFingerprint === '' || $detailFingerprint === '') {
+            return false;
+        }
+
+        return Str::contains($bodyFingerprint, $detailFingerprint)
+            || Str::contains($detailFingerprint, $bodyFingerprint)
+            || mb_substr($bodyFingerprint, 0, 24) === mb_substr($detailFingerprint, 0, 24);
+    }
+
+    private function textFingerprint(string $text): string
+    {
+        $text = preg_replace('/[\d\.\s%％，、。；：！？\(\)（）「」『』,;:!\?]+/u', '', $text) ?? $text;
+
+        return mb_substr($text, 0, 48);
+    }
+
+    private function textToneConflict(string $body, string $detail): bool
+    {
+        $bodyTone = $this->textTone($body);
+        $detailTone = $this->textTone($detail);
+
+        if ($bodyTone === 'neutral' || $detailTone === 'neutral' || $bodyTone === $detailTone) {
+            return false;
+        }
+
+        if (in_array($bodyTone, ['risk', 'bear'], true) && in_array($detailTone, ['risk', 'bear'], true)) {
+            return false;
+        }
+
+        return true;
+    }
+
+    private function textTone(string $text): string
+    {
+        if (Str::contains($text, ['弱勢', '跌破', '轉弱', '均線下方', '跌深', '賣壓仍在', '下跌結構', '空方'])) {
+            return 'bear';
+        }
+
+        if (Str::contains($text, ['風險', '估值', '拉回', '震盪', '籌碼浮動', '乖離', '過熱', '領先基本面', '保守'])) {
+            return 'risk';
+        }
+
+        if (Str::contains($text, ['偏向多方', '買方掌握', '轉強', '上漲條件', '支撐', '動能改善', '題材升溫', '法人買盤', '營收成長', '多方結構'])) {
+            return 'bull';
+        }
+
+        return 'neutral';
+    }
+
+    private function detailHasSectionSignal(string $detail, string $section): bool
+    {
+        $signals = [
+            'price_theme' => ['近 5 日', '近 20 日', '近 60 日', '量能', '題材'],
+            'technical' => ['MACD', 'KD', 'RSI', '均線', '乖離'],
+            'chip' => ['外資', '投信', '法人', '融資', '融券', '買超', '賣超'],
+            'fundamental' => ['營收', 'EPS', 'ROE', '毛利率', '本益比', '股利'],
+            'summary' => ['條件', '分類', '風險', '觀察'],
+        ];
+
+        return Str::contains($detail, $signals[$section] ?? []);
     }
 
     /**
