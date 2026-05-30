@@ -129,6 +129,12 @@
             line-height: 1.5;
         }
 
+        .stock-quote-meta {
+            color: var(--muted);
+            font-size: clamp(13px, 3.2vw, 15px);
+            font-weight: 700;
+        }
+
         .stock-info-tabs {
             display: grid;
             grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -375,10 +381,14 @@
     @php
         $closeValue = is_numeric($stock['close']) ? (float) $stock['close'] : null;
         $changeValue = is_numeric($stock['change']) ? (float) $stock['change'] : null;
+        $changePctValue = is_numeric($stock['changePct'] ?? null) ? (float) $stock['changePct'] : null;
         $closeText = $closeValue === null ? '無資料' : rtrim(rtrim(number_format($closeValue, 2), '0'), '.');
         $changeArrow = $changeValue === null ? '' : ($changeValue > 0 ? '▲' : ($changeValue < 0 ? '▼' : ''));
         $changeText = $changeValue === null ? '' : $changeArrow.rtrim(rtrim(number_format(abs($changeValue), 2), '0'), '.');
+        $changePctText = $changePctValue === null ? '' : '（'.($changePctValue > 0 ? '+' : '').rtrim(rtrim(number_format($changePctValue, 2), '0'), '.').'%）';
         $changeTone = $changeValue === null ? '' : ($changeValue > 0 ? 'red' : ($changeValue < 0 ? 'green' : ''));
+        $quoteSource = $stock['quoteSource'] ?? '收盤';
+        $quoteTime = $stock['quoteTime'] ?? null;
     @endphp
 
     <section class="page-head stock-head">
@@ -389,7 +399,11 @@
                 </div>
                 <p class="lead stock-quote-line">
                     <span class="stock-price-change {{ $changeTone }}">{{ $closeText }}{{ $changeText }}</span>
+                    @if ($changePctText !== '')
+                        <span class="stock-price-change {{ $changeTone }}">{{ $changePctText }}</span>
+                    @endif
                     <span>成交量{{ $stock['volume'] }}</span>
+                    <span class="stock-quote-meta">{{ $quoteSource }}{{ $quoteTime ? ' '.$quoteTime : '' }}</span>
                 </p>
             </div>
             <div>

@@ -804,6 +804,21 @@ Route::get('/s/{symbol}', function (string $symbol, StockEventChainBuilder $even
         ->firstOrFail();
 
     $latestPrice = $stockRecord->dailyPrices->first();
+    $latestSnapshot = Schema::hasTable('stock_snapshots')
+        ? DB::table('stock_snapshots')
+            ->where('symbol', $stockRecord->symbol)
+            ->whereNotNull('close')
+            ->orderByDesc('snapshot_at')
+            ->first()
+        : null;
+    $quoteClose = $latestSnapshot?->close ?? $latestPrice?->close;
+    $quoteChange = $latestSnapshot?->change_price ?? $latestPrice?->change;
+    $quoteVolume = $latestSnapshot?->total_volume ?? $latestSnapshot?->volume ?? $latestPrice?->volume;
+    $quoteChangePct = $latestSnapshot?->change_rate;
+    $quoteSource = $latestSnapshot ? '即時' : '收盤';
+    $quoteTime = $latestSnapshot?->snapshot_at
+        ? \Carbon\CarbonImmutable::parse((string) $latestSnapshot->snapshot_at, 'Asia/Taipei')->format('m/d H:i')
+        : ($latestPrice?->trade_date?->format('m/d') ?? null);
     $latestChip = $stockRecord->latestChip;
     $latestScore = $stockRecord->latestScore;
     $isWatched = DB::table('watchlist')
@@ -1316,9 +1331,12 @@ Route::get('/s/{symbol}', function (string $symbol, StockEventChainBuilder $even
             'symbol' => $stockRecord->symbol,
             'name' => $stockRecord->name,
             'market' => $stockRecord->market,
-            'close' => $latestPrice?->close ?? '無資料',
-            'change' => $latestPrice?->change ?? '無資料',
-            'volume' => $latestPrice?->volume ? number_format($latestPrice->volume) : '無資料',
+            'close' => $quoteClose ?? '無資料',
+            'change' => $quoteChange ?? '無資料',
+            'changePct' => $quoteChangePct,
+            'volume' => $quoteVolume ? number_format((int) $quoteVolume) : '無資料',
+            'quoteSource' => $quoteSource,
+            'quoteTime' => $quoteTime,
             'decision' => $evaluation['label'],
             'decisionTone' => $evaluation['tone'],
             'score' => $latestScore?->total_score ?? $latestScore?->technical_score ?? 0,
