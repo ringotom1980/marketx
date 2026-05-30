@@ -70,8 +70,13 @@ Schedule::command('market:taiwan-price-pipeline')
 
 Schedule::command('market:import-finmind-sponsor snapshot')
     ->weekdays()
-    ->everyFiveMinutes()
-    ->between('08:55', '13:45')
+    ->everyMinute()
+    ->between('08:55', '13:35')
+    ->timezone('Asia/Taipei')
+    ->withoutOverlapping();
+
+Schedule::command('market:prune-stock-snapshots --days=10')
+    ->dailyAt('02:35')
     ->timezone('Asia/Taipei')
     ->withoutOverlapping();
 
