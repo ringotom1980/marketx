@@ -80,14 +80,14 @@ class StockResearchReportComposer
     private function renderReport(array $pack): string
     {
         return implode("\n\n", array_filter([
-            "一、近期股價與量能\n\n".$this->priceSection($pack),
-            "二、支撐與壓力\n\n".$this->supportSection($pack),
-            "三、技術結構\n\n".$this->technicalSection($pack),
-            "四、籌碼與資金動向\n\n".$this->chipSection($pack),
-            "五、財報、營收與評價\n\n".$this->fundamentalSection($pack),
-            "六、新聞與題材\n\n".$this->newsSection($pack),
-            "七、觀察重點\n\n".$this->directionSection($pack),
-            "總結\n\n".$this->summarySection($pack),
+            "一、近期股價與量能\n".$this->priceSection($pack),
+            "二、支撐與壓力\n".$this->supportSection($pack),
+            "三、技術結構\n".$this->technicalSection($pack),
+            "四、籌碼與資金動向\n".$this->chipSection($pack),
+            "五、財報、營收與評價\n".$this->fundamentalSection($pack),
+            "六、新聞與題材\n".$this->newsSection($pack),
+            "七、觀察重點\n".$this->directionSection($pack),
+            "總結\n".$this->summarySection($pack),
         ]));
     }
 
@@ -99,7 +99,6 @@ class StockResearchReportComposer
             "{$pack['name']}最新收盤 {$this->n($price['close'])} 元，單日{$this->changeWord($price['change'])} {$this->absNumber($price['change'])} 元（{$this->signedPct($price['change_pct'])}），成交量 {$this->shares($price['volume'])}。",
             "近 5 日報酬率 {$this->signedPct($trend['return5'])}，近 20 日報酬率 {$this->signedPct($trend['return20'])}，近 60 日報酬率 {$this->signedPct($trend['return60'])}。",
             "目前成交量約為 20 日平均成交量的 {$this->n($trend['volume_ratio20'])} 倍。",
-            '',
             $this->priceNarrative($pack),
         ];
 
@@ -113,17 +112,14 @@ class StockResearchReportComposer
 
         if ($sr['support'] !== null) {
             $lines[] = '支撐區 '.$sr['support'].' 元';
-            $lines[] = '';
             $lines[] = '支撐區累積成交量：'.$this->shares($sr['support_strength']);
         } else {
             $lines[] = '支撐區：目前資料不足';
         }
 
-        $lines[] = '';
-
         if ($sr['pressure'] !== null) {
-            $lines[] = '壓力區 '.$sr['pressure'].' 元';
             $lines[] = '';
+            $lines[] = '壓力區 '.$sr['pressure'].' 元';
             $lines[] = '壓力區累積成交量：'.$this->shares($sr['pressure_strength']);
         } else {
             $lines[] = '壓力區：上方暫無明確成交密集壓力';
@@ -249,7 +245,6 @@ class StockResearchReportComposer
             foreach (array_slice($pack['news'], 0, 5) as $news) {
                 $lines[] = $this->newsDate($news['date'] ?? null);
                 $lines[] = $news['title'];
-                $lines[] = '';
             }
         }
 
