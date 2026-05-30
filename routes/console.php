@@ -78,6 +78,12 @@ Schedule::command('market:build-daily-context --session=aftermarket')
     ->timezone('Asia/Taipei')
     ->withoutOverlapping();
 
+Schedule::command('market:generate-stock-reports --limit=0')
+    ->weekdays()
+    ->dailyAt('20:00')
+    ->timezone('Asia/Taipei')
+    ->withoutOverlapping();
+
 Schedule::command('market:daily-pipeline')
     ->dailyAt('21:30')
     ->timezone('Asia/Taipei')
