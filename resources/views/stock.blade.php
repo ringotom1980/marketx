@@ -116,14 +116,14 @@
 
         .live-price-dot {
             position: absolute;
-            width: 10px;
-            height: 10px;
+            width: 8px;
+            height: 8px;
             border-radius: 999px;
             pointer-events: none;
             transform: translate(-50%, -50%);
             z-index: 4;
             animation: livePulse 1s ease-in-out infinite;
-            box-shadow: 0 0 0 4px rgba(180, 35, 24, .12);
+            box-shadow: 0 0 0 3px rgba(180, 35, 24, .1);
         }
 
         .live-price-dot.red {
@@ -132,7 +132,7 @@
 
         .live-price-dot.green {
             background: #147d55;
-            box-shadow: 0 0 0 4px rgba(20, 125, 85, .12);
+            box-shadow: 0 0 0 3px rgba(20, 125, 85, .1);
         }
 
         @keyframes livePulse {
@@ -1581,6 +1581,25 @@
                 minimumFractionDigits: Number(value) >= 100 ? 0 : 2,
                 maximumFractionDigits: 2,
             });
+            const taiwanTimeFormatter = (time) => new Intl.DateTimeFormat('zh-TW', {
+                timeZone: 'Asia/Taipei',
+                hour: '2-digit',
+                minute: '2-digit',
+                hour12: false,
+            }).format(new Date(Number(time) * 1000));
+            const realtimeSessionRange = (rows) => {
+                if (!rows.length) return null;
+                const firstDate = new Date(Number(rows[0].time) * 1000);
+                const open = new Date(firstDate);
+                open.setHours(9, 0, 0, 0);
+                const close = new Date(firstDate);
+                close.setHours(13, 30, 0, 0);
+
+                return {
+                    from: Math.floor(open.getTime() / 1000),
+                    to: Math.floor(close.getTime() / 1000),
+                };
+            };
 
             const rowsFor = (range) => (chartData[range] || [])
                 .map((item) => ({
@@ -1638,6 +1657,9 @@
                         borderColor: '#dbe1e8',
                         timeVisible: range === 'realtime' || range === 'intraday',
                         secondsVisible: false,
+                        fixLeftEdge: range === 'realtime',
+                        fixRightEdge: range === 'realtime',
+                        tickMarkFormatter: range === 'realtime' ? taiwanTimeFormatter : undefined,
                     },
                     localization: { priceFormatter: formatPrice },
                     handleScroll: {
@@ -1658,11 +1680,11 @@
                     const last = rows[rows.length - 1];
                     const tone = last && first && last.value >= first.value ? 'red' : 'green';
                     const line = chart.addLineSeries({
-                        color: tone === 'red' ? '#b42318' : '#147d55',
-                        lineWidth: 2,
+                        color: tone === 'red' ? '#c24132' : '#16845f',
+                        lineWidth: 1,
                         priceFormat: { type: 'price', precision: 2, minMove: 0.01 },
                         lastValueVisible: true,
-                        priceLineVisible: true,
+                        priceLineVisible: false,
                     });
                     line.setData(rows.map((item) => ({ time: item.time, value: item.value })));
 
@@ -1682,7 +1704,12 @@
                         dot.style.top = `${y}px`;
                     };
 
-                    chart.timeScale().fitContent();
+                    const sessionRange = realtimeSessionRange(rows);
+                    if (sessionRange) {
+                        chart.timeScale().setVisibleRange(sessionRange);
+                    } else {
+                        chart.timeScale().fitContent();
+                    }
                     chart.timeScale().subscribeVisibleTimeRangeChange(positionDot);
                     window.setTimeout(positionDot, 80);
                     resizeObserver = new ResizeObserver(() => {
