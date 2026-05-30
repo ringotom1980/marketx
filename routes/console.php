@@ -182,3 +182,13 @@ Schedule::command('market:audit-stock-report-quality --limit=180')
     ->dailyAt('02:40')
     ->timezone('Asia/Taipei')
     ->withoutOverlapping();
+
+Schedule::command('market:agents-quality-to-language-suggestions --limit=120')
+    ->dailyAt('02:48')
+    ->timezone('Asia/Taipei')
+    ->withoutOverlapping();
+
+Schedule::command('market:agents-publish-language-suggestions --limit=30 --min-priority=70')
+    ->dailyAt('02:56')
+    ->timezone('Asia/Taipei')
+    ->withoutOverlapping();
