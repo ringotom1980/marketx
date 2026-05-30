@@ -371,6 +371,10 @@ class RunAgentLearningPipeline extends Command
         $roleId = DB::table('agent_roles')->where('slug', 'language-curator')->value('id');
         $suggestions = collect($this->baseLanguageSuggestions())
             ->merge($this->knowledgeDrivenLanguageSuggestions())
+            ->merge($this->newsDrivenLanguageSuggestions())
+            ->merge($this->themeKnowledgeLanguageSuggestions())
+            ->merge($this->industryKnowledgeParagraphSuggestions())
+            ->merge($this->historicalCaseLanguageSuggestions())
             ->reject(fn (array $suggestion) => $this->learningSuggestionExists($suggestion))
             ->take($this->limit)
             ->values();
@@ -383,7 +387,7 @@ class RunAgentLearningPipeline extends Command
                     'suggestion_type' => $suggestion['suggestion_type'],
                     'target_table' => $suggestion['target_table'],
                     'status' => 'pending',
-                    'priority' => $suggestion['priority'],
+                    'priority' => (int) round((float) $suggestion['priority']),
                     'title' => $suggestion['title'],
                     'rationale' => $suggestion['rationale'],
                     'proposed_payload' => $this->json($suggestion['proposed_payload']),
@@ -732,6 +736,222 @@ class RunAgentLearningPipeline extends Command
     }
 
     /**
+     * @return Collection<int,array<string,mixed>>
+     */
+    private function newsDrivenLanguageSuggestions(): Collection
+    {
+        if (! Schema::hasTable('news_items')) {
+            return collect();
+        }
+
+        return DB::table('news_items')
+            ->where('status', 'active')
+            ->where('news_date', '>=', CarbonImmutable::now('Asia/Taipei')->subDays(5)->toDateString())
+            ->orderByDesc('importance_score')
+            ->orderByDesc('published_at')
+            ->limit(30)
+            ->get()
+            ->map(function ($news) {
+                $tone = match ($news->sentiment) {
+                    'positive' => 'bull',
+                    'negative' => 'risk',
+                    default => 'neutral',
+                };
+                $section = $news->category === 'company_disclosure' ? 'fundamental' : 'price_theme';
+                $condition = $news->category === 'company_disclosure' ? 'company_disclosure_reference' : 'fresh_news_reference';
+                $title = $this->cleanTrainingText((string) $news->title, 70);
+                $source = $this->cleanTrainingText((string) $news->source_name, 30);
+                $text = match ($section) {
+                    'fundamental' => "市場會把「{$title}」視為公司訊息面的新線索，短線不只看標題本身，也要回到營收、獲利與法人反應確認影響是否擴大。",
+                    default => "市場今天把焦點放在「{$title}」，相關題材容易被資金重新檢視；若代表股同步放量轉強，題材熱度才比較有延續性。",
+                };
+
+                return [
+                    'suggestion_type' => 'language_asset',
+                    'target_table' => 'language_assets',
+                    'priority' => min(88, 52 + (int) $news->importance_score / 2),
+                    'title' => '新聞語句候選：'.$title,
+                    'rationale' => "由 {$source} 新聞轉成可重複使用的分析語句，避免直接搬用新聞內容。",
+                    'proposed_payload' => [
+                        'asset_type' => 'sentence',
+                        'section' => $section,
+                        'tone' => $tone,
+                        'condition_key' => $condition,
+                        'text' => $text,
+                        'weight' => 62,
+                        'source' => 'news_agent',
+                        'metadata' => [
+                            'news_item_id' => $news->id,
+                            'source_name' => $news->source_name,
+                            'category' => $news->category,
+                        ],
+                    ],
+                    'evidence_payload' => [
+                        'news_item_id' => $news->id,
+                        'source_name' => $news->source_name,
+                        'url' => $news->url,
+                        'news_date' => $news->news_date,
+                        'sentiment' => $news->sentiment,
+                    ],
+                ];
+            });
+    }
+
+    /**
+     * @return Collection<int,array<string,mixed>>
+     */
+    private function themeKnowledgeLanguageSuggestions(): Collection
+    {
+        if (! Schema::hasTable('theme_knowledge')) {
+            return collect();
+        }
+
+        return DB::table('theme_knowledge')
+            ->where('status', 'active')
+            ->orderByDesc('updated_at')
+            ->limit(20)
+            ->get()
+            ->map(function ($theme) {
+                $metrics = $this->decodeJson($theme->latest_metrics);
+                $heat = (int) ($metrics['heat_score'] ?? 0);
+                $tone = $heat >= 75 ? 'bull' : ($heat <= 35 ? 'risk' : 'neutral');
+                $condition = $heat >= 75 ? 'theme_heat_high' : ($heat <= 35 ? 'theme_heat_cooling' : 'theme_watch');
+                $themeName = $this->cleanTrainingText((string) $theme->theme_name, 40);
+                $text = match ($condition) {
+                    'theme_heat_high' => "{$themeName}目前屬於市場關注度偏高的題材，後續重點不是只看熱度分數，而是看代表股能不能擴散、量能能不能跟上。",
+                    'theme_heat_cooling' => "{$themeName}熱度已經偏弱，若代表股無法重新站回短線結構，資金容易轉向其他更有延續性的族群。",
+                    default => "{$themeName}目前比較像觀察型題材，還需要新聞催化、代表股轉強或法人買盤延續，才有機會升級成主流資金方向。",
+                };
+
+                return [
+                    'suggestion_type' => 'language_asset',
+                    'target_table' => 'language_assets',
+                    'priority' => 64 + min(20, max(0, $heat - 50) / 2),
+                    'title' => '題材語句候選：'.$themeName,
+                    'rationale' => '由題材知識庫與最新熱度轉成題材雷達、個股報告都可使用的句型。',
+                    'proposed_payload' => [
+                        'asset_type' => 'sentence',
+                        'section' => 'price_theme',
+                        'tone' => $tone,
+                        'condition_key' => $condition,
+                        'text' => $text,
+                        'weight' => 64,
+                        'source' => 'theme_knowledge_agent',
+                        'metadata' => [
+                            'theme_id' => $theme->theme_id,
+                            'heat_score' => $heat,
+                        ],
+                    ],
+                    'evidence_payload' => [
+                        'theme_name' => $theme->theme_name,
+                        'latest_metrics' => $metrics,
+                        'asof_date' => $theme->asof_date,
+                    ],
+                ];
+            });
+    }
+
+    /**
+     * @return Collection<int,array<string,mixed>>
+     */
+    private function industryKnowledgeParagraphSuggestions(): Collection
+    {
+        if (! Schema::hasTable('industry_knowledge')) {
+            return collect();
+        }
+
+        return DB::table('industry_knowledge')
+            ->where('status', 'active')
+            ->orderByDesc('updated_at')
+            ->limit(12)
+            ->get()
+            ->map(function ($industry) {
+                $name = $this->cleanTrainingText((string) $industry->industry_name, 40);
+
+                return [
+                    'suggestion_type' => 'paragraph_template',
+                    'target_table' => 'paragraph_templates',
+                    'priority' => 70,
+                    'title' => '產業段落模板候選：'.$name,
+                    'rationale' => '由產業知識庫建立產業鏈段落，讓個股報告能說明族群位置與資金輪動。',
+                    'proposed_payload' => [
+                        'template_key' => 'industry_chain_context_'.substr(sha1($name), 0, 10),
+                        'name' => $name.'產業鏈位置段落',
+                        'section' => 'price_theme',
+                        'scenario' => 'industry_chain',
+                        'tone' => 'neutral',
+                        'body_template' => "{stock_name}所屬的{$name}族群，短線要同時看產業消息、代表股強弱與資金是否擴散。若只有單一個股表態，解讀上要保守；若族群多檔同步轉強，題材可信度會明顯提高。",
+                        'required_conditions' => ['industry_matched'],
+                        'optional_conditions' => ['theme_hot', 'representative_symbols_strong', 'volume_expand'],
+                        'weight' => 72,
+                        'source' => 'industry_knowledge_agent',
+                        'metadata' => [
+                            'industry_name' => $industry->industry_name,
+                        ],
+                    ],
+                    'evidence_payload' => [
+                        'industry_name' => $industry->industry_name,
+                        'representative_symbols' => $this->decodeJson($industry->representative_symbols),
+                    ],
+                ];
+            });
+    }
+
+    /**
+     * @return Collection<int,array<string,mixed>>
+     */
+    private function historicalCaseLanguageSuggestions(): Collection
+    {
+        if (! Schema::hasTable('historical_cases')) {
+            return collect();
+        }
+
+        return DB::table('historical_cases')
+            ->where('status', 'active')
+            ->orderByDesc('case_date')
+            ->limit(20)
+            ->get()
+            ->map(function ($case) {
+                $payload = $this->decodeJson($case->outcome_payload ?? null);
+                $avg = isset($payload['avg_change_pct']) ? (float) $payload['avg_change_pct'] : null;
+                $tone = $avg === null ? 'neutral' : ($avg > 0 ? 'bull' : 'risk');
+                $condition = $avg === null ? 'historical_case_reference' : ($avg > 0 ? 'historical_case_worked' : 'historical_case_failed');
+                $caseTitle = $this->cleanTrainingText((string) $case->title, 60);
+                $text = $avg === null
+                    ? "歷史案例顯示，類似條件出現時不能只看單一訊號，仍要搭配後續量價與籌碼是否延續。"
+                    : ($avg > 0
+                        ? "歷史案例中，類似條件後續平均表現偏正向，但仍要確認當下是否有同樣的量價與題材支撐。"
+                        : "歷史案例中，類似條件後續容易失效，若當下又出現量能退潮或法人轉賣，解讀上要更保守。");
+
+                return [
+                    'suggestion_type' => 'language_asset',
+                    'target_table' => 'language_assets',
+                    'priority' => 66,
+                    'title' => '歷史案例語句候選：'.$caseTitle,
+                    'rationale' => '把五張卡片追蹤驗證結果轉成可提醒使用者的風險/延續性語句。',
+                    'proposed_payload' => [
+                        'asset_type' => 'sentence',
+                        'section' => 'summary',
+                        'tone' => $tone,
+                        'condition_key' => $condition,
+                        'text' => $text,
+                        'weight' => 66,
+                        'source' => 'historical_case_agent',
+                        'metadata' => [
+                            'historical_case_id' => $case->id,
+                            'avg_change_pct' => $avg,
+                        ],
+                    ],
+                    'evidence_payload' => [
+                        'historical_case_id' => $case->id,
+                        'case_date' => $case->case_date,
+                        'outcome_payload' => $payload,
+                    ],
+                ];
+            });
+    }
+
+    /**
      * @param array<string,mixed> $suggestion
      */
     private function learningSuggestionExists(array $suggestion): bool
@@ -951,6 +1171,15 @@ class RunAgentLearningPipeline extends Command
     private function clampScore(int $score): int
     {
         return max(0, min(100, $score));
+    }
+
+    private function cleanTrainingText(string $text, int $limit = 80): string
+    {
+        $text = html_entity_decode(strip_tags($text), ENT_QUOTES | ENT_HTML5);
+        $text = preg_replace('/\s+/u', ' ', $text) ?? $text;
+        $text = trim($text);
+
+        return Str::limit($text, $limit, '');
     }
 
     private function json(mixed $value): string
