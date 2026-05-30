@@ -6,6 +6,7 @@ use App\Support\Ai\AiPipelineService;
 use App\Support\Ai\AiUsageLimiter;
 use App\Support\Ai\AiResult;
 use App\Support\Ai\GeminiProvider;
+use App\Support\Ai\GroqProvider;
 use Carbon\CarbonImmutable;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\DB;
@@ -15,11 +16,11 @@ class AiGenerateGlobalPremarketReport extends Command
     protected $signature = 'market:ai-generate-global-premarket
         {--date= : Report date, default today in Asia/Taipei}
         {--force : Regenerate even if today report exists}
-        {--live : Actually call Gemini. Without this option only logs a skipped result}';
+        {--live : Actually call AI. Without this option only logs a skipped result}';
 
-    protected $description = 'Generate one cached Gemini global premarket report for the global radar page.';
+    protected $description = 'Generate one cached AI global premarket report for the global radar page.';
 
-    public function handle(GeminiProvider $gemini, AiPipelineService $pipeline, AiUsageLimiter $limiter): int
+    public function handle(GeminiProvider $gemini, GroqProvider $groq, AiPipelineService $pipeline, AiUsageLimiter $limiter): int
     {
         $task = 'global_premarket';
         $reportDate = $this->option('date')
@@ -40,17 +41,23 @@ class AiGenerateGlobalPremarketReport extends Command
         $prompt = $this->prompt($dataPack);
         $result = $this->generateWithRetry($gemini, $prompt);
 
+        if (! $result->ok) {
+            $pipeline->log($task.'_gemini_fallback', $result, $prompt);
+            $this->warn('Gemini global premarket failed, falling back to Groq: '.$result->error);
+            $result = $groq->chat($prompt, (bool) $this->option('live'));
+        }
+
         $pipeline->log($task, $result, $prompt);
 
         if (! $result->ok) {
-            $this->warn('Gemini global premarket skipped/failed: '.$result->error);
+            $this->warn('AI global premarket skipped/failed: '.$result->error);
             return self::FAILURE;
         }
 
         $text = $this->cleanReportText((string) $result->text);
 
         if (mb_strlen($text) < 80) {
-            $this->warn('Gemini global premarket report too short.');
+            $this->warn('AI global premarket report too short.');
             return self::FAILURE;
         }
 
@@ -60,14 +67,14 @@ class AiGenerateGlobalPremarketReport extends Command
                 'title' => '《股市在幹嘛》今日全球盤前觀察',
                 'summary' => $text,
                 'data_pack' => json_encode($dataPack, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
-                'model' => 'gemini:'.$result->model,
+                'model' => $result->provider.':'.$result->model,
                 'token_usage' => json_encode($result->usage, JSON_UNESCAPED_SLASHES),
                 'created_at' => now(),
                 'updated_at' => now(),
             ],
         );
 
-        $this->info('Gemini global premarket report generated: '.$reportDate);
+        $this->info('AI global premarket report generated: '.$reportDate.' / '.$result->provider.':'.$result->model);
 
         return self::SUCCESS;
     }

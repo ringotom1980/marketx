@@ -39,7 +39,7 @@ class GroqProvider
                 'model' => $model,
                 'temperature' => 0.1,
                 'messages' => [
-                    ['role' => 'system', 'content' => '你是金融新聞前處理引擎，只做摘要、分類與結構化，不做價格預測。'],
+                    ['role' => 'system', 'content' => '你是《股市在幹嘛》的金融資料前處理與研究摘要助理。請使用繁體中文，根據使用者提供的資料回答，不要編造資料，不要提供明確買賣建議。'],
                     ['role' => 'user', 'content' => $prompt],
                 ],
             ]);

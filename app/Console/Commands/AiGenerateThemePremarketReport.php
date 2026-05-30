@@ -6,6 +6,7 @@ use App\Support\Ai\AiPipelineService;
 use App\Support\Ai\AiUsageLimiter;
 use App\Support\Ai\AiResult;
 use App\Support\Ai\GeminiProvider;
+use App\Support\Ai\GroqProvider;
 use Carbon\CarbonImmutable;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\DB;
@@ -15,11 +16,11 @@ class AiGenerateThemePremarketReport extends Command
     protected $signature = 'market:ai-generate-theme-premarket
         {--date= : Report date, default today in Asia/Taipei}
         {--force : Regenerate even if today report exists}
-        {--live : Actually call Gemini. Without this option only logs a skipped result}';
+        {--live : Actually call AI. Without this option only logs a skipped result}';
 
-    protected $description = 'Generate one cached Gemini theme premarket report for the theme radar page.';
+    protected $description = 'Generate one cached AI theme premarket report for the theme radar page.';
 
-    public function handle(GeminiProvider $gemini, AiPipelineService $pipeline, AiUsageLimiter $limiter): int
+    public function handle(GeminiProvider $gemini, GroqProvider $groq, AiPipelineService $pipeline, AiUsageLimiter $limiter): int
     {
         $task = 'theme_premarket';
         $reportDate = $this->option('date')
@@ -42,10 +43,17 @@ class AiGenerateThemePremarketReport extends Command
         $prompt = $this->prompt($dataPack);
         $result = $this->generateWithRetry($gemini, $prompt);
 
+        if (! $result->ok) {
+            $pipeline->log($task.'_gemini_fallback', $result, $prompt);
+            $this->warn('Gemini theme premarket failed, falling back to Groq: '.$result->error);
+            $prompt = $this->prompt($this->compactDataPackForGroq($dataPack));
+            $result = $groq->chat($prompt, (bool) $this->option('live'));
+        }
+
         $pipeline->log($task, $result, $prompt);
 
         if (! $result->ok) {
-            $this->warn('Gemini theme premarket skipped/failed: '.$result->error);
+            $this->warn('AI theme premarket skipped/failed: '.$result->error);
 
             return self::FAILURE;
         }
@@ -53,7 +61,7 @@ class AiGenerateThemePremarketReport extends Command
         $text = $this->cleanReportText((string) $result->text);
 
         if (mb_strlen($text) < 120) {
-            $this->warn('Gemini theme premarket report too short.');
+            $this->warn('AI theme premarket report too short.');
 
             return self::FAILURE;
         }
@@ -64,14 +72,14 @@ class AiGenerateThemePremarketReport extends Command
                 'title' => '《股市在幹嘛》今日題材盤前觀察',
                 'summary' => $text,
                 'data_pack' => json_encode($dataPack, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
-                'model' => 'gemini:'.$result->model,
+                'model' => $result->provider.':'.$result->model,
                 'token_usage' => json_encode($result->usage, JSON_UNESCAPED_SLASHES),
                 'created_at' => now(),
                 'updated_at' => now(),
             ],
         );
 
-        $this->info('Gemini theme premarket report generated: '.$reportDate);
+        $this->info('AI theme premarket report generated: '.$reportDate.' / '.$result->provider.':'.$result->model);
 
         return self::SUCCESS;
     }
@@ -91,6 +99,78 @@ class AiGenerateThemePremarketReport extends Command
         }
 
         return $result;
+    }
+
+    private function compactDataPackForGroq(array $dataPack): array
+    {
+        $dataPack['global_market'] = collect($dataPack['global_market'] ?? [])
+            ->take(12)
+            ->values()
+            ->all();
+
+        $dataPack['event_clusters'] = collect($dataPack['event_clusters'] ?? [])
+            ->take(5)
+            ->values()
+            ->all();
+
+        $dataPack['recent_news_events'] = collect($dataPack['recent_news_events'] ?? [])
+            ->take(6)
+            ->values()
+            ->all();
+
+        $dataPack['themes'] = collect($dataPack['themes'] ?? [])
+            ->take(5)
+            ->map(function (array $theme): array {
+                return [
+                    'name' => $theme['name'] ?? null,
+                    'slug' => $theme['slug'] ?? null,
+                    'heat_score' => $theme['heat_score'] ?? null,
+                    'score_date' => $theme['score_date'] ?? null,
+                    'scores' => [
+                        'news' => data_get($theme, 'scores.news'),
+                        'price' => data_get($theme, 'scores.price'),
+                        'volume' => data_get($theme, 'scores.volume'),
+                        'chip' => data_get($theme, 'scores.chip'),
+                    ],
+                    'status' => $theme['status'] ?? null,
+                    'warming_reasons' => array_slice((array) ($theme['warming_reasons'] ?? []), 0, 4),
+                    'risk_flags' => array_slice((array) ($theme['risk_flags'] ?? []), 0, 4),
+                    'representative_stocks' => collect($theme['representative_stocks'] ?? [])
+                    ->take(2)
+                    ->map(function (array $stock): array {
+                        return [
+                            'symbol' => $stock['symbol'] ?? null,
+                            'name' => $stock['name'] ?? null,
+                            'trade_date' => $stock['trade_date'] ?? null,
+                            'close' => $stock['close'] ?? null,
+                            'change' => $stock['change'] ?? null,
+                            'change_pct' => $stock['change_pct'] ?? null,
+                            'confidence_score' => $stock['confidence_score'] ?? null,
+                            'module_scores' => $stock['module_scores'] ?? [],
+                            'technical' => [
+                                'rsi14' => data_get($stock, 'technical.rsi14'),
+                                'macd' => data_get($stock, 'technical.macd'),
+                                'macd_signal' => data_get($stock, 'technical.macd_signal'),
+                                'volume_ratio20' => data_get($stock, 'technical.volume_ratio20'),
+                                'bais20' => data_get($stock, 'technical.bais20'),
+                                'signals' => array_slice((array) data_get($stock, 'technical.signals', []), 0, 4),
+                                'risk_flags' => array_slice((array) data_get($stock, 'technical.risk_flags', []), 0, 4),
+                            ],
+                            'chip' => $stock['chip'] ?? [],
+                            'revenue' => $stock['revenue'] ?? [],
+                            'financial' => $stock['financial'] ?? [],
+                        ];
+                    })
+                    ->values()
+                    ->all(),
+                ];
+            })
+            ->values()
+            ->all();
+
+        $dataPack['fallback_note'] = 'Gemini unavailable; this is a compact Groq fallback data pack.';
+
+        return $dataPack;
     }
 
     private function dataPack(string $reportDate): array
