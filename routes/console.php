@@ -143,6 +143,11 @@ Schedule::command('market:agents-learning-pipeline --phase=collect --limit=120')
     ->timezone('Asia/Taipei')
     ->withoutOverlapping();
 
+Schedule::command('market:agents-build-knowledge-bases --fetch-news --limit=80')
+    ->cron('25 */6 * * *')
+    ->timezone('Asia/Taipei')
+    ->withoutOverlapping();
+
 Schedule::command('market:agents-learning-pipeline --phase=classify --limit=160')
     ->dailyAt('01:12')
     ->timezone('Asia/Taipei')
@@ -150,6 +155,11 @@ Schedule::command('market:agents-learning-pipeline --phase=classify --limit=160'
 
 Schedule::command('market:agents-learning-pipeline --phase=language --limit=80')
     ->dailyAt('01:52')
+    ->timezone('Asia/Taipei')
+    ->withoutOverlapping();
+
+Schedule::command('market:agents-build-knowledge-bases --seed-language --limit=160')
+    ->dailyAt('01:58')
     ->timezone('Asia/Taipei')
     ->withoutOverlapping();
 

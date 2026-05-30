@@ -12,7 +12,12 @@ Agents do not directly change production behavior. They collect, classify, sugge
 
 Tables:
 
-- `market_knowledge_items`: news, events, reports, theme knowledge, industry knowledge, historical cases.
+- `news_items`: physical news database.
+- `market_events`: physical event database.
+- `theme_knowledge`: physical theme knowledge database.
+- `industry_knowledge`: physical industry knowledge database.
+- `historical_cases`: physical historical case database.
+- `market_knowledge_items`: unified index used by agents and Ollama.
 - Sources initially come from existing MarketX data: `global_events`, `global_event_clusters`, `global_ai_reports`, and `theme_ai_reports`.
 - Future news crawlers can write into the same table without changing later stages.
 
@@ -20,12 +25,14 @@ Command:
 
 ```bash
 php artisan market:agents-learning-pipeline --phase=collect
+php artisan market:agents-build-knowledge-bases --fetch-news
 ```
 
 Schedule:
 
 ```text
-Every 6 hours at minute 10
+Every 6 hours at minute 10: collect internal knowledge
+Every 6 hours at minute 25: fetch free RSS/news sources and sync structured databases
 ```
 
 ### Stage 2: Classification
@@ -63,12 +70,14 @@ Command:
 
 ```bash
 php artisan market:agents-learning-pipeline --phase=language
+php artisan market:agents-build-knowledge-bases --seed-language
 ```
 
 Schedule:
 
 ```text
 Daily 01:52 Asia/Taipei
+Daily 01:58 Asia/Taipei larger seed and template sync
 ```
 
 ### Stage 4: Rule Governance
@@ -136,6 +145,17 @@ Latest verified counts:
 - Published paragraph templates: 1
 - Published article templates: 1
 - Learning suggestions: 25 approved, 1 pending
+
+The next expanded baseline should be higher:
+
+- `news_items`: external RSS/news plus internal MarketX news.
+- `market_events`: event clusters copied into a dedicated event database.
+- `theme_knowledge`: one row per active theme.
+- `industry_knowledge`: one row per active stock industry.
+- `historical_cases`: radar card validation cases.
+- `language_assets`: at least 15 baseline assets.
+- `paragraph_templates`: at least 8 baseline templates.
+- `article_templates`: at least 6 baseline templates.
 
 ## Codex Review Rule
 
