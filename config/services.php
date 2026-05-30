@@ -40,6 +40,7 @@ return [
         'global_event_feed' => env('MARKETX_GLOBAL_EVENT_FEED'),
         'finnhub_api_key' => env('FINNHUB_API_KEY'),
         'marketaux_api_key' => env('MARKETAUX_API_KEY'),
+        'finmind_token' => env('FINMIND_TOKEN'),
         'ai_model' => env('MARKETX_AI_MODEL', 'gpt-4.1-mini'),
         'admin_email' => env('MARKETX_ADMIN_EMAIL', 'admin@marketx.local'),
         'admin_password_hash' => env('MARKETX_ADMIN_PASSWORD_HASH'),

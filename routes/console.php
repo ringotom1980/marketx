@@ -68,6 +68,26 @@ Schedule::command('market:taiwan-price-pipeline')
     ->timezone('Asia/Taipei')
     ->withoutOverlapping();
 
+Schedule::command('market:import-finmind-sponsor snapshot')
+    ->weekdays()
+    ->everyFiveMinutes()
+    ->between('08:55', '13:45')
+    ->timezone('Asia/Taipei')
+    ->withoutOverlapping();
+
+Schedule::command('market:import-finmind-sponsor futures-snapshot --symbol=TXF')
+    ->weekdays()
+    ->everyFiveMinutes()
+    ->between('08:45', '13:50')
+    ->timezone('Asia/Taipei')
+    ->withoutOverlapping();
+
+Schedule::command('market:import-finmind-sponsor stock-kbar')
+    ->weekdays()
+    ->dailyAt('16:20')
+    ->timezone('Asia/Taipei')
+    ->withoutOverlapping();
+
 Schedule::command('market:taiwan-aftermarket-pipeline')
     ->dailyAt('16:40')
     ->timezone('Asia/Taipei')
@@ -84,6 +104,14 @@ Schedule::command('market:daily-pipeline')
     ->timezone('Asia/Taipei')
     ->withoutOverlapping();
 
+foreach (['margin-maintenance', 'block-report', 'block-trade'] as $dataset) {
+    Schedule::command('market:import-finmind-sponsor '.$dataset)
+        ->weekdays()
+        ->dailyAt('21:50')
+        ->timezone('Asia/Taipei')
+        ->withoutOverlapping();
+}
+
 Schedule::command('market:build-daily-context --session=night')
     ->dailyAt('22:35')
     ->timezone('Asia/Taipei')
@@ -96,6 +124,24 @@ Schedule::command('market:taiwan-price-pipeline')
 
 Schedule::command('market:taiwan-price-pipeline')
     ->dailyAt('23:45')
+    ->timezone('Asia/Taipei')
+    ->withoutOverlapping();
+
+Schedule::command('market:import-finmind-sponsor government-bank')
+    ->weekdays()
+    ->dailyAt('23:50')
+    ->timezone('Asia/Taipei')
+    ->withoutOverlapping();
+
+Schedule::command('market:import-finmind-sponsor market-value')
+    ->weekdays()
+    ->dailyAt('23:55')
+    ->timezone('Asia/Taipei')
+    ->withoutOverlapping();
+
+Schedule::command('market:import-finmind-sponsor market-value-weight')
+    ->weekdays()
+    ->dailyAt('23:58')
     ->timezone('Asia/Taipei')
     ->withoutOverlapping();
 
